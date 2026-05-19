@@ -6,10 +6,12 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { PromptInput } from '@/components/chat/PromptInput';
 import { FileDiffViewer, buildDiffsFromFiles } from '@/components/chat/FileDiffViewer';
 import { ActionHistory, buildActionsFromFiles } from '@/components/chat/ActionHistory';
+import { WorkingProcess } from '@/components/chat/WorkingProcess';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
+  generationStep?: number;
   onSendMessage: (content: string) => void;
   onOpenFile: (path: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
@@ -19,6 +21,7 @@ interface ChatPanelProps {
 export function ChatPanel({
   messages,
   isGenerating,
+  generationStep = -1,
   onSendMessage,
   onOpenFile,
   onRegenerateMessage,
@@ -123,14 +126,9 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* Typing indicator */}
+        {/* Working process indicator */}
         {isGenerating && (
-          <div className="animate-[fade-in_200ms_ease-out] flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-gray-100 to-gray-50 rounded-2xl border border-gray-300 shadow-lg">
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-            <div className="typing-dot" />
-            <span className="text-[10px] text-gray-500 ml-1">Generating...</span>
-          </div>
+          <WorkingProcess generationStep={generationStep} />
         )}
 
         <div ref={messagesEndRef} />

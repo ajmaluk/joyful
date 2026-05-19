@@ -3,9 +3,20 @@ import type { ChatMessage, ProjectFile, AIGenerationResponse } from '@/types';
 import { generateWithAI } from '@/services/aiService';
 import * as storage from '@/services/storage';
 
+export const GENERATION_STEPS = [
+  'Analyzing your request...',
+  'Detecting the best template...',
+  'Generating page structure...',
+  'Writing HTML content...',
+  'Styling with CSS...',
+  'Adding interactivity...',
+  'Finalizing output...',
+] as const;
+
 export function useChat(projectId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => storage.getChatHistory(projectId));
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState<number>(-1);
 
   const sendMessage = useCallback(async (
     content: string,
@@ -23,8 +34,16 @@ export function useChat(projectId: string) {
     storage.saveChatHistory(projectId, newMessages);
 
     setIsGenerating(true);
+    setGenerationStep(0);
     try {
       const history = newMessages.map(m => ({ role: m.role, content: m.content }));
+
+      // Advance through generation steps with realistic timing
+      for (let i = 1; i < GENERATION_STEPS.length; i++) {
+        await new Promise(r => setTimeout(r, 400 + Math.random() * 300));
+        setGenerationStep(i);
+      }
+
       const response = await generateWithAI(content, existingFiles, history);
 
       const assistantMsg: ChatMessage = {
@@ -53,8 +72,9 @@ export function useChat(projectId: string) {
       return null;
     } finally {
       setIsGenerating(false);
+      setGenerationStep(-1);
     }
   }, [messages, projectId]);
 
-  return { messages, isGenerating, sendMessage };
+  return { messages, isGenerating, generationStep, sendMessage };
 }

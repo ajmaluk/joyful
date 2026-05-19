@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Folder, FolderOpen, ChevronDown,
-  FileCode, FileJson, FileText, File, Plus, FolderPlus, Minus, Trash2, Sparkles
+  FileCode, FileJson, FileText, File, Plus, FolderPlus, Minus, Trash2, Sparkles, Pencil
 } from 'lucide-react';
 import type { ProjectFile, FileType } from '@/types';
 import { buildFileTree, getFileColor } from '@/services/fileSystem';
@@ -38,6 +38,7 @@ function TreeNode({
   expandedFolders,
   toggleFolder,
   onDeleteFile,
+  onRenameFile,
   readOnly,
 }: {
   node: FileTreeNode;
@@ -48,6 +49,7 @@ function TreeNode({
   expandedFolders: Set<string>;
   toggleFolder: (path: string) => void;
   onDeleteFile: (path: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void;
   readOnly: boolean;
 }) {
   const isExpanded = expandedFolders.has(node.path);
@@ -90,6 +92,7 @@ function TreeNode({
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
               onDeleteFile={onDeleteFile}
+              onRenameFile={onRenameFile}
               readOnly={readOnly}
             />
           ))}
@@ -120,13 +123,25 @@ function TreeNode({
         <span className="w-2 h-2 rounded-full bg-primary ml-auto flex-shrink-0 animate-pulse" />
       )}
       {!readOnly && (
-        <button
-          onClick={() => onDeleteFile(projectFile.path)}
-          className="rounded p-1 text-muted-foreground opacity-0 transition-all duration-150 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-          title={`Delete ${node.name}`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <button
+            onClick={() => {
+              const nextPath = window.prompt('Rename file', projectFile.path)?.trim();
+              if (nextPath && nextPath !== projectFile.path) onRenameFile(projectFile.path, nextPath);
+            }}
+            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title={`Rename ${node.name}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => onDeleteFile(projectFile.path)}
+            className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            title={`Delete ${node.name}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -138,6 +153,7 @@ export function FileExplorer({
   onSelectFile,
   onCreateFile,
   onDeleteFile,
+  onRenameFile,
   readOnly = false,
 }: FileExplorerProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -164,7 +180,11 @@ export function FileExplorer({
       }
     }
     collectFolders(tree);
-    setExpandedFolders(prev => (prev.size === 0 ? allFolders : prev));
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      allFolders.forEach(folder => next.add(folder));
+      return next;
+    });
   }, [tree]);
 
   const collapseAll = useCallback(() => setExpandedFolders(new Set()), []);
@@ -255,6 +275,7 @@ export function FileExplorer({
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
               onDeleteFile={onDeleteFile}
+              onRenameFile={onRenameFile}
               readOnly={readOnly}
             />
           ))

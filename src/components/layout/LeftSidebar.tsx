@@ -7,6 +7,7 @@ import {
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
+import type { Project } from '@/types';
 import {
   Tooltip,
   TooltipContent,
@@ -27,14 +28,18 @@ const bottomNavItems = [
 
 interface LeftSidebarProps {
   onNewProject: () => void;
+  projects?: Project[];
 }
 
-export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
+export function LeftSidebar({ onNewProject, projects = [] }: LeftSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
   const { user } = useAuth();
   const userLabel = user?.displayName || user?.email || 'Profile';
+  const recentProjects = [...projects]
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 8);
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -142,7 +147,7 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
 
           {/* Quick project links - shown when expanded */}
           {expanded && (
-            <>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
               <button
                 onClick={() => navigate('/builder')}
                 className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -150,7 +155,40 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
                 <Code2 className="w-4 h-4 flex-shrink-0" />
                 <span className="text-xs truncate">Open builder</span>
               </button>
-            </>
+              {recentProjects.length > 0 ? (
+                <div className="mt-1 space-y-0.5">
+                  {recentProjects.map((project) => {
+                    const active = location.pathname === `/builder/${project.id}`;
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => navigate(`/builder/${project.id}`)}
+                        className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+                          active
+                            ? 'bg-background text-foreground shadow-xs'
+                            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                        }`}
+                        title={project.name}
+                      >
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-primary/10 font-mono text-[10px] font-bold text-primary">
+                          {project.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">{project.name}</span>
+                          <span className="block truncate text-[10px] text-muted-foreground">
+                            {project.files.length} file{project.files.length === 1 ? '' : 's'}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mx-2.5 mt-2 rounded-md border border-dashed border-sidebar-border p-3 text-xs leading-5 text-muted-foreground">
+                  No projects yet
+                </div>
+              )}
+            </div>
           )}
         </div>
 

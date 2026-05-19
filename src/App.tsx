@@ -142,7 +142,7 @@ function AppLayout() {
 
       <div className="flex h-full min-h-0">
         {showSidebar && (
-          <LeftSidebar onNewProject={() => handleStartProject('')} />
+          <LeftSidebar projects={projects} onNewProject={() => handleStartProject('')} />
         )}
 
         <main className={`min-w-0 flex-1 ${isMarketingPage ? 'overflow-y-auto' : 'overflow-hidden'}`}>
@@ -169,6 +169,7 @@ function AppLayout() {
                         projects={projects}
                         onCreateProject={handleCreateProject}
                         onDeleteProject={removeProject}
+                        onStartProject={handleStartProject}
                       />
                     </AuthGate>
                   }
@@ -188,7 +189,7 @@ function AppLayout() {
                   path="/templates"
                   element={
                     <AuthGate>
-                      <TemplatesPage onCreateProject={handleCreateProject} />
+                      <TemplatesPage onCreateProject={handleCreateProject} onUpdateProject={updateProject} />
                     </AuthGate>
                   }
                 />

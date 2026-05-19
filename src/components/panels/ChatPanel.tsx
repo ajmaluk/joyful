@@ -34,7 +34,10 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
-  const [nextSteps, setNextSteps] = useState<string[] | undefined>();
+  const nextSteps = useMemo(
+    () => [...messages].reverse().find(message => message.role === 'assistant' && message.nextSteps?.length)?.nextSteps,
+    [messages]
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -80,7 +83,6 @@ export function ChatPanel({
 
   const handleClearChat = useCallback(() => {
     onClearMessages?.();
-    setNextSteps(undefined);
   }, [onClearMessages]);
 
   const handleExportChat = useCallback(() => {
@@ -111,7 +113,7 @@ export function ChatPanel({
 
       {/* Messages */}
       <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-4">
-        {messages.length === 0 && files.length === 0 && (
+        {messages.length === 0 && (
           <div className="min-w-0 space-y-6 py-8">
             <SmartSuggestions
               files={files}

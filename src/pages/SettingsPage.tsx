@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Settings, Palette, Code2, Brain, User, Gift,
-  Moon, Sun, Monitor, Check, ShieldCheck, Zap, SlidersHorizontal
+  Moon, Sun, Monitor, Check, SlidersHorizontal, KeyRound, PlugZap
 } from 'lucide-react';
 import type { UserSettings } from '@/types';
 import * as storage from '@/services/storage';
@@ -29,6 +29,22 @@ const themeOptions = [
   icon: typeof Monitor;
 }>;
 
+const providerOptions = [
+  { value: 'local', label: 'Local Lite', model: 'local-lite', description: 'Built-in free generator. No key needed.', badge: 'Included' },
+  { value: 'openai', label: 'OpenAI', model: 'gpt-4o', description: 'Strong general website generation and edits.', badge: 'API key' },
+  { value: 'anthropic', label: 'Anthropic', model: 'claude-3-5-sonnet', description: 'Careful planning and long-form copy refinement.', badge: 'API key' },
+  { value: 'openrouter', label: 'OpenRouter', model: 'openrouter/auto', description: 'Route to many hosted models from one account.', badge: 'API key' },
+  { value: 'google', label: 'Google Gemini', model: 'gemini-1.5-pro', description: 'Fast multimodal-friendly generation path.', badge: 'API key' },
+  { value: 'mistral', label: 'Mistral', model: 'mistral-large-latest', description: 'Efficient code and content generation.', badge: 'API key' },
+  { value: 'groq', label: 'Groq', model: 'llama-3.1-70b-versatile', description: 'Low-latency iteration for quick edits.', badge: 'API key' },
+] satisfies Array<{
+  value: UserSettings['aiProvider'];
+  label: string;
+  model: string;
+  description: string;
+  badge: string;
+}>;
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -37,6 +53,37 @@ export function SettingsPage() {
 
   const updateSetting = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
     const next = { ...settings, [key]: value };
+    setSettings(next);
+    storage.saveSettings(next);
+  };
+
+  const activateProvider = (provider: UserSettings['aiProvider'], model: string) => {
+    const hasKey = Boolean(settings.providerKeys?.[provider]?.trim());
+    const next: UserSettings = {
+      ...settings,
+      aiProvider: provider,
+      aiModel: model,
+      connectedProviders: {
+        ...settings.connectedProviders,
+        [provider]: provider === 'local' || hasKey,
+      },
+    };
+    setSettings(next);
+    storage.saveSettings(next);
+  };
+
+  const updateProviderKey = (provider: UserSettings['aiProvider'], value: string) => {
+    const next: UserSettings = {
+      ...settings,
+      providerKeys: {
+        ...settings.providerKeys,
+        [provider]: value,
+      },
+      connectedProviders: {
+        ...settings.connectedProviders,
+        [provider]: provider === 'local' || value.trim().length > 0,
+      },
+    };
     setSettings(next);
     storage.saveSettings(next);
   };
@@ -204,42 +251,81 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground">AI Runtime</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Joyful runs in free local mode by default. No paid API key is required.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Choose the active builder brain and connect optional providers for richer generation.</p>
             </div>
             <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-card p-5">
-                <div className="mb-4 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
-                      <ShieldCheck className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-card-foreground">Local Lite generator</p>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                        Uses the built-in free generator for website drafts and edits. Project files stay in browser storage.
-                      </p>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <PlugZap className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-card-foreground">Active provider</p>
+                      <p className="text-xs text-muted-foreground">{providerOptions.find(option => option.value === settings.aiProvider)?.label} · {settings.aiModel}</p>
                     </div>
                   </div>
-                  <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-500">Active</span>
+                  <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-500">
+                    {settings.connectedProviders?.[settings.aiProvider] ? 'Connected' : 'Needs key'}
+                  </span>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {['No OpenAI key required', 'No Anthropic key required', 'No E2B sandbox cost', 'Export static files'].map((item) => (
-                    <div key={item} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                      <Check className="h-3.5 w-3.5 text-emerald-500" />
-                      {item}
-                    </div>
-                  ))}
+                <div className="grid gap-3">
+                  {providerOptions.map((provider) => {
+                    const isActive = settings.aiProvider === provider.value;
+                    const isConnected = provider.value === 'local' || Boolean(settings.connectedProviders?.[provider.value]);
+                    return (
+                      <div
+                        key={provider.value}
+                        className={`rounded-lg border p-4 transition-colors ${
+                          isActive ? 'border-primary bg-primary/10' : 'border-border bg-background'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground">{provider.label}</p>
+                              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{provider.badge}</span>
+                              {isConnected && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">Connected</span>}
+                            </div>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{provider.description}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => activateProvider(provider.value, provider.model)}
+                            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              isActive
+                                ? 'bg-primary text-primary-foreground'
+                                : 'border border-border text-foreground hover:border-primary/50 hover:bg-accent'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Use'}
+                          </button>
+                        </div>
+                        {provider.value !== 'local' && (
+                          <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2">
+                            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                            <input
+                              type="password"
+                              value={settings.providerKeys?.[provider.value] || ''}
+                              onChange={(event) => updateProviderKey(provider.value, event.target.value)}
+                              placeholder={`${provider.label} API key`}
+                              className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="rounded-lg border border-border bg-card p-5 opacity-75">
-                <div className="mb-3 flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-sm font-medium text-card-foreground">Optional API mode</p>
-                </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Paid AI providers can be added later as an advanced option, but the current product experience stays free.
-                </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {['Local mode stays available', 'Provider keys stay in browser storage', 'Manual files always editable', 'ZIP export remains free'].map((item) => (
+                  <div key={item} className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                    {item}
+                  </div>
+                ))}
               </div>
 
               <div className="rounded-xl border border-border bg-card p-5">
@@ -409,7 +495,7 @@ export function SettingsPage() {
             })}
           </div>
         </div>
-        <div className="mx-auto max-w-3xl p-5 md:p-8">
+        <div className="w-full max-w-none p-5 md:p-8 xl:px-10">
           {renderContent()}
         </div>
       </div>

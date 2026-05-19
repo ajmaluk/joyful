@@ -1,10 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, Undo2, Redo2, RotateCcw, Monitor, Share2, Sparkles, Menu, X, LogOut, Settings, User } from 'lucide-react';
+import { ChevronDown, Undo2, Redo2, RotateCcw, Monitor, Share2, Sparkles, Menu, X, LogOut, Settings, User, Moon, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
+import { useThemeSetting } from '@/hooks/useThemeSetting';
 
 export function TopBar() {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function TopBar() {
   const isWorkspace = location.pathname.match(/^\/builder\/[^/]+$/);
   const isMarketingPage = marketingPaths.has(location.pathname);
   const { user } = useAuth();
+  const { cycleTheme, isDark } = useThemeSetting();
 
   const userLabel = user?.displayName || user?.email || 'Profile';
   const avatarLetter = userLabel.trim().charAt(0).toUpperCase() || 'U';
@@ -59,6 +61,15 @@ export function TopBar() {
           </nav>
 
           <div className="relative flex items-center gap-3">
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="hidden h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white/70 text-gray-700 transition-colors hover:bg-white hover:text-gray-950 sm:flex dark:border-white/10 dark:bg-white/5 dark:text-white/75 dark:hover:bg-white/10 dark:hover:text-white"
+              aria-label="Toggle theme"
+              title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             {user ? (
               <>
                 <button
@@ -128,6 +139,9 @@ export function TopBar() {
               </button>
               <button onClick={() => { navigate('/pricing'); setMobileMenuOpen(false); }} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
                 Pricing
+              </button>
+              <button onClick={() => { cycleTheme(); setMobileMenuOpen(false); }} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
+                {isDark ? 'Light theme' : 'Dark theme'}
               </button>
               <div className="border-t border-gray-200 pt-2 mt-2 dark:border-white/10">
                 {user ? (

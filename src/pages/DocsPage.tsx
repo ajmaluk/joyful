@@ -25,11 +25,13 @@ import {
   Workflow,
   X,
   Zap,
+  Sun,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { MarketingFooter } from '@/components/marketing/MarketingChrome';
+import { useThemeSetting } from '@/hooks/useThemeSetting';
 
 type DocTab = 'Introduction' | 'Features' | 'Integrations' | 'Tips & Tricks' | 'Changelog';
 
@@ -262,6 +264,92 @@ const docsByTab: Record<DocTab, DocGroup[]> = {
         },
       ],
     },
+    {
+      title: 'Builder workflow',
+      items: [
+        {
+          id: 'using-templates',
+          label: 'Using templates',
+          icon: LayoutDashboard,
+          eyebrow: 'Builder workflow',
+          title: 'Use templates as editable starting points',
+          summary:
+            'Templates are practical project starters. Choose a layout, open it in the builder, then use chat and code editing to reshape the copy, sections, styling, and behavior.',
+          heroBadge: 'Templates',
+          stats: [
+            { value: '1 click', label: 'template to builder' },
+            { value: 'Full files', label: 'HTML, CSS, and JS' },
+            { value: 'Editable', label: 'chat and code loop' },
+          ],
+          cards: [
+            { icon: LayoutDashboard, title: 'Start from a pattern', body: 'Pick the template closest to the job so the first draft already has a useful structure.' },
+            { icon: FileCode2, title: 'Open real files', body: 'Template projects include normal website files, which keeps the output inspectable and portable.' },
+            { icon: Bot, title: 'Ask AI to adapt it', body: 'Use chat to change the theme, copy, sections, layout density, and interaction details.' },
+            { icon: Globe2, title: 'Preview before export', body: 'Review the template at desktop and mobile sizes before shipping or downloading.' },
+          ],
+          sections: [
+            { id: 'choose-a-template', title: 'Choose a template', body: 'Start with the template that best matches the website type, not necessarily the final visual style. The AI can reshape tone and theme after the structure exists.' },
+            { id: 'open-template-in-builder', title: 'Open it in the builder', body: 'When a template opens in the builder, treat it like a normal project. The file explorer, preview, editor, and AI chat all work against the generated files.' },
+            { id: 'customize-with-ai', title: 'Customize with AI', body: 'Ask for focused edits such as changing the color system, replacing sections, rewriting the hero, improving mobile spacing, or adding a new feature block.' },
+          ],
+          related: ['Quick start', 'AI editing loop', 'Files, preview, export'],
+        },
+        {
+          id: 'ai-editing-loop',
+          label: 'AI editing loop',
+          icon: Bot,
+          eyebrow: 'Builder workflow',
+          title: 'Work with the AI in small visible tasks',
+          summary:
+            'The best builder flow is task-based: describe the change, let the AI plan and apply file edits, then review the result in preview before asking for the next improvement.',
+          heroBadge: 'AI loop',
+          stats: [
+            { value: 'Plan', label: 'visible task list' },
+            { value: 'Edit', label: 'file-level changes' },
+            { value: 'Review', label: 'preview feedback' },
+          ],
+          cards: [
+            { icon: Sparkles, title: 'Start with intent', body: 'Say what should change and why, rather than asking for a vague improvement.' },
+            { icon: Workflow, title: 'Track the work', body: 'Use visible tasks to understand what the AI is doing and what is already complete.' },
+            { icon: FileCode2, title: 'Inspect changed files', body: 'Open the files after a change so you can verify the implementation, not just the preview.' },
+            { icon: ShieldCheck, title: 'Keep changes scoped', body: 'Smaller requests make it easier to keep the page stable while improving quality.' },
+          ],
+          sections: [
+            { id: 'write-focused-requests', title: 'Write focused requests', body: 'A good request names the target area, desired outcome, and any constraints. For example, ask for a stronger pricing section or a cleaner mobile hero.' },
+            { id: 'review-ai-tasks', title: 'Review AI tasks', body: 'Use the task list to see the AI progress from planning to editing and verification. If a task looks wrong, adjust the next prompt with specific direction.' },
+            { id: 'iterate-after-preview', title: 'Iterate after preview', body: 'Preview is the fastest way to catch spacing, hierarchy, and theme issues. Use what you see to drive the next small edit.' },
+          ],
+          related: ['Prompting best practices', 'Using templates', 'Files, preview, export'],
+        },
+        {
+          id: 'files-preview-export',
+          label: 'Files, preview, export',
+          icon: FileCode2,
+          eyebrow: 'Builder workflow',
+          title: 'Manage files, preview changes, and export cleanly',
+          summary:
+            'Joyful keeps the project practical by exposing files, previewing the website, and exporting the final result as normal front-end assets.',
+          heroBadge: 'Ship flow',
+          stats: [
+            { value: 'Create', label: 'new files' },
+            { value: 'Edit', label: 'existing code' },
+            { value: 'Export', label: 'portable output' },
+          ],
+          cards: [
+            { icon: FileCode2, title: 'Use the file explorer', body: 'Create, rename, edit, and remove project files while keeping the structure clear.' },
+            { icon: Globe2, title: 'Preview constantly', body: 'Use preview to verify visual changes, layout behavior, and interaction states.' },
+            { icon: Bot, title: 'Let AI handle routine edits', body: 'Ask the AI to add files, update sections, or remove unused code when it is faster than manual work.' },
+            { icon: ShieldCheck, title: 'Export when stable', body: 'Export after checking the core pages, responsive states, and final copy.' },
+          ],
+          sections: [
+            { id: 'file-operations', title: 'File operations', body: 'Keep filenames simple and predictable. Create new files when a section or behavior becomes complex enough to deserve its own place.' },
+            { id: 'preview-checks', title: 'Preview checks', body: 'Check the top of the page, navigation, hero, calls to action, and mobile layout before you consider the project ready.' },
+            { id: 'export-handoff', title: 'Export and handoff', body: 'Exported projects should remain easy to host, review, or hand to another developer because they are ordinary website files.' },
+          ],
+          related: ['Workspace', 'Quick start', 'Using templates'],
+        },
+      ],
+    },
   ],
   Features: [
     {
@@ -449,6 +537,21 @@ const assistantPrompts: Record<string, string[]> = {
     'When should I edit files manually?',
     'How do previews fit into the flow?',
   ],
+  'using-templates': [
+    'How do I use a template?',
+    'Can I edit template files?',
+    'What should I customize first?',
+  ],
+  'ai-editing-loop': [
+    'How should I ask AI for edits?',
+    'What does the task list mean?',
+    'How do I review AI changes?',
+  ],
+  'files-preview-export': [
+    'How do file operations work?',
+    'What should I check in preview?',
+    'When should I export?',
+  ],
   'prompting-best-practices': [
     'What makes a strong first prompt?',
     'How should I ask for revisions?',
@@ -485,6 +588,12 @@ const assistantReplies: Record<string, string> = {
     'Joyful is fully free. The docs now frame that clearly: no paid-tier language, no confusing billing path, and no hidden upgrade story around the core builder experience.',
   workspace:
     'Use the workspace as your main loop: prompt when speed matters, inspect the generated files when precision matters, and preview often so layout decisions stay visible.',
+  'using-templates':
+    'Templates are starting projects, not locked layouts. Open one in the builder, inspect the generated files, then use AI or manual edits to reshape it around your content and brand.',
+  'ai-editing-loop':
+    'Treat AI edits as a visible task loop: ask for one useful change, review the planned work, inspect the file edits, then preview before asking for the next improvement.',
+  'files-preview-export':
+    'Use the file explorer for structure, preview for visual checks, and export only after the page is stable across the main screen sizes and core interactions.',
   'prompting-best-practices':
     'The best prompts are specific about audience, page goal, tone, and sections. After generation, use smaller follow-up prompts to improve one thing at a time.',
   'quick-start':
@@ -521,8 +630,8 @@ function findDocByLabel(label: string) {
 
 function DocsHeroVisual({ badge }: { badge: string }) {
   return (
-    <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#121316] shadow-[0_25px_120px_rgba(0,0,0,0.42)]">
-      <div className="relative aspect-[16/9] overflow-hidden rounded-[1.75rem] border border-white/6 bg-[#0d0e12]">
+    <div className="mx-auto max-w-5xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_18px_55px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#121316] dark:shadow-[0_25px_120px_rgba(0,0,0,0.42)]">
+      <div className="relative aspect-[16/7] max-h-[360px] overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/6 dark:bg-[#0d0e12]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(255,255,255,0.72),transparent_26%),radial-gradient(circle_at_25%_45%,rgba(110,131,255,0.95),transparent_34%),radial-gradient(circle_at_80%_42%,rgba(238,118,214,0.88),transparent_30%),radial-gradient(circle_at_55%_90%,rgba(255,108,61,0.92),transparent_28%),linear-gradient(180deg,#cad8ff_0%,#7191ff_24%,#d172e4_58%,#f14986_80%,#ff7637_100%)]" />
         <div className="absolute left-0 top-0 h-full w-[17%] border-r border-black/10 bg-[#f3f0e8]/95">
           <div className="px-3 py-4">
@@ -557,11 +666,11 @@ function DocsHeroVisual({ badge }: { badge: string }) {
           </div>
         </div>
       </div>
-      <div className="border-t border-white/8 bg-[#1c1a1f] p-4">
-        <div className="flex items-center gap-3 rounded-[1.45rem] border border-white/14 bg-[#211f24] px-5 py-4 text-sm text-white/45">
+      <div className="border-t border-gray-200 bg-gray-50 p-3 dark:border-white/8 dark:bg-[#1c1a1f]">
+        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 dark:border-white/14 dark:bg-[#211f24] dark:text-white/45">
           <span className="truncate">Ask a question about this article...</span>
           <div className="ml-auto flex items-center gap-3">
-            <span className="text-xs text-white/35">⌘I</span>
+            <span className="text-xs text-gray-400 dark:text-white/35">⌘I</span>
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#294577] text-white">↑</div>
           </div>
         </div>
@@ -576,6 +685,7 @@ export function DocsPage() {
   const initialDocIdRef = useRef<string | null>(null);
   const [activeDocId, setActiveDocId] = useState<string>('welcome');
   const [copied, setCopied] = useState(false);
+  const { cycleTheme, isDark } = useThemeSetting();
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [assistantInput, setAssistantInput] = useState('');
@@ -788,11 +898,11 @@ export function DocsPage() {
   const previousDoc = currentDocIndex > 0 ? flatDocs[currentDocIndex - 1] : null;
   const nextDoc = currentDocIndex >= 0 && currentDocIndex < flatDocs.length - 1 ? flatDocs[currentDocIndex + 1] : null;
   const articleNav = (
-    <div className="rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-5 xl:border-0 xl:bg-transparent xl:p-0">
-      <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-white/35 xl:hidden">{activeTab}</div>
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-[0_14px_45px_rgba(15,23,42,0.06)] xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none dark:border-white/8 dark:bg-[#0d0f14] dark:xl:bg-transparent">
+      <div className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400 xl:hidden dark:text-white/35">{activeTab}</div>
       {activeGroups.map((group) => (
-        <div key={group.title} className="mb-10 last:mb-0">
-          <h2 className="mb-4 text-base font-semibold text-white/90 xl:mb-5 xl:text-[1.05rem]">{group.title}</h2>
+        <div key={group.title} className="mb-7 last:mb-0">
+          <h2 className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-white/55">{group.title}</h2>
           <div className="space-y-1">
             {group.items.map((item) => {
               const Icon = item.icon;
@@ -805,10 +915,10 @@ export function DocsPage() {
                     setActiveDocId(item.id);
                     setMobileSidebarOpen(false);
                   }}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-[0.95rem] transition-all duration-200 xl:text-[1.02rem] ${
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-all duration-200 ${
                     isActive
-                      ? 'bg-[#101a2b] text-[#59a4ff] shadow-[inset_0_0_0_1px_rgba(89,164,255,0.12)]'
-                      : 'text-white/50 hover:bg-white/[0.03] hover:text-white/85'
+                      ? 'bg-[#eef5ff] text-[#2563eb] shadow-[inset_3px_0_0_#3a96ff] dark:bg-[#101a2b] dark:text-[#59a4ff] dark:shadow-[inset_3px_0_0_#3a96ff]'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-950 dark:text-white/50 dark:hover:bg-white/[0.03] dark:hover:text-white/85'
                   }`}
                 >
                   <Icon className="h-4 w-4 flex-none" />
@@ -823,28 +933,28 @@ export function DocsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#090a0d] text-white">
-      <div className="mx-auto min-h-screen max-w-[2048px] rounded-b-[2rem] border-x border-b border-white/8 bg-[#090a0d] shadow-[0_30px_120px_rgba(0,0,0,0.32)]">
+    <div className="min-h-screen bg-white text-gray-950 dark:bg-[#090a0d] dark:text-white">
+      <div className="mx-auto min-h-screen max-w-[1680px] rounded-b-2xl border-x border-b border-gray-200 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)] dark:border-white/8 dark:bg-[#090a0d] dark:shadow-[0_30px_120px_rgba(0,0,0,0.32)]">
         {/* Header */}
-        <header className="border-b border-white/8 px-5 py-4 sm:px-8">
+        <header className="border-b border-gray-200 px-5 py-4 sm:px-8 dark:border-white/8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setMobileSidebarOpen(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[#0e1015] text-white/75 transition-colors hover:bg-white/[0.05] hover:text-white xl:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 xl:hidden dark:border-white/10 dark:bg-[#0e1015] dark:text-white/75 dark:hover:bg-white/[0.05] dark:hover:text-white"
                 aria-label="Open docs navigation"
               >
                 <Menu className="h-5 w-5" />
               </button>
               <button onClick={() => navigate('/')} className="flex items-center gap-3 transition-opacity hover:opacity-90">
-                <BrandLogo className="h-11 w-11" />
-                <span className="text-[2.35rem] font-bold leading-none tracking-[-0.05em] text-white sm:text-[3rem]">Joyful</span>
+                <BrandLogo className="h-8 w-8" />
+                <span className="text-2xl font-bold leading-none tracking-normal text-gray-950 sm:text-3xl dark:text-white">Joyful</span>
               </button>
               <button
                 type="button"
                 onClick={openAssistant}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-[#0e1015] text-white/82 transition-colors hover:bg-white/[0.05] xl:hidden"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 xl:hidden dark:border-white/10 dark:bg-[#0e1015] dark:text-white/82 dark:hover:bg-white/[0.05] dark:hover:text-white"
                 aria-label="Open AI assistant"
               >
                 <Sparkles className="h-5 w-5" />
@@ -854,7 +964,7 @@ export function DocsPage() {
             {/* Search bar */}
             <div className="relative flex flex-1 flex-col gap-3 lg:max-w-[760px] lg:flex-row lg:items-center">
               <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-white/40" />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -866,25 +976,25 @@ export function DocsPage() {
                   onFocus={() => setSearchOpen(true)}
                   onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
                   placeholder="Search docs, setup, prompts, exports..."
-                  className="h-14 w-full rounded-2xl border border-white/10 bg-[#0e1015] pl-12 pr-20 text-base text-white outline-none transition-colors placeholder:text-white/40 focus:border-[#3a96ff]/40 focus:bg-[#0e1015] sm:text-lg"
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 pl-10 pr-16 text-sm text-gray-950 outline-none transition-colors placeholder:text-gray-400 focus:border-[#3a96ff]/40 focus:bg-white dark:border-white/10 dark:bg-[#0e1015] dark:text-white dark:placeholder:text-white/40 dark:focus:bg-[#0e1015]"
                 />
-                <span className="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-lg border border-white/10 px-2 py-1 text-xs text-white/35 sm:block">⌘K</span>
+                <span className="pointer-events-none absolute right-4 top-1/2 hidden -translate-y-1/2 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-400 sm:block dark:border-white/10 dark:text-white/35">⌘K</span>
 
                 {/* Search results dropdown */}
                 {searchOpen && searchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1015] shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#0e1015] dark:shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
                     {searchResults.map((result) => (
                       <button
                         key={`${result.tab}-${result.id}`}
                         type="button"
                         onMouseDown={() => handleSearchSelect(result.tab, result.id)}
-                        className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-white/[0.06]"
+                        className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.06]"
                       >
-                        <Search className="mt-0.5 h-4 w-4 flex-none text-white/30" />
+                        <Search className="mt-0.5 h-4 w-4 flex-none text-gray-400 dark:text-white/30" />
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-white">{result.label}</div>
-                          <div className="mt-0.5 text-xs text-white/40">{result.eyebrow} &middot; {result.tab}</div>
-                          <div className="mt-1 truncate text-xs text-white/30">{result.summary}...</div>
+                          <div className="text-sm font-medium text-gray-950 dark:text-white">{result.label}</div>
+                          <div className="mt-0.5 text-xs text-gray-500 dark:text-white/40">{result.eyebrow} &middot; {result.tab}</div>
+                          <div className="mt-1 truncate text-xs text-gray-400 dark:text-white/30">{result.summary}...</div>
                         </div>
                       </button>
                     ))}
@@ -893,43 +1003,49 @@ export function DocsPage() {
 
                 {/* No results */}
                 {searchOpen && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#0e1015] px-5 py-6 text-center shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
-                    <p className="text-sm text-white/40">No results for &ldquo;{searchQuery}&rdquo;</p>
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white px-5 py-6 text-center shadow-[0_20px_80px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#0e1015] dark:shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
+                    <p className="text-sm text-gray-500 dark:text-white/40">No results for &ldquo;{searchQuery}&rdquo;</p>
                   </div>
                 )}
               </div>
               <button
                 type="button"
                 onClick={openAssistant}
-                className="hidden h-14 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#0e1015] px-5 text-base font-medium text-white/82 transition-colors hover:bg-white/[0.05] xl:inline-flex"
+                className="hidden h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-950 xl:inline-flex dark:border-white/10 dark:bg-[#0e1015] dark:text-white/82 dark:hover:bg-white/[0.05] dark:hover:text-white"
               >
                 <Sparkles className="h-4 w-4" />
                 Ask AI
               </button>
             </div>
 
-            <div className="flex items-center gap-5 text-sm text-white/68 sm:gap-6 sm:text-base">
-              <button onClick={() => navigate('/support')} className="transition-colors hover:text-white">Support</button>
-              <button onClick={() => navigate('/blog')} className="transition-colors hover:text-white">Blog</button>
-              <button aria-label="Toggle theme" className="transition-colors hover:text-white">
-                <Moon className="h-5 w-5" />
+            <div className="flex items-center gap-4 text-sm text-gray-600 sm:gap-5 dark:text-white/68">
+              <button onClick={() => navigate('/support')} className="transition-colors hover:text-gray-950 dark:hover:text-white">Support</button>
+              <button onClick={() => navigate('/blog')} className="transition-colors hover:text-gray-950 dark:hover:text-white">Blog</button>
+              <button
+                type="button"
+                onClick={cycleTheme}
+                aria-label="Toggle theme"
+                className="transition-colors hover:text-gray-950 dark:hover:text-white"
+                title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+              >
+                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
             </div>
           </div>
         </header>
 
         {/* Tabs */}
-        <div className="border-b border-white/8 px-5 sm:px-8">
-          <nav className="scrollbar-none flex gap-6 overflow-x-auto sm:gap-8">
+        <div className="border-b border-gray-200 px-5 sm:px-8 dark:border-white/8">
+          <nav className="scrollbar-none flex gap-5 overflow-x-auto sm:gap-6">
             {docTabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => handleTabChange(tab)}
-                className={`border-b-2 pb-4 pt-5 text-[0.98rem] font-medium whitespace-nowrap transition-colors sm:text-[1.05rem] ${
+                className={`border-b-2 pb-3 pt-4 whitespace-nowrap text-sm font-medium transition-colors ${
                   activeTab === tab
-                    ? 'border-[#3a96ff] text-white'
-                    : 'border-transparent text-white/52 hover:text-white/80'
+                    ? 'border-[#3a96ff] text-gray-950 dark:text-white'
+                    : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-white/52 dark:hover:text-white/80'
                 }`}
               >
                 {tab}
@@ -967,7 +1083,7 @@ export function DocsPage() {
         )}
 
         {/* Main grid */}
-        <div className="grid gap-8 px-5 py-8 lg:px-8 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_280px] xl:gap-8 2xl:gap-10 xl:py-10">
+        <div className="grid gap-6 px-5 py-6 lg:px-8 xl:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_240px] xl:gap-6 2xl:gap-8 xl:py-8">
           {/* Left sidebar - article nav */}
           <aside className="hidden xl:block">
             <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto pr-1">{articleNav}</div>
@@ -975,13 +1091,13 @@ export function DocsPage() {
 
           {/* Main content */}
           <main ref={mainRef} className="min-w-0">
-            <div className="rounded-[1.75rem] border border-white/8 bg-[linear-gradient(180deg,#0e1015_0%,#0a0c10_100%)] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.28)] sm:p-8">
-              <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-white/38">
-                <button type="button" onClick={() => navigate('/docs')} className="transition-colors hover:text-white">Docs</button>
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_20px_70px_rgba(15,23,42,0.08)] sm:p-6 dark:border-white/8 dark:bg-[linear-gradient(180deg,#0e1015_0%,#0a0c10_100%)] dark:shadow-[0_20px_80px_rgba(0,0,0,0.28)]">
+              <div className="mb-5 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-white/38">
+                <button type="button" onClick={() => navigate('/docs')} className="transition-colors hover:text-gray-950 dark:hover:text-white">Docs</button>
                 <ChevronRight className="h-3.5 w-3.5" />
-                <button type="button" onClick={() => handleTabChange(activeTab)} className="transition-colors hover:text-white">{activeTab}</button>
+                <button type="button" onClick={() => handleTabChange(activeTab)} className="transition-colors hover:text-gray-950 dark:hover:text-white">{activeTab}</button>
                 <ChevronRight className="h-3.5 w-3.5" />
-                <span className="text-white/65">{activeDoc.label}</span>
+                <span className="text-gray-700 dark:text-white/65">{activeDoc.label}</span>
               </div>
 
               <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -990,10 +1106,10 @@ export function DocsPage() {
                     {activeDoc.heroBadge}
                   </div>
                   <p className="mt-4 text-base font-semibold text-[#4f9fff]">{activeDoc.eyebrow}</p>
-                  <h1 className="mt-3 text-4xl font-bold tracking-[-0.045em] text-white sm:text-5xl">
+                  <h1 className="mt-2 text-3xl font-bold tracking-normal text-gray-950 sm:text-4xl dark:text-white">
                     {activeDoc.title}
                   </h1>
-                  <p className="mt-5 max-w-4xl text-lg leading-[1.8] text-white/60 sm:text-[1.15rem]">
+                  <p className="mt-4 max-w-3xl text-base leading-7 text-gray-600 dark:text-white/60">
                     {activeDoc.summary}
                   </p>
                 </div>
@@ -1001,10 +1117,10 @@ export function DocsPage() {
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className={`inline-flex shrink-0 items-center gap-2 self-start whitespace-nowrap rounded-2xl border px-4 py-3 text-sm font-medium leading-none transition-all sm:px-5 sm:text-base ${
+                  className={`inline-flex shrink-0 items-center gap-2 self-start whitespace-nowrap rounded-xl border px-4 py-2.5 text-sm font-medium leading-none transition-all ${
                     copied
-                      ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-white/10 bg-[#0d0f14] text-white/76 hover:bg-white/[0.04] hover:text-white'
+                      ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+                      : 'border-gray-200 bg-gray-950 text-white hover:bg-gray-800 dark:border-white/10 dark:bg-[#0d0f14] dark:text-white/76 dark:hover:bg-white/[0.04] dark:hover:text-white'
                   }`}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -1013,15 +1129,15 @@ export function DocsPage() {
               </div>
 
               {/* Stats */}
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 {activeDoc.stats.map((stat) => (
                   <div
                     key={stat.label}
-                    className="group relative overflow-hidden rounded-[1.35rem] border border-white/8 bg-white/[0.03] p-5 transition-all duration-300 hover:border-white/16 hover:bg-white/[0.05]"
+                    className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-4 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]"
                   >
                     <div className="absolute right-0 top-0 h-16 w-16 translate-x-4 -translate-y-4 rounded-full bg-[#6387ff]/10 transition-transform group-hover:scale-150" />
-                    <div className="relative text-2xl font-bold tracking-[-0.03em] text-white transition-colors group-hover:text-[#72b2ff] sm:text-3xl">{stat.value}</div>
-                    <div className="mt-4 text-sm font-medium text-white/48">{stat.label}</div>
+                    <div className="relative text-xl font-bold tracking-normal text-gray-950 transition-colors group-hover:text-[#2f5bff] sm:text-2xl dark:text-white dark:group-hover:text-[#72b2ff]">{stat.value}</div>
+                    <div className="mt-3 text-sm font-medium text-gray-500 dark:text-white/48">{stat.label}</div>
                   </div>
                 ))}
               </div>
@@ -1038,13 +1154,13 @@ export function DocsPage() {
                   return (
                     <section
                       key={card.title}
-                      className="group rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-6 transition-all duration-300 hover:border-white/16 hover:shadow-[0_8px_40px_rgba(58,150,255,0.08)]"
+                      className="group rounded-xl border border-gray-200 bg-gray-50 p-5 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-[#0d0f14] dark:hover:border-white/16 dark:hover:shadow-[0_8px_40px_rgba(58,150,255,0.08)]"
                     >
                       <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#13233d] text-[#5ca8ff] transition-all duration-300 group-hover:bg-[#1a3055] group-hover:text-[#72b2ff]">
                         <Icon className="h-5 w-5" />
                       </div>
-                      <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">{card.title}</h2>
-                      <p className="mt-3 text-[1.02rem] leading-8 text-white/56">{card.body}</p>
+                      <h2 className="text-xl font-semibold tracking-normal text-gray-950 dark:text-white">{card.title}</h2>
+                      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-white/56">{card.body}</p>
                     </section>
                   );
                 })}
@@ -1052,7 +1168,7 @@ export function DocsPage() {
             </div>
 
             {/* Sections */}
-            <div className="mt-10 space-y-6">
+            <div className="mt-8 space-y-4">
               {activeDoc.sections.map((section, idx) => (
                 <section
                   key={section.id}
@@ -1060,17 +1176,17 @@ export function DocsPage() {
                   ref={(node) => {
                     sectionRefs.current[section.id] = node;
                   }}
-                  className="relative rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-6 transition-all duration-300 hover:border-white/14 sm:p-8"
+                  className="relative rounded-xl border border-gray-200 bg-gray-50 p-5 transition-all duration-300 hover:border-gray-300 hover:bg-white sm:p-6 dark:border-white/8 dark:bg-[#0d0f14] dark:hover:border-white/14"
                 >
-                  <div className="absolute -left-3 top-8 hidden h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-[#0d0f14] text-xs font-bold text-white/40 sm:flex">
+                  <div className="absolute -left-3 top-8 hidden h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-xs font-bold text-gray-400 shadow-sm sm:flex dark:border-white/10 dark:bg-[#0d0f14] dark:text-white/40">
                     {idx + 1}
                   </div>
-                  <h2 className="text-2xl font-semibold tracking-[-0.03em] text-white">{section.title}</h2>
-                  <p className="mt-4 text-[1.05rem] leading-8 text-white/58">{section.body}</p>
+                  <h2 className="text-xl font-semibold tracking-normal text-gray-950 dark:text-white">{section.title}</h2>
+                  <p className="mt-3 text-sm leading-7 text-gray-600 dark:text-white/58">{section.body}</p>
                   {section.bullets && (
                     <ul className="mt-6 space-y-3">
                       {section.bullets.map((bullet) => (
-                        <li key={bullet} className="flex gap-3 text-[1rem] leading-7 text-white/54">
+                        <li key={bullet} className="flex gap-3 text-sm leading-6 text-gray-600 dark:text-white/54">
                           <span className="mt-2.5 h-2 w-2 flex-none rounded-full bg-[#5aa5ff]" />
                           <span>{bullet}</span>
                         </li>
@@ -1082,16 +1198,16 @@ export function DocsPage() {
             </div>
 
             {/* Related pages */}
-            <section className="mt-8 rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-6 sm:p-7">
+            <section className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6 dark:border-white/8 dark:bg-[#0d0f14]">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#72b2ff]">Keep reading</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-white">Related pages</h2>
+                  <h2 className="mt-2 text-xl font-semibold tracking-normal text-gray-950 dark:text-white">Related pages</h2>
                 </div>
                 <button
                   type="button"
                   onClick={openAssistant}
-                  className="inline-flex items-center gap-2 self-start rounded-xl border border-white/10 px-3 py-2 text-sm font-medium text-white/62 transition-colors hover:bg-white/[0.04] hover:text-white"
+                  className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-950 dark:border-white/10 dark:bg-transparent dark:text-white/62 dark:hover:bg-white/[0.04] dark:hover:text-white"
                 >
                   <Sparkles className="h-4 w-4" />
                   Ask about this page
@@ -1103,7 +1219,7 @@ export function DocsPage() {
                     key={item}
                     type="button"
                     onClick={() => handleRelatedSelect(item)}
-                    className="group flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-4 text-left text-white/68 transition-all duration-200 hover:border-white/16 hover:bg-white/[0.05] hover:text-white"
+                    className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm text-gray-600 transition-all duration-200 hover:border-gray-300 hover:text-gray-950 dark:border-white/8 dark:bg-white/[0.02] dark:text-white/68 dark:hover:border-white/16 dark:hover:bg-white/[0.05] dark:hover:text-white"
                   >
                     <span>{item}</span>
                     <ChevronRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -1121,10 +1237,10 @@ export function DocsPage() {
                     setActiveDocId(previousDoc.article.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="group rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-5 text-left transition-all hover:border-white/16 hover:bg-white/[0.04]"
+                  className="group rounded-xl border border-gray-200 bg-gray-50 p-5 text-left transition-all hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-[#0d0f14] dark:hover:border-white/16 dark:hover:bg-white/[0.04]"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/32">Previous</p>
-                  <div className="mt-3 flex items-center gap-3 text-white/72 group-hover:text-white">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400 dark:text-white/32">Previous</p>
+                  <div className="mt-3 flex items-center gap-3 text-gray-600 group-hover:text-gray-950 dark:text-white/72 dark:group-hover:text-white">
                     <ChevronRight className="h-4 w-4 rotate-180 transition-transform group-hover:-translate-x-1" />
                     <span className="font-medium">{previousDoc.article.label}</span>
                   </div>
@@ -1138,10 +1254,10 @@ export function DocsPage() {
                     setActiveDocId(nextDoc.article.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="group rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-5 text-left transition-all hover:border-white/16 hover:bg-white/[0.04] md:text-right"
+                  className="group rounded-xl border border-gray-200 bg-gray-50 p-5 text-left transition-all hover:border-gray-300 hover:bg-white md:text-right dark:border-white/8 dark:bg-[#0d0f14] dark:hover:border-white/16 dark:hover:bg-white/[0.04]"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/32">Next</p>
-                  <div className="mt-3 flex items-center gap-3 text-white/72 group-hover:text-white md:justify-end">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400 dark:text-white/32">Next</p>
+                  <div className="mt-3 flex items-center gap-3 text-gray-600 group-hover:text-gray-950 md:justify-end dark:text-white/72 dark:group-hover:text-white">
                     <span className="font-medium">{nextDoc.article.label}</span>
                     <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
@@ -1149,19 +1265,19 @@ export function DocsPage() {
               )}
             </section>
 
-            <section className="mt-8 overflow-hidden rounded-[1.5rem] border border-[#3a96ff]/20 bg-[linear-gradient(135deg,rgba(19,35,61,0.92),rgba(13,15,20,0.98))] p-6 sm:p-8">
+            <section className="mt-6 overflow-hidden rounded-xl border border-[#3a96ff]/20 bg-[linear-gradient(135deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))] p-5 sm:p-6 dark:bg-[linear-gradient(135deg,rgba(19,35,61,0.92),rgba(13,15,20,0.98))]">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#72b2ff]">Ready to build</p>
-                  <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">Turn this guidance into a real page.</h2>
-                  <p className="mt-3 max-w-2xl text-base leading-7 text-white/58">
+                  <h2 className="mt-2 text-2xl font-semibold tracking-normal text-gray-950 dark:text-white">Turn this guidance into a real page.</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-white/58">
                     Open the builder, start from a prompt, and keep the docs nearby while you shape the first draft.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => navigate('/builder')}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-[#0d0f14] transition-transform hover:scale-[1.02]"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-5 py-3 text-sm font-bold text-white transition-transform hover:scale-[1.02] dark:bg-white dark:text-[#0d0f14]"
                 >
                   Open builder
                   <ChevronRight className="h-4 w-4" />
@@ -1172,12 +1288,12 @@ export function DocsPage() {
 
           {/* Right sidebar - On this page (2xl only) */}
           <aside className="hidden 2xl:block">
-            <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-[1.5rem] border border-white/8 bg-[#0d0f14] p-5">
-              <div className="mb-6 flex items-center gap-3 text-white/72">
+            <div className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-[0_14px_45px_rgba(15,23,42,0.06)] dark:border-white/8 dark:bg-[#0d0f14]">
+              <div className="mb-5 flex items-center gap-3 text-gray-700 dark:text-white/72">
                 <BookOpen className="h-4 w-4" />
-                <span className="text-base font-medium xl:text-[1.05rem]">On this page</span>
+                <span className="text-sm font-medium">On this page</span>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {activeDoc.sections.map((section) => {
                   const isActive = section.id === activeSectionId;
                   return (
@@ -1185,10 +1301,10 @@ export function DocsPage() {
                       key={section.id}
                       type="button"
                       onClick={() => scrollToSection(section.id)}
-                      className={`block border-l-2 py-1 pl-3 text-left text-[0.95rem] leading-6 transition-all duration-200 xl:text-[1rem] ${
+                      className={`block border-l-2 py-1 pl-3 text-left text-sm leading-5 transition-all duration-200 ${
                         isActive
                           ? 'border-[#3a96ff] text-[#4f9fff]'
-                          : 'border-transparent text-white/45 hover:text-white/75'
+                          : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-white/45 dark:hover:text-white/75'
                       }`}
                     >
                       {section.title}
@@ -1207,25 +1323,25 @@ export function DocsPage() {
           >
             <button
               type="button"
-              className="absolute inset-0 bg-black/58 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-950/18 backdrop-blur-sm dark:bg-black/58"
               onClick={() => setAssistantOpen(false)}
               aria-label="Close AI assistant"
             />
-            <div className="absolute bottom-0 left-0 right-0 flex max-h-[86vh] min-h-[560px] flex-col rounded-t-[1.5rem] border border-white/8 bg-[#090b10] shadow-[0_-20px_80px_rgba(0,0,0,0.38)] sm:left-6 sm:right-6 sm:bottom-6 sm:rounded-[1.5rem] xl:left-auto xl:right-6 xl:top-6 xl:bottom-6 xl:w-[410px] xl:max-h-none xl:min-h-0 xl:shadow-[0_24px_100px_rgba(0,0,0,0.45)] 2xl:w-[430px]">
+            <div className="absolute bottom-0 left-0 right-0 flex max-h-[86vh] min-h-[560px] flex-col rounded-t-[1.5rem] border border-gray-200 bg-white shadow-[0_-20px_80px_rgba(15,23,42,0.18)] sm:left-6 sm:right-6 sm:bottom-6 sm:rounded-[1.5rem] xl:left-auto xl:right-6 xl:top-6 xl:bottom-6 xl:w-[410px] xl:max-h-none xl:min-h-0 xl:shadow-[0_24px_100px_rgba(15,23,42,0.22)] 2xl:w-[430px] dark:border-white/8 dark:bg-[#090b10] dark:shadow-[0_24px_100px_rgba(0,0,0,0.45)]">
               {/* Assistant header */}
-              <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+              <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-white/8">
                 <div className="flex items-center gap-3">
                   <Sparkles className="h-4 w-4 text-[#4f9fff]" />
-                  <span className="text-xl font-semibold tracking-[-0.03em] text-white">Assistant</span>
+                  <span className="text-xl font-semibold tracking-normal text-gray-950 dark:text-white">Assistant</span>
                 </div>
-                <div className="flex items-center gap-3 text-white/45">
-                  <button type="button" className="transition-colors hover:text-white" aria-label="Open in new">
+                <div className="flex items-center gap-3 text-gray-400 dark:text-white/45">
+                  <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Open in new">
                     <ChevronRight className="h-4 w-4 -rotate-45" />
                   </button>
                   <button
                     type="button"
                     onClick={handleClearAssistant}
-                    className="transition-colors hover:text-white"
+                    className="transition-colors hover:text-gray-900 dark:hover:text-white"
                     aria-label="Clear thread"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1233,7 +1349,7 @@ export function DocsPage() {
                   <button
                     type="button"
                     onClick={() => setAssistantOpen(false)}
-                    className="transition-colors hover:text-white"
+                    className="transition-colors hover:text-gray-900 dark:hover:text-white"
                     aria-label="Close assistant"
                   >
                     <X className="h-4 w-4" />
@@ -1242,8 +1358,8 @@ export function DocsPage() {
               </div>
 
               {/* On this page - mobile/tablet */}
-              <div className="border-b border-white/8 px-5 py-4 xl:hidden">
-                <div className="mb-4 flex items-center gap-3 text-white/72">
+              <div className="border-b border-gray-200 px-5 py-4 xl:hidden dark:border-white/8">
+                <div className="mb-4 flex items-center gap-3 text-gray-700 dark:text-white/72">
                   <BookOpen className="h-4 w-4" />
                   <span className="text-base font-medium">On this page</span>
                 </div>
@@ -1258,7 +1374,7 @@ export function DocsPage() {
                         className={`block border-l-2 py-1 pl-3 text-left text-sm leading-6 transition-all duration-200 ${
                           isActive
                             ? 'border-[#3a96ff] text-[#4f9fff]'
-                            : 'border-transparent text-white/45 hover:text-white/75'
+                            : 'border-transparent text-gray-500 hover:text-gray-900 dark:text-white/45 dark:hover:text-white/75'
                         }`}
                       >
                         {section.title}
@@ -1272,23 +1388,23 @@ export function DocsPage() {
               <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
                 {/* Default context message */}
                 <div className="flex justify-end">
-                  <div className="max-w-[78%] rounded-[1.35rem] bg-white/[0.06] px-4 py-3 text-sm font-medium tracking-[-0.01em] text-white/90">
+                  <div className="max-w-[78%] rounded-[1.35rem] bg-gray-950 px-4 py-3 text-sm font-medium tracking-normal text-white shadow-sm dark:bg-white/[0.06] dark:text-white/90">
                     {activeDoc.label}
                   </div>
                 </div>
 
                 <div>
-                  <div className="max-w-[92%] text-sm leading-7 text-white/62">
+                  <div className="max-w-[92%] text-sm leading-7 text-gray-600 dark:text-white/62">
                     {assistantReplies[activeDoc.id] ?? assistantReplies.welcome}
                   </div>
-                  <div className="mt-4 flex items-center gap-3 text-white/35">
-                    <button type="button" className="transition-colors hover:text-white" aria-label="Helpful">
+                  <div className="mt-4 flex items-center gap-3 text-gray-400 dark:text-white/35">
+                    <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Helpful">
                       <ThumbsUp className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" className="transition-colors hover:text-white" aria-label="Not helpful">
+                    <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Not helpful">
                       <ThumbsDown className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" onClick={handleCopy} className="transition-colors hover:text-white" aria-label="Copy">
+                    <button type="button" onClick={handleCopy} className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Copy">
                       <Copy className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -1299,21 +1415,21 @@ export function DocsPage() {
                   <div key={i}>
                     {msg.role === 'user' ? (
                       <div className="flex justify-end">
-                        <div className="max-w-[78%] rounded-[1.35rem] bg-white/[0.06] px-4 py-3 text-sm font-medium tracking-[-0.01em] text-white/90">
+                        <div className="max-w-[78%] rounded-[1.35rem] bg-gray-950 px-4 py-3 text-sm font-medium tracking-normal text-white shadow-sm dark:bg-white/[0.06] dark:text-white/90">
                           {msg.content}
                         </div>
                       </div>
                     ) : (
                       <div>
-                        <div className="max-w-[92%] text-sm leading-7 text-white/62">{msg.content}</div>
-                        <div className="mt-4 flex items-center gap-3 text-white/35">
-                          <button type="button" className="transition-colors hover:text-white" aria-label="Helpful">
+                        <div className="max-w-[92%] text-sm leading-7 text-gray-600 dark:text-white/62">{msg.content}</div>
+                        <div className="mt-4 flex items-center gap-3 text-gray-400 dark:text-white/35">
+                          <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Helpful">
                             <ThumbsUp className="h-3.5 w-3.5" />
                           </button>
-                          <button type="button" className="transition-colors hover:text-white" aria-label="Not helpful">
+                          <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Not helpful">
                             <ThumbsDown className="h-3.5 w-3.5" />
                           </button>
-                          <button type="button" onClick={handleCopy} className="transition-colors hover:text-white" aria-label="Copy">
+                          <button type="button" onClick={handleCopy} className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Copy">
                             <Copy className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -1325,7 +1441,7 @@ export function DocsPage() {
                 {/* Suggested questions */}
                 {assistantMessages.length === 0 && (
                   <div>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/28">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-white/28">
                       Suggested questions
                     </p>
                     <div className="space-y-2">
@@ -1334,7 +1450,7 @@ export function DocsPage() {
                           key={prompt}
                           type="button"
                           onClick={() => handleSuggestedQuestion(prompt)}
-                          className="block w-full rounded-xl border border-white/6 bg-white/[0.02] px-4 py-2.5 text-left text-xs leading-5 text-white/55 transition-all duration-200 hover:border-white/14 hover:bg-white/[0.05] hover:text-white/80"
+                          className="block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-left text-xs leading-5 text-gray-600 transition-all duration-200 hover:border-gray-300 hover:bg-white hover:text-gray-950 dark:border-white/6 dark:bg-white/[0.02] dark:text-white/55 dark:hover:border-white/14 dark:hover:bg-white/[0.05] dark:hover:text-white/80"
                         >
                           {prompt}
                         </button>
@@ -1345,8 +1461,8 @@ export function DocsPage() {
               </div>
 
               {/* Input area */}
-              <div className="border-t border-white/8 p-4">
-                <div className="rounded-[1.4rem] border border-[#2e8eff]/20 bg-[#090b10] p-3 shadow-[0_0_0_1px_rgba(46,142,255,0.08)] transition-all duration-200 focus-within:border-[#2e8eff]/40">
+              <div className="border-t border-gray-200 p-4 dark:border-white/8">
+                <div className="rounded-[1.4rem] border border-[#2e8eff]/20 bg-gray-50 p-3 shadow-[0_0_0_1px_rgba(46,142,255,0.08)] transition-all duration-200 focus-within:border-[#2e8eff]/40 dark:bg-[#090b10]">
                   <textarea
                     value={assistantInput}
                     onChange={(event) => setAssistantInput(event.target.value)}
@@ -1358,10 +1474,10 @@ export function DocsPage() {
                     }}
                     placeholder="Ask a question..."
                     rows={2}
-                    className="w-full resize-none bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+                    className="w-full resize-none bg-transparent text-sm text-gray-950 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-white/30"
                   />
-                  <div className="mt-2 flex items-center justify-between text-white/35">
-                    <button type="button" className="transition-colors hover:text-white" aria-label="Attach file">
+                  <div className="mt-2 flex items-center justify-between text-gray-400 dark:text-white/35">
+                    <button type="button" className="transition-colors hover:text-gray-900 dark:hover:text-white" aria-label="Attach file">
                       <Paperclip className="h-4 w-4" />
                     </button>
                     <button
@@ -1379,9 +1495,7 @@ export function DocsPage() {
           </aside>
         </div>
       </div>
-      <div className="dark">
-        <MarketingFooter />
-      </div>
+      <MarketingFooter />
     </div>
   );
 }

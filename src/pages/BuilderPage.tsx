@@ -41,7 +41,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { messages, isGenerating, sendMessage, clearMessages } = useChat(projectId || 'default');
+  const { messages, isGenerating, generationStep, sendMessage, clearMessages } = useChat(projectId || 'default');
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -89,14 +89,18 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const handleSendMessage = useCallback(async (content: string) => {
     const response = await sendMessage(content, files);
     if (response) {
-      // Merge AI-generated files with existing files
       const newFiles = [...files];
       for (const file of response.files) {
+        if (file.action === 'delete') {
+          const existingIdx = newFiles.findIndex(f => f.path === file.path);
+          if (existingIdx >= 0) newFiles.splice(existingIdx, 1);
+          continue;
+        }
         const existingIdx = newFiles.findIndex(f => f.path === file.path);
         const projectFile: ProjectFile = {
           id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${file.path}`,
           path: file.path,
-          content: file.content,
+          content: file.content || '',
           type: getFileType(file.path),
         };
         if (existingIdx >= 0) {
@@ -106,6 +110,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         }
       }
       setFiles(newFiles);
+      setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
+      if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
+        setSelectedFile(newFiles.find(file => file.path === 'index.html') || newFiles[0] || null);
+      }
       persistFiles(newFiles);
       const nextActiveFile = newFiles.find(file => file.path === 'index.html') || newFiles[0] || null;
       if (nextActiveFile) {
@@ -115,7 +123,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           return [...prev, nextActiveFile];
         });
       }
-      addToast('success', `Generated ${response.files.length} file${response.files.length > 1 ? 's' : ''}`);
+      const changedCount = response.files.length;
+      addToast('success', `Applied ${changedCount} file operation${changedCount > 1 ? 's' : ''}`);
       setViewMode('preview');
     }
   }, [files, sendMessage, persistFiles, addToast]);
@@ -216,16 +225,26 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   // Rename file
   const handleRenameFile = useCallback((oldPath: string, newPath: string) => {
+    const cleanPath = newPath.trim();
+    if (!validatePath(cleanPath)) {
+      addToast('error', 'Use a relative file path without traversal.');
+      return;
+    }
+    if (files.some(file => file.path === cleanPath && file.path !== oldPath)) {
+      addToast('error', `${cleanPath} already exists.`);
+      return;
+    }
     setFiles(prev => {
-      const next = prev.map(f => f.path === oldPath ? { ...f, path: newPath } : f);
+      const next = prev.map(f => f.path === oldPath ? { ...f, path: cleanPath, type: getFileType(cleanPath) } : f);
       persistFiles(next);
       return next;
     });
-    setOpenFiles(prev => prev.map(f => f.path === oldPath ? { ...f, path: newPath } : f));
+    setOpenFiles(prev => prev.map(f => f.path === oldPath ? { ...f, path: cleanPath, type: getFileType(cleanPath) } : f));
     if (selectedFile?.path === oldPath) {
-      setSelectedFile(prev => prev ? { ...prev, path: newPath } : null);
+      setSelectedFile(prev => prev ? { ...prev, path: cleanPath, type: getFileType(cleanPath) } : null);
     }
-  }, [selectedFile, persistFiles]);
+    addToast('success', `Renamed ${oldPath} to ${cleanPath}`);
+  }, [files, selectedFile, persistFiles, addToast]);
 
   // Open file from chat
   const handleOpenFileFromChat = useCallback((path: string) => {
@@ -273,7 +292,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-black p-0 text-foreground md:p-2">
+    <div className="h-[100dvh] overflow-hidden bg-muted p-0 text-foreground dark:bg-black md:p-2">
       <div className="relative flex h-full min-h-0 overflow-hidden border border-border bg-background shadow-2xl shadow-black/60 md:rounded-xl">
         {/* Main workspace area */}
         {sidebarOpen && (
@@ -306,7 +325,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             onCreateFile={handleCreateFile}
             onDeleteFile={handleDeleteFile}
             onRenameFile={handleRenameFile}
-            readOnly
           />
         </aside>
 
@@ -435,7 +453,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 onSelectFile={handleSelectFile}
                 onCloseFile={handleCloseFile}
                 onUpdateFile={handleUpdateFile}
-                readOnly
               />
             ) : (
               <PreviewPanel files={files} />
@@ -466,6 +483,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
               onOpenFile={handleOpenFileFromChat}
               onRegenerateMessage={handleRegenerateMessage}
               onClearMessages={clearMessages}
+              generationStep={generationStep}
             />
           </div>
         </aside>
@@ -516,6 +534,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                   onOpenFile={handleOpenFileFromChat}
                   onRegenerateMessage={handleRegenerateMessage}
                   onClearMessages={clearMessages}
+                  generationStep={generationStep}
                 />
               </div>
             </div>

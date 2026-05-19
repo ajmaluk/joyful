@@ -62,20 +62,34 @@ export function saveChatHistory(projectId: string, messages: ChatMessage[]): voi
 
 // Settings
 export function getSettings(): UserSettings {
-  try {
-    const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    if (data) return JSON.parse(data);
-  } catch { /* ignore */ }
-  return {
+  const defaults: UserSettings = {
     theme: 'system',
     editorFontSize: 14,
     editorLineHeight: 1.6,
     autoSave: true,
     livePreview: true,
-    aiProvider: 'openai',
-    aiModel: 'gpt-4o',
+    aiProvider: 'local',
+    aiModel: 'local-lite',
     aiTemperature: 0.7,
+    connectedProviders: { local: true },
+    providerKeys: {},
   };
+
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+    if (data) {
+      const parsed = JSON.parse(data) as Partial<UserSettings>;
+      return {
+        ...defaults,
+        ...parsed,
+        aiProvider: parsed.aiProvider || defaults.aiProvider,
+        aiModel: parsed.aiModel || defaults.aiModel,
+        connectedProviders: { ...defaults.connectedProviders, ...parsed.connectedProviders },
+        providerKeys: { ...defaults.providerKeys, ...parsed.providerKeys },
+      };
+    }
+  } catch { /* ignore */ }
+  return defaults;
 }
 
 export function saveSettings(settings: UserSettings): void {

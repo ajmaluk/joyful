@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, RotateCcw, Check, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, RotateCcw, Check, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, CircleDot } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { TypingText } from '@/components/ui/TypingText';
 
@@ -124,6 +124,31 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isG
           </p>
         )}
       </div>
+
+      {message.tasks && message.tasks.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">AI task list</p>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-gray-500">
+              {message.tasks.filter(task => task.status === 'done').length}/{message.tasks.length} done
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {message.tasks.map((task) => (
+              <div key={task.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-white px-2.5 py-2">
+                {task.status === 'done' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+                ) : (
+                  <CircleDot className="h-3.5 w-3.5 flex-shrink-0 text-indigo-500" />
+                )}
+                <span className={`truncate text-xs ${task.status === 'done' ? 'text-gray-700' : 'font-medium text-gray-900'}`}>
+                  {task.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* File chips */}
       {message.files && message.files.length > 0 && (

@@ -252,6 +252,41 @@ document.querySelectorAll('a[href^="#"]').forEach(a=>{
 });`;
 }
 
+function extractRequestedPath(prompt: string): string | null {
+  const quoted = prompt.match(/["'`](.{1,120}\.[a-z0-9]+)["'`]/i)?.[1];
+  const direct = quoted || prompt.match(/\b([\w ./-]+\.(?:html|css|js|json|md|jsx|tsx))\b/i)?.[1];
+  if (!direct) return null;
+  const normalized = direct.trim().replace(/^\.\//, '').replace(/\s+/g, '-');
+  if (normalized.includes('..') || normalized.startsWith('/') || !/^[/\w\-.]+$/.test(normalized)) return null;
+  return normalized;
+}
+
+function starterContentForPath(path: string, prompt: string): string {
+  const title = path.split('/').pop()?.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ') || 'New file';
+  if (path.endsWith('.html')) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <h1>${title.charAt(0).toUpperCase() + title.slice(1)}</h1>
+    <p>${prompt.replace(/[<>]/g, '').slice(0, 180) || 'Add your content here.'}</p>
+  </main>
+</body>
+</html>`;
+  }
+  if (path.endsWith('.css')) return `:root {\n  color-scheme: light;\n}\n\nbody {\n  margin: 0;\n  font-family: Inter, system-ui, sans-serif;\n}\n`;
+  if (path.endsWith('.js')) return `// ${title}\nconsole.log('${title} loaded');\n`;
+  if (path.endsWith('.json')) return `{\n  "name": "${title}",\n  "createdBy": "Joyful"\n}\n`;
+  if (path.endsWith('.md')) return `# ${title.charAt(0).toUpperCase() + title.slice(1)}\n\nCreated from your Joyful prompt.\n`;
+  return '';
+}
+
 // ─── Full Template Builders ────────────────────────────────────────
 
 function buildPortfolio(analysis: PromptAnalysis): AIGenerationResponse {
@@ -637,6 +672,33 @@ function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analy
   const modifiedFiles: AIGenerationResponse['files'] = [];
   let summary = '';
   const nextSteps: string[] = [];
+  const requestedPath = extractRequestedPath(prompt);
+
+  if (requestedPath && /\b(delete|remove)\b/.test(lower)) {
+    if (!existingFiles.some(file => file.path === requestedPath)) {
+      return {
+        files: [],
+        summary: `I could not find ${requestedPath} to delete.`,
+        nextSteps: ['Check the file path', 'Open the file explorer', 'Ask Joyful to create the file instead'],
+        metadata: { template: analysis.template, sections: ['file-system'], estimatedComplexity: 'simple' },
+      };
+    }
+    return {
+      files: [{ path: requestedPath, action: 'delete' }],
+      summary: `Deleted ${requestedPath} from the project.`,
+      nextSteps: ['Review the preview', 'Remove any references to that file', 'Export the updated project'],
+      metadata: { template: analysis.template, sections: ['file-system'], estimatedComplexity: 'simple' },
+    };
+  }
+
+  if (requestedPath && /\b(create|add|new)\b/.test(lower) && !existingFiles.some(file => file.path === requestedPath)) {
+    return {
+      files: [{ path: requestedPath, content: starterContentForPath(requestedPath, prompt), action: 'create' }],
+      summary: `Created ${requestedPath} with starter content based on your request.`,
+      nextSteps: ['Open the new file', 'Ask Joyful to connect it from navigation', 'Refine the content'],
+      metadata: { template: analysis.template, sections: ['file-system'], estimatedComplexity: 'simple' },
+    };
+  }
 
   if (/dark|night|black/.test(lower) && /convert|make|change|switch|toggle/.test(lower)) {
     css = css
@@ -754,9 +816,10 @@ export async function* generateWithAIStream(
   for (const file of response.files) {
     yield { type: 'file_start', data: { path: file.path } };
 
+    const content = file.content || '';
     const chunkSize = 200;
-    for (let i = 0; i < file.content.length; i += chunkSize) {
-      const chunk = file.content.slice(i, i + chunkSize);
+    for (let i = 0; i < content.length; i += chunkSize) {
+      const chunk = content.slice(i, i + chunkSize);
       yield { type: 'file_content', data: { path: file.path, content: chunk } };
       await new Promise(resolve => setTimeout(resolve, 50));
     }

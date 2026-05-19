@@ -31,6 +31,8 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   files?: FileOperation[];
+  tasks?: ChatTask[];
+  nextSteps?: string[];
   rating?: number;
   actionType?: 'create' | 'modify' | 'delete' | 'generate';
   metadata?: {
@@ -38,6 +40,12 @@ export interface ChatMessage {
     sections?: string[];
     complexity?: 'simple' | 'medium' | 'complex';
   };
+}
+
+export interface ChatTask {
+  id: string;
+  label: string;
+  status: 'todo' | 'doing' | 'done';
 }
 
 // Chat action for history tracking
@@ -61,7 +69,7 @@ export interface FileOperation {
 export interface AIGenerationResponse {
   files: {
     path: string;
-    content: string;
+    content?: string;
     action?: 'create' | 'modify' | 'delete';
   }[];
   summary: string;
@@ -102,9 +110,11 @@ export interface UserSettings {
   editorLineHeight: number;
   autoSave: boolean;
   livePreview: boolean;
-  aiProvider: 'openai' | 'anthropic' | 'openrouter';
+  aiProvider: 'local' | 'openai' | 'anthropic' | 'openrouter' | 'google' | 'mistral' | 'groq';
   aiModel: string;
   aiTemperature: number;
+  connectedProviders?: Partial<Record<UserSettings['aiProvider'], boolean>>;
+  providerKeys?: Partial<Record<UserSettings['aiProvider'], string>>;
 }
 
 // Toast notification

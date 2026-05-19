@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -23,6 +23,7 @@ interface DashboardPageProps {
   projects: Project[];
   onCreateProject: (name: string, description: string) => Project;
   onDeleteProject: (id: string) => void;
+  onStartProject?: (prompt: string) => void;
 }
 
 const tabs = ['My projects', 'Recently viewed', 'Templates'] as const;
@@ -31,9 +32,11 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
 }
 
-export function DashboardPage({ projects, onCreateProject, onDeleteProject }: DashboardPageProps) {
+export function DashboardPage({ projects, onCreateProject, onDeleteProject, onStartProject }: DashboardPageProps) {
   const navigate = useNavigate();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState('');
+  const [prompt, setPrompt] = useState('');
   const [showNewProject, setShowNewProject] = useState(false);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('My projects');
 
@@ -59,6 +62,33 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
     navigate(`/builder/${project.id}`);
   };
 
+  const handlePromptInput = () => {
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+  };
+
+  const handlePromptSubmit = () => {
+    const trimmed = prompt.trim();
+    if (onStartProject) {
+      onStartProject(trimmed);
+      return;
+    }
+    if (!trimmed) {
+      setShowNewProject(true);
+      return;
+    }
+    const project = onCreateProject(trimmed.slice(0, 54), trimmed);
+    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmed } });
+  };
+
+  const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      handlePromptSubmit();
+    }
+  };
+
   const handleDeleteProject = (project: Project) => {
     if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
       onDeleteProject(project.id);
@@ -71,64 +101,71 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#0f100f] text-[#f6f2ea]">
+    <div className="h-full overflow-y-auto bg-white text-gray-950 dark:bg-[#0f100f] dark:text-[#f6f2ea]">
       <section className="relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-14 lg:px-10">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#171816_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(15,16,15,0.86)_0%,rgba(15,16,15,0.12)_48%,rgba(15,16,15,0)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#171816_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.84)_0%,rgba(255,255,255,0.42)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(15,16,15,0.86)_0%,rgba(15,16,15,0.12)_48%,rgba(15,16,15,0)_100%)]" />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-center justify-center py-8 text-center sm:min-h-[48vh]">
+        <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center justify-center py-8 text-center sm:min-h-[48vh]">
           <button
             type="button"
             onClick={() => navigate('/docs')}
-            className="mb-7 inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-[#17181a]/80 p-1 pr-4 text-sm font-semibold text-white shadow-xl backdrop-blur transition-colors hover:border-white/20"
+            className="mb-7 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/85 p-1 pr-4 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur transition-colors hover:border-gray-300 dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
           >
             <span className="rounded-full bg-[#2f5bff] px-3 py-1 text-xs">New</span>
             <span className="truncate">Workspace skills - create your first skill</span>
             <ArrowRight className="h-4 w-4 flex-none" />
           </button>
 
-          <h1 className="text-balance text-4xl font-bold tracking-normal text-white sm:text-5xl">
+          <h1 className="text-balance text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">
             What do you want to build?
           </h1>
-          <p className="mt-2 text-lg text-white/60">Describe your idea and watch it come to life</p>
+          <p className="mt-2 text-lg font-medium text-gray-700 dark:text-white/60">Describe your idea and watch it come to life</p>
 
-          <div className="mt-9 w-full max-w-4xl rounded-[1.45rem] border border-black/50 bg-[#20211e] p-3 text-left shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/10">
-            <button
-              type="button"
-              onClick={() => setShowNewProject(true)}
-              className="block min-h-24 w-full px-3 pt-3 text-left text-lg font-medium text-[#d8d3ca] outline-none transition-colors hover:text-white"
-            >
-              Ask Joyful to create a prototype...
-            </button>
+          <div className="mt-9 w-full max-w-4xl rounded-[1.45rem] border border-gray-200 bg-white p-3 text-left shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-black/5 dark:border-black/50 dark:bg-[#20211e] dark:shadow-[0_28px_90px_rgba(0,0,0,0.36)] dark:ring-white/10">
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              rows={4}
+              onChange={(event) => {
+                setPrompt(event.target.value);
+                handlePromptInput();
+              }}
+              onInput={handlePromptInput}
+              onKeyDown={handlePromptKeyDown}
+              placeholder="Ask Joyful to create a prototype..."
+              className="block min-h-24 max-h-[180px] w-full resize-none bg-transparent px-3 pt-3 text-left text-lg font-medium text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#f5f2ea] dark:placeholder:text-[#d8d3ca]/75"
+              aria-label="Describe what you want Joyful to build"
+            />
             <div className="flex items-center justify-between gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowNewProject(true)}
+                onClick={() => navigate('/templates')}
                 aria-label="Create project"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-[#d8d3ca] transition-colors hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white"
               >
                 <Plus className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowNewProject(true)}
-                  className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-[#d8d3ca] transition-colors hover:bg-white/5 hover:text-white sm:flex"
+                  onClick={handlePromptSubmit}
+                  className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-950 sm:flex dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
                 >
                   Build <ArrowRight className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
                   aria-label="Voice prompt"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#d8d3ca] transition-colors hover:bg-white/5 hover:text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
                 >
                   <Mic className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowNewProject(true)}
+                  onClick={handlePromptSubmit}
                   aria-label="Start building"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5f2ea] text-[#171816] transition-transform hover:scale-105"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -138,10 +175,10 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
         </div>
       </section>
 
-      <section className="relative z-10 bg-[#0f100f] px-4 py-8 sm:px-6 lg:px-10">
-        <div className="mx-auto max-w-7xl rounded-lg border border-white/10 bg-[#17120f] p-4 shadow-[0_30px_90px_rgba(0,0,0,0.36)] sm:p-6">
+      <section className="relative z-10 bg-white px-4 py-8 sm:px-6 lg:px-10 dark:bg-[#0f100f]">
+        <div className="mx-auto w-full max-w-none rounded-lg border border-gray-200 bg-white p-4 shadow-[0_30px_90px_rgba(15,23,42,0.08)] sm:p-6 dark:border-white/10 dark:bg-[#17120f] dark:shadow-[0_30px_90px_rgba(0,0,0,0.36)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
               {tabs.map((tab) => (
                 <button
                   key={tab}
@@ -152,8 +189,8 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                   }}
                   className={`rounded-md px-4 py-2 text-sm font-semibold transition-colors ${
                     activeTab === tab
-                      ? 'bg-white/10 text-white shadow-sm'
-                      : 'text-[#aaa69d] hover:bg-white/5 hover:text-white'
+                      ? 'bg-white text-gray-950 shadow-sm dark:bg-white/10 dark:text-white'
+                      : 'text-gray-500 hover:bg-white hover:text-gray-950 dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white'
                   }`}
                 >
                   {tab}
@@ -163,18 +200,18 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#aaa69d]" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[#aaa69d]" />
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search projects..."
-                  className="h-10 w-full rounded-md border border-white/10 bg-white/[0.03] pl-9 pr-4 text-sm font-medium text-white outline-none transition-colors placeholder:text-[#6f6b64] hover:border-white/18 focus:border-[#6387ff] sm:w-72"
+                  className="h-10 w-full rounded-md border border-gray-200 bg-white pl-9 pr-4 text-sm font-medium text-gray-950 outline-none transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-[#6387ff] focus:ring-2 focus:ring-[#6387ff]/20 sm:w-72 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-[#6f6b64] dark:hover:border-white/18"
                 />
               </div>
               <button
                 onClick={() => setShowNewProject(true)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#f5f2ea] px-4 text-sm font-bold text-[#171816] transition-transform hover:scale-[1.01]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
               >
                 <Plus className="h-4 w-4" />
                 New project
@@ -188,52 +225,52 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
               { label: 'Files', value: totalFiles },
               { label: 'Drafts', value: projects.filter((project) => project.status === 'draft').length },
             ].map((stat) => (
-              <div key={stat.label} className="group rounded-lg border border-white/8 bg-white/[0.03] p-4 transition-all duration-300 hover:border-white/16 hover:bg-white/[0.05]">
-                <div className="text-2xl font-bold text-white transition-colors duration-300 group-hover:text-[#8fa7ff]">{stat.value}</div>
-                <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-[#aaa69d]">{stat.label}</div>
+              <div key={stat.label} className="group rounded-lg border border-gray-200 bg-gray-50 p-4 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
+                <div className="text-2xl font-bold text-gray-950 transition-colors duration-300 group-hover:text-[#2f5bff] dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
+                <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-gray-500 dark:text-[#aaa69d]">{stat.label}</div>
               </div>
             ))}
           </div>
 
           {projects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/12 bg-white/[0.02] px-6 py-20 text-center">
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-20 text-center dark:border-white/12 dark:bg-white/[0.02]">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6387ff]/20 to-[#f23c78]/20">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
                   <Sparkles className="h-6 w-6" />
                 </div>
               </div>
-              <h2 className="text-2xl font-bold text-white">Start building something amazing</h2>
-              <p className="mt-3 max-w-md text-sm leading-6 text-[#aaa69d]">
+              <h2 className="text-2xl font-bold text-gray-950 dark:text-white">Start building something amazing</h2>
+              <p className="mt-3 max-w-md text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
                 Create your first project and turn your idea into a beautiful website in minutes.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button
                   onClick={() => setShowNewProject(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#f5f2ea] px-6 py-3 text-sm font-bold text-[#171816] transition-transform hover:scale-[1.02]"
+                  className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-6 py-3 text-sm font-bold text-white transition-transform hover:scale-[1.02] dark:bg-[#f5f2ea] dark:text-[#171816]"
                 >
                   <Sparkles className="h-4 w-4" />
                   Create your first project
                 </button>
                 <button
                   onClick={() => navigate('/templates')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.05]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-6 py-3 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-50 dark:border-white/10 dark:text-white dark:hover:bg-white/[0.05]"
                 >
                   Browse templates
                 </button>
               </div>
             </div>
           ) : visibleProjects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] px-6 py-20 text-center">
-              <Search className="mb-4 h-8 w-8 text-[#aaa69d]" />
-              <h2 className="text-lg font-bold text-white">No matching projects</h2>
-              <p className="mt-2 text-sm text-[#aaa69d]">Try a different search term.</p>
+            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-6 py-20 text-center dark:border-white/8 dark:bg-white/[0.02]">
+              <Search className="mb-4 h-8 w-8 text-gray-400 dark:text-[#aaa69d]" />
+              <h2 className="text-lg font-bold text-gray-950 dark:text-white">No matching projects</h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Try a different search term.</p>
             </div>
           ) : (
             <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
               {visibleProjects.map((project) => (
                 <article
                   key={project.id}
-                  className="group relative overflow-hidden rounded-xl border border-white/8 bg-[#211f1b] transition-all duration-300 hover:-translate-y-1 hover:border-white/18 hover:shadow-[0_16px_50px_rgba(0,0,0,0.4)]"
+                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-[0_16px_50px_rgba(15,23,42,0.14)] dark:border-white/8 dark:bg-[#211f1b] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.4)]"
                 >
                   <button
                     type="button"
@@ -249,11 +286,11 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         title={project.name}
                       />
                     ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#1a1a18] to-[#2a2a28]">
+                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1a1a18] dark:to-[#2a2a28]">
                         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
                           <Wand2 className="h-7 w-7" />
                         </div>
-                        <span className="text-sm font-medium text-white/60">Ready for your first prompt</span>
+                        <span className="text-sm font-medium text-gray-500 dark:text-white/60">Ready for your first prompt</span>
                       </div>
                     )}
                     <div className="absolute inset-0 flex items-center justify-center gap-2 bg-[#171816]/0 opacity-0 backdrop-blur-md transition-all group-hover:bg-[#171816]/80 group-hover:opacity-100">
@@ -264,15 +301,15 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-base font-bold text-white">{project.name}</h3>
-                        <p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#aaa69d]">
+                        <h3 className="truncate text-base font-bold text-gray-950 dark:text-white">{project.name}</h3>
+                        <p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-gray-600 dark:text-[#aaa69d]">
                           {project.description || 'No description yet.'}
                         </p>
                       </div>
                     </div>
 
                     <div className="mt-3 flex items-center justify-between">
-                      <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-[#aaa69d]">
+                      <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-gray-500 dark:text-[#aaa69d]">
                         <span className="flex items-center gap-1.5">
                           <Clock className="h-3.5 w-3.5" />
                           {formatDate(project.updatedAt)}
@@ -304,7 +341,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         type="button"
                         onClick={() => navigate(`/builder/${project.id}`)}
                         aria-label={`Preview ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:bg-white/[0.08] hover:text-white"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-950 dark:border-white/10 dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -313,7 +350,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         onClick={() => handleExportProject(project)}
                         disabled={project.files.length === 0}
                         aria-label={`Export ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-950 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
                       >
                         <Download className="h-4 w-4" />
                       </button>
@@ -321,7 +358,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         type="button"
                         onClick={() => handleDeleteProject(project)}
                         aria-label={`Delete ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-200"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-600 dark:border-white/10 dark:text-[#aaa69d] dark:hover:text-red-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

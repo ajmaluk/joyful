@@ -19,11 +19,11 @@ function StepIcon({ status }: { status: 'pending' | 'active' | 'done' }) {
 export function WorkingProcess({ generationStep }: WorkingProcessProps) {
   if (generationStep < 0) return null;
 
-  const completedCount = generationStep;
+  const completedCount = Math.min(generationStep + 1, GENERATION_STEPS.length);
   const progressPercent = Math.round((completedCount / GENERATION_STEPS.length) * 100);
 
   return (
-    <div className="animate-[fade-in_200ms_ease-out] rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/30 p-4 shadow-lg shadow-indigo-500/5">
+    <div className="animate-[fade-in_200ms_ease-out] rounded-xl border border-border bg-card p-4 shadow-lg shadow-black/5">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
@@ -31,15 +31,15 @@ export function WorkingProcess({ generationStep }: WorkingProcessProps) {
             <Loader2 className="h-4 w-4 text-indigo-500 animate-spin" />
             <div className="absolute inset-0 h-4 w-4 rounded-full bg-indigo-400/20 animate-ping" />
           </div>
-          <span className="text-sm font-bold text-gray-800">Building your site</span>
+          <span className="text-sm font-bold text-foreground">AI build plan</span>
         </div>
-        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-600">{progressPercent}%</span>
+        <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">{progressPercent}%</span>
       </div>
 
       {/* Progress bar */}
-      <div className="h-1.5 rounded-full bg-gray-200 mb-3 overflow-hidden">
+      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted">
         <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-400 shadow-sm shadow-indigo-500/30"
+          className="h-full rounded-full bg-primary shadow-sm shadow-indigo-500/30"
           initial={{ width: '0%' }}
           animate={{ width: `${progressPercent}%` }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -59,15 +59,15 @@ export function WorkingProcess({ generationStep }: WorkingProcessProps) {
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05, duration: 0.3, ease: 'easeOut' }}
-                className={`flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all duration-300 ${
-                  status === 'active' ? 'bg-indigo-50 shadow-sm shadow-indigo-500/10 ring-1 ring-indigo-200/50' : ''
+                className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-all duration-300 ${
+                  status === 'active' ? 'bg-primary/10 shadow-sm ring-1 ring-primary/20' : ''
                 } ${status === 'done' ? 'opacity-50' : ''}`}
               >
                 <StepIcon status={status} />
                 <span className={`text-xs transition-colors ${
-                  status === 'active' ? 'font-semibold text-indigo-700' :
-                  status === 'done' ? 'text-gray-500 line-through' :
-                  'text-gray-400'
+                  status === 'active' ? 'font-semibold text-primary' :
+                  status === 'done' ? 'text-muted-foreground line-through' :
+                  'text-muted-foreground'
                 }`}>
                   {label}
                 </span>

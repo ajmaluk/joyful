@@ -5,7 +5,6 @@ import {
   Clock,
   Download,
   Eye,
-  Folder,
   Grid3X3,
   Mic,
   Pencil,
@@ -25,12 +24,6 @@ interface DashboardPageProps {
   onCreateProject: (name: string, description: string) => Project;
   onDeleteProject: (id: string) => void;
 }
-
-const promptIdeas = [
-  'Create a launch page for a design studio',
-  'Build a dashboard for a subscription app',
-  'Make a portfolio with case studies',
-];
 
 const tabs = ['My projects', 'Recently viewed', 'Templates'] as const;
 
@@ -95,13 +88,14 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
           </button>
 
           <h1 className="text-balance text-4xl font-bold tracking-normal text-white sm:text-5xl">
-            What&apos;s on your mind?
+            What do you want to build?
           </h1>
+          <p className="mt-2 text-lg text-white/60">Describe your idea and watch it come to life</p>
 
           <div className="mt-9 w-full max-w-4xl rounded-[1.45rem] border border-black/50 bg-[#20211e] p-3 text-left shadow-[0_28px_90px_rgba(0,0,0,0.36)] ring-1 ring-white/10">
             <button
               type="button"
-              onClick={() => navigate('/builder')}
+              onClick={() => setShowNewProject(true)}
               className="block min-h-24 w-full px-3 pt-3 text-left text-lg font-medium text-[#d8d3ca] outline-none transition-colors hover:text-white"
             >
               Ask Joyful to create a prototype...
@@ -118,7 +112,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => navigate('/builder')}
+                  onClick={() => setShowNewProject(true)}
                   className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-[#d8d3ca] transition-colors hover:bg-white/5 hover:text-white sm:flex"
                 >
                   Build <ArrowRight className="h-3.5 w-3.5" />
@@ -132,7 +126,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate('/builder')}
+                  onClick={() => setShowNewProject(true)}
                   aria-label="Start building"
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5f2ea] text-[#171816] transition-transform hover:scale-105"
                 >
@@ -140,20 +134,6 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                 </button>
               </div>
             </div>
-          </div>
-
-          <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-2 text-left sm:grid-cols-3">
-            {promptIdeas.map((idea) => (
-              <button
-                key={idea}
-                type="button"
-                onClick={() => navigate('/builder')}
-                className="group flex min-h-12 items-center justify-between gap-3 rounded-lg border border-white/12 bg-black/14 px-4 py-3 text-sm font-medium text-white/78 backdrop-blur transition-colors hover:bg-black/24 hover:text-white"
-              >
-                <span>{idea}</span>
-                <ArrowRight className="h-4 w-4 flex-none opacity-0 transition-opacity group-hover:opacity-100" />
-              </button>
-            ))}
           </div>
         </div>
       </section>
@@ -208,29 +188,39 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
               { label: 'Files', value: totalFiles },
               { label: 'Drafts', value: projects.filter((project) => project.status === 'draft').length },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-lg border border-white/8 bg-white/[0.03] p-4">
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
+              <div key={stat.label} className="group rounded-lg border border-white/8 bg-white/[0.03] p-4 transition-all duration-300 hover:border-white/16 hover:bg-white/[0.05]">
+                <div className="text-2xl font-bold text-white transition-colors duration-300 group-hover:text-[#8fa7ff]">{stat.value}</div>
                 <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-[#aaa69d]">{stat.label}</div>
               </div>
             ))}
           </div>
 
           {projects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-white/12 bg-white/[0.02] px-6 py-20 text-center">
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-lg bg-white/[0.06] text-[#8fa7ff]">
-                <Folder className="h-7 w-7" />
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/12 bg-white/[0.02] px-6 py-20 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6387ff]/20 to-[#f23c78]/20">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
+                  <Sparkles className="h-6 w-6" />
+                </div>
               </div>
-              <h2 className="text-xl font-bold text-white">No projects yet</h2>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-[#aaa69d]">
-                Create your first project and Joyful will open a builder workspace for files, preview, and chat.
+              <h2 className="text-2xl font-bold text-white">Start building something amazing</h2>
+              <p className="mt-3 max-w-md text-sm leading-6 text-[#aaa69d]">
+                Create your first project and turn your idea into a beautiful website in minutes.
               </p>
-              <button
-                onClick={() => setShowNewProject(true)}
-                className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#f5f2ea] px-4 py-2.5 text-sm font-bold text-[#171816] transition-transform hover:scale-[1.01]"
-              >
-                <Sparkles className="h-4 w-4" />
-                Create your first project
-              </button>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => setShowNewProject(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#f5f2ea] px-6 py-3 text-sm font-bold text-[#171816] transition-transform hover:scale-[1.02]"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Create your first project
+                </button>
+                <button
+                  onClick={() => navigate('/templates')}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/[0.05]"
+                >
+                  Browse templates
+                </button>
+              </div>
             </div>
           ) : visibleProjects.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-white/8 bg-white/[0.02] px-6 py-20 text-center">
@@ -243,12 +233,12 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
               {visibleProjects.map((project) => (
                 <article
                   key={project.id}
-                  className="group overflow-hidden rounded-lg border border-white/8 bg-[#211f1b] transition-colors hover:border-white/18"
+                  className="group relative overflow-hidden rounded-xl border border-white/8 bg-[#211f1b] transition-all duration-300 hover:-translate-y-1 hover:border-white/18 hover:shadow-[0_16px_50px_rgba(0,0,0,0.4)]"
                 >
                   <button
                     type="button"
                     onClick={() => navigate(`/builder/${project.id}`)}
-                    className="relative block aspect-[16/10] w-full overflow-hidden bg-[#f5f2ea] text-left"
+                    className="relative block aspect-[16/9] w-full overflow-hidden bg-[#f5f2ea] text-left"
                   >
                     {project.files.length > 0 ? (
                       <iframe
@@ -259,37 +249,45 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         title={project.name}
                       />
                     ) : (
-                      <div className="flex h-full w-full flex-col items-center justify-center bg-[linear-gradient(135deg,#f7f1e8,#dfe8ff_48%,#f7d5ec)] text-[#171816]">
-                        <Wand2 className="mb-3 h-9 w-9 text-[#6387ff]" />
-                        <span className="text-sm font-bold">Ready for your first prompt</span>
+                      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-[#1a1a18] to-[#2a2a28]">
+                        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
+                          <Wand2 className="h-7 w-7" />
+                        </div>
+                        <span className="text-sm font-medium text-white/60">Ready for your first prompt</span>
                       </div>
                     )}
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-[#171816]/0 opacity-0 backdrop-blur-sm transition-all group-hover:bg-[#171816]/72 group-hover:opacity-100">
-                      <span className="rounded-md bg-white px-3 py-2 text-sm font-bold text-[#171816]">Open builder</span>
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-[#171816]/0 opacity-0 backdrop-blur-md transition-all group-hover:bg-[#171816]/80 group-hover:opacity-100">
+                      <span className="rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#171816]">Open Builder</span>
                     </div>
                   </button>
 
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h3 className="truncate text-base font-bold text-white">{project.name}</h3>
                         <p className="mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#aaa69d]">
                           {project.description || 'No description yet.'}
                         </p>
                       </div>
-                      <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-normal text-[#aaa69d]">
-                        {project.status}
-                      </span>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-medium text-[#aaa69d]">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />
-                        {formatDate(project.updatedAt)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Grid3X3 className="h-3.5 w-3.5" />
-                        {project.files.length} files
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-[#aaa69d]">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatDate(project.updatedAt)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Grid3X3 className="h-3.5 w-3.5" />
+                          {project.files.length} files
+                        </span>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        project.status === 'published' 
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' 
+                          : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                      }`}>
+                        {project.status}
                       </span>
                     </div>
 
@@ -297,7 +295,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                       <button
                         type="button"
                         onClick={() => navigate(`/builder/${project.id}`)}
-                        className="flex h-9 flex-1 items-center justify-center gap-2 rounded-md bg-white/[0.06] text-sm font-semibold text-white transition-colors hover:bg-white/[0.1]"
+                        className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#6387ff] text-sm font-semibold text-white transition-all hover:bg-[#7a9aff]"
                       >
                         <Pencil className="h-4 w-4" />
                         Edit
@@ -306,7 +304,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         type="button"
                         onClick={() => navigate(`/builder/${project.id}`)}
                         aria-label={`Preview ${project.name}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-[#aaa69d] transition-colors hover:bg-white/[0.06] hover:text-white"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:bg-white/[0.08] hover:text-white"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -315,7 +313,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         onClick={() => handleExportProject(project)}
                         disabled={project.files.length === 0}
                         aria-label={`Export ${project.name}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-[#aaa69d] transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Download className="h-4 w-4" />
                       </button>
@@ -323,7 +321,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject }: Da
                         type="button"
                         onClick={() => handleDeleteProject(project)}
                         aria-label={`Delete ${project.name}`}
-                        className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-[#aaa69d] transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-200"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-[#aaa69d] transition-all hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

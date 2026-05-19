@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Sparkles, Compass, Zap, BookOpen,
-  Settings, User, FolderPlus, Layout, Code2, CreditCard
+  Sparkles, Compass, BookOpen,
+  Settings, User, FolderPlus, Layout, Code2, LogOut
 } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { useAuth } from '@/hooks/useAuth';
+import { signOutUser } from '@/services/firebase';
 import {
   Tooltip,
   TooltipContent,
@@ -13,16 +15,14 @@ import {
 } from '@/components/ui/tooltip';
 
 const topNavItems = [
-  { icon: Sparkles, label: 'New Project', path: '/dashboard', action: 'new' as const },
-  { icon: Layout, label: 'Projects', path: '/dashboard' },
-  { icon: Zap, label: 'AI Builder', path: '/builder' },
+  { icon: Sparkles, label: 'New Project', path: '/builder', action: 'new' as const },
+  { icon: Layout, label: 'Builder', path: '/builder' },
   { icon: Compass, label: 'Templates', path: '/templates' },
   { icon: BookOpen, label: 'Docs', path: '/docs' },
 ];
 
 const bottomNavItems = [
   { icon: Settings, label: 'Settings', path: '/settings' },
-  { icon: User, label: 'Account', path: '/settings' },
 ];
 
 interface LeftSidebarProps {
@@ -33,6 +33,8 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
+  const { user } = useAuth();
+  const userLabel = user?.displayName || user?.email || 'Profile';
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -55,11 +57,13 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
         onMouseLeave={() => setExpanded(false)}
       >
         <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-3 flex w-full items-center gap-3 px-2.5 text-left transition-opacity hover:opacity-85"
+          onClick={() => navigate('/builder')}
+          className={`mb-3 flex w-full items-center transition-opacity hover:opacity-85 ${
+            expanded ? 'gap-3 px-2.5 text-left' : 'justify-center px-2'
+          }`}
         >
-          <BrandLogo className="h-10 w-10" />
-          {expanded && <span className="truncate text-base font-bold text-foreground">joyful</span>}
+          <BrandLogo className="h-6 w-6" />
+          {expanded && <span className="truncate text-base font-bold text-foreground">Joyful</span>}
         </button>
 
         {/* Top nav items */}
@@ -120,9 +124,9 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => navigate('/dashboard')}
+                  onClick={() => navigate('/builder')}
                   className={`flex w-full items-center justify-center rounded-md px-2.5 py-2 transition-colors ${
-                    isActive('/dashboard') || isActive('/builder')
+                    isActive('/builder')
                       ? 'bg-background text-foreground shadow-xs'
                       : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                   }`}
@@ -144,7 +148,7 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
                 className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
                 <Code2 className="w-4 h-4 flex-shrink-0" />
-                <span className="text-xs truncate">Portfolio Site</span>
+                <span className="text-xs truncate">Open builder</span>
               </button>
             </>
           )}
@@ -152,6 +156,17 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
 
         {/* Bottom actions */}
         <div className="flex flex-col gap-0.5 w-full px-2 mt-auto">
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+              {user?.photoURL ? <img src={user.photoURL} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : <User className="h-3.5 w-3.5" />}
+            </span>
+            {expanded && (
+              <span className="truncate text-[13px] font-medium">{userLabel}</span>
+            )}
+          </button>
           {bottomNavItems.map((item) => {
             const Icon = item.icon;
             const button = (
@@ -183,18 +198,25 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
               </Tooltip>
             );
           })}
-          {/* Upgrade hint */}
+          <button
+            type="button"
+            onClick={() => {
+              void signOutUser().then(() => navigate('/'));
+            }}
+            className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sidebar-foreground transition-colors hover:bg-red-500/10 hover:text-red-500"
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {expanded && <span className="truncate text-[13px] font-medium">Sign out</span>}
+          </button>
+          {/* Free badge */}
           {expanded && (
-            <button
-              onClick={() => navigate('/pricing')}
-              className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent p-2.5 transition-colors hover:border-primary/50 hover:bg-background"
-            >
-              <CreditCard className="w-4 h-4 text-primary" />
+            <div className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
               <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-foreground">Upgrade to Pro</span>
-                <span className="text-[10px] text-muted-foreground">Unlimited AI</span>
+                <span className="text-[11px] font-medium text-emerald-300">Free forever</span>
+                <span className="text-[10px] text-emerald-400/60">All features included</span>
               </div>
-            </button>
+            </div>
           )}
         </div>
       </aside>

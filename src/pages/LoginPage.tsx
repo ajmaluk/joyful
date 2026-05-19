@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, type FormEvent } from 'react';
 import {
   AuthShell,
   GithubMarker,
@@ -7,17 +6,30 @@ import {
   ProviderButton,
   SubmitIcon,
 } from '@/components/auth/AuthShell';
-import * as storage from '@/services/storage';
+import { signInWithEmail, signInWithGithub, signInWithGoogle } from '@/services/firebase';
+import { AlertCircle } from 'lucide-react';
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAuth = async (action: () => Promise<unknown>) => {
+    setError('');
+    setIsLoading(true);
+    try {
+      await action();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not log in. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    storage.setAuthenticated(true);
-    navigate('/dashboard');
+    void handleAuth(() => signInWithEmail(email, password));
   };
 
   return (
@@ -29,8 +41,8 @@ export function LoginPage() {
       switchTo="/signup"
     >
       <div className="space-y-3">
-        <ProviderButton provider="Google" marker={<GoogleMarker />} lastUsed />
-        <ProviderButton provider="GitHub" marker={<GithubMarker />} />
+        <ProviderButton provider="Google" marker={<GoogleMarker />} lastUsed disabled={isLoading} onClick={() => void handleAuth(signInWithGoogle)} />
+        <ProviderButton provider="GitHub" marker={<GithubMarker />} disabled={isLoading} onClick={() => void handleAuth(signInWithGithub)} />
       </div>
 
       <div className="my-6 flex items-center gap-3">
@@ -40,6 +52,12 @@ export function LoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="flex items-start gap-2 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-500">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-none" />
+            <span>{error}</span>
+          </div>
+        )}
         <div>
           <label htmlFor="login-email" className="mb-2 block text-sm font-bold text-gray-950 dark:text-[#f6f2ea]">
             Email
@@ -48,8 +66,11 @@ export function LoginPage() {
             id="login-email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError('');
+            }}
+            placeholder="you@gmail.com"
             autoComplete="email"
             required
             className="h-11 w-full rounded-md border border-gray-200 bg-white px-4 text-sm font-medium text-gray-950 outline-none transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-[#6387ff] focus:ring-2 focus:ring-[#6387ff]/25 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-[#6f6b64] dark:hover:border-white/18"
@@ -72,7 +93,10 @@ export function LoginPage() {
             id="login-password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setError('');
+            }}
             placeholder="Enter your password"
             autoComplete="current-password"
             required
@@ -82,9 +106,10 @@ export function LoginPage() {
 
         <button
           type="submit"
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-[#6387ff]/70 dark:bg-[#f5f2ea] dark:text-[#171816]"
+          disabled={isLoading}
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-[#6387ff]/70 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 dark:bg-[#f5f2ea] dark:text-[#171816]"
         >
-          Continue <SubmitIcon />
+          {isLoading ? 'Signing in...' : <>Continue <SubmitIcon /></>}
         </button>
       </form>
     </AuthShell>

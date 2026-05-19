@@ -1,18 +1,38 @@
-import { ArrowRight, FolderOpen, Plus } from 'lucide-react';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { FolderOpen, Plus, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import type { Project } from '@/types';
 
 interface BuilderStartPageProps {
   projects: Project[];
-  onNewProject: () => void;
+  onStartProject: (prompt: string) => void;
 }
 
-export function BuilderStartPage({ projects, onNewProject }: BuilderStartPageProps) {
+export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageProps) {
   const navigate = useNavigate();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [prompt, setPrompt] = useState('');
   const recentProjects = [...projects].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
+
+  const handleInput = () => {
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 152)}px`;
+  };
+
+  const handleSubmit = () => {
+    onStartProject(prompt.trim());
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      handleSubmit();
+    }
+  };
 
   return (
     <div className="h-full overflow-y-auto bg-[#0f100f] text-[#f6f2ea]">
@@ -23,22 +43,40 @@ export function BuilderStartPage({ projects, onNewProject }: BuilderStartPagePro
             <BrandLogo className="mb-5 h-14 w-14" />
             <h1 className="text-4xl font-bold tracking-normal text-white">Choose a project to build.</h1>
             <p className="mt-3 text-sm leading-6 text-[#aaa69d]">
-              The builder needs a project workspace so files, chat history, and previews can be saved locally.
+              Describe a new app and Joyful will create the workspace, open chat, and start building. Send an empty prompt to open a fresh blank project.
             </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={onNewProject}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#f5f2ea] px-4 py-2.5 text-sm font-bold text-[#171816] transition-transform hover:scale-[1.01]"
-              >
-                <Plus className="h-4 w-4" />
-                New project
-              </button>
-              <button
-                onClick={() => navigate('/templates')}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/5"
-              >
-                Browse templates <ArrowRight className="h-4 w-4" />
-              </button>
+            <div className="mt-6 rounded-2xl border border-white/10 bg-[#1d1f1d] p-3 shadow-2xl shadow-black/30">
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                rows={3}
+                onChange={(event) => {
+                  setPrompt(event.target.value);
+                  handleInput();
+                }}
+                onInput={handleInput}
+                onKeyDown={handleKeyDown}
+                placeholder="Build a modern portfolio for a product designer..."
+                className="block min-h-24 w-full resize-none bg-transparent px-3 pt-3 text-base font-medium text-white outline-none placeholder:text-[#7d7a73]"
+                aria-label="Describe what you want Joyful to build"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/templates')}
+                  className="inline-flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-[#aaa69d] transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  <Plus className="h-4 w-4" />
+                  Browse templates
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-[1.02]"
+                >
+                  Build
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </section>

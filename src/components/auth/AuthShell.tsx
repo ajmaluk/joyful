@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, Github, LockKeyhole, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
+import { TypingCycle } from '@/components/ui/TypingCycle';
 
 type AuthShellProps = {
   title: string;
@@ -22,15 +23,21 @@ export function ProviderButton({
   provider,
   marker,
   lastUsed = false,
+  onClick,
+  disabled = false,
 }: {
   provider: string;
   marker: ReactNode;
   lastUsed?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      className="relative flex h-11 w-full items-center justify-center gap-3 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#6387ff]/70 dark:border-white/10 dark:bg-white/[0.03] dark:text-[#f6f2ea] dark:hover:border-white/20 dark:hover:bg-white/[0.06]"
+      onClick={onClick}
+      disabled={disabled}
+      className="relative flex h-11 w-full items-center justify-center gap-3 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 transition-colors hover:border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#6387ff]/70 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.03] dark:text-[#f6f2ea] dark:hover:border-white/20 dark:hover:bg-white/[0.06]"
     >
       <span className="flex h-5 w-5 items-center justify-center text-base">{marker}</span>
       <span>Continue with {provider}</span>
@@ -60,15 +67,14 @@ export function AuthShell({
         onClick={() => navigate('/')}
         className="fixed left-4 top-4 z-20 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-bold text-gray-950 transition-colors hover:bg-gray-100 dark:text-white dark:hover:bg-white/5"
       >
-        <BrandLogo className="h-8 w-8" />
-        <span>joyful</span>
+        <BrandLogo className="h-7 w-7" />
+        <span>Joyful</span>
       </button>
 
       <main className="grid min-h-dvh lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)]">
         <section className="flex min-h-dvh items-center justify-center px-4 py-20 sm:px-6 lg:px-10">
           <div className="w-full max-w-md">
             <div className="mb-7">
-              <BrandLogo className="mb-6 h-14 w-14" />
               <h1 className="text-4xl font-bold tracking-normal text-gray-950 dark:text-white">{title}</h1>
               <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">{subtitle}</p>
             </div>
@@ -108,7 +114,21 @@ export function AuthShell({
 
               <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white/90 p-3 shadow-[0_26px_80px_rgba(15,23,42,0.16)] backdrop-blur dark:bg-[#f5f2ea]/90 dark:shadow-[0_26px_80px_rgba(0,0,0,0.28)]">
                 <div className="flex items-center gap-4 rounded-xl px-4 py-3 text-gray-950 dark:text-[#171816]">
-                  <span className="flex-1 text-lg font-semibold">Ask Joyful to build dashboards.</span>
+                  <span className="flex-1 text-lg font-semibold">
+                    <TypingCycle
+                      texts={[
+                        'Ask Joyful to build dashboards.',
+                        'Ask Joyful to create websites.',
+                        'Ask Joyful to design interfaces.',
+                        'Ask Joyful to code applications.',
+                      ]}
+                      speed={30}
+                      deleteSpeed={12}
+                      delayBetweenTexts={1800}
+                      className="inline"
+                      showCursor={true}
+                    />
+                  </span>
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-950 text-white dark:bg-[#171816]">
                     <ArrowRight className="h-5 w-5" />
                   </span>

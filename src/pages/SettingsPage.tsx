@@ -5,6 +5,9 @@ import {
 } from 'lucide-react';
 import type { UserSettings } from '@/types';
 import * as storage from '@/services/storage';
+import { useAuth } from '@/hooks/useAuth';
+import { signOutUser } from '@/services/firebase';
+import { useNavigate } from 'react-router-dom';
 
 const categories = [
   { id: 'general', label: 'General', icon: Settings },
@@ -27,6 +30,8 @@ const themeOptions = [
 }>;
 
 export function SettingsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeCategory, setActiveCategory] = useState('general');
   const [settings, setSettings] = useState<UserSettings>(() => storage.getSettings());
 
@@ -45,33 +50,45 @@ export function SettingsPage() {
               <h3 className="text-lg font-semibold text-foreground">General Settings</h3>
               <p className="mt-1 text-sm text-muted-foreground">Keep everyday editing behavior quiet and predictable.</p>
             </div>
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="flex items-center justify-between gap-6 border-b border-border p-4">
-                <div>
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between gap-6 border-b border-border p-5">
+                <div className="flex-1">
                   <label className="text-sm font-medium text-card-foreground">Auto-save</label>
-                  <p className="text-xs text-muted-foreground mt-0.5">Automatically save changes to files</p>
+                  <p className="text-xs text-muted-foreground mt-1">Automatically save changes to files</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => updateSetting('autoSave', !settings.autoSave)}
                   aria-pressed={settings.autoSave}
-                  className={`h-6 w-11 rounded-full p-0.5 transition-colors ${settings.autoSave ? 'bg-primary' : 'bg-muted'}`}
+                  className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
+                    settings.autoSave 
+                      ? 'bg-[#6387ff]' 
+                      : 'bg-muted'
+                  }`}
                 >
-                  <div className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${settings.autoSave ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <div className={`h-5 w-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                    settings.autoSave ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
                 </button>
               </div>
-              <div className="flex items-center justify-between gap-6 p-4">
-                <div>
+              <div className="flex items-center justify-between gap-6 p-5">
+                <div className="flex-1">
                   <label className="text-sm font-medium text-card-foreground">Live Preview Auto-refresh</label>
-                  <p className="text-xs text-muted-foreground mt-0.5">Automatically refresh preview on file changes</p>
+                  <p className="text-xs text-muted-foreground mt-1">Automatically refresh preview on file changes</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => updateSetting('livePreview', !settings.livePreview)}
                   aria-pressed={settings.livePreview}
-                  className={`h-6 w-11 rounded-full p-0.5 transition-colors ${settings.livePreview ? 'bg-primary' : 'bg-muted'}`}
+                  className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
+                    settings.livePreview 
+                      ? 'bg-[#6387ff]' 
+                      : 'bg-muted'
+                  }`}
                 >
-                  <div className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${settings.livePreview ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <div className={`h-5 w-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                    settings.livePreview ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
                 </button>
               </div>
             </div>
@@ -135,39 +152,47 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground">Editor Settings</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Tune the code surface without changing generated files.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Customize your code editing experience.</p>
             </div>
-            <div className="overflow-hidden rounded-lg border border-border bg-card">
-              <div className="border-b border-border p-4">
-                <label className="text-sm font-medium text-card-foreground mb-3 block">Font Size</label>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">10px</span>
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="border-b border-border p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-medium text-card-foreground">Font Size</label>
+                  <span className="rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">{settings.editorFontSize}px</span>
+                </div>
+                <div className="relative">
                   <input
                     type="range"
                     min={10}
                     max={20}
                     value={settings.editorFontSize}
                     onChange={(e) => updateSetting('editorFontSize', parseInt(e.target.value))}
-                    className="flex-1 accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">20px</span>
-                  <span className="w-12 rounded-md border border-border bg-background px-2 py-1 text-right text-sm text-foreground">{settings.editorFontSize}px</span>
+                  <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                    <span>Small</span>
+                    <span>Large</span>
+                  </div>
                 </div>
               </div>
-              <div className="p-4">
-                <label className="text-sm font-medium text-card-foreground mb-3 block">Line Height</label>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">1.2</span>
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-medium text-card-foreground">Line Height</label>
+                  <span className="rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">{settings.editorLineHeight}</span>
+                </div>
+                <div className="relative">
                   <input
                     type="range"
                     min={12}
                     max={24}
                     value={Math.round(settings.editorLineHeight * 10)}
                     onChange={(e) => updateSetting('editorLineHeight', parseInt(e.target.value) / 10)}
-                    className="flex-1 accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">2.4</span>
-                  <span className="w-12 rounded-md border border-border bg-background px-2 py-1 text-right text-sm text-foreground">{settings.editorLineHeight}</span>
+                  <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                    <span>Compact</span>
+                    <span>Spacious</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -217,20 +242,24 @@ export function SettingsPage() {
                 </p>
               </div>
 
-              <div className="rounded-lg border border-border bg-card p-4">
-                <label className="text-sm font-medium text-card-foreground mb-3 block">Temperature</label>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">0</span>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-medium text-card-foreground">AI Temperature</label>
+                  <span className="rounded-lg bg-[#6387ff]/10 px-3 py-1.5 text-sm font-semibold text-[#6387ff]">{settings.aiTemperature}</span>
+                </div>
+                <div className="relative">
                   <input
                     type="range"
                     min={0}
                     max={100}
                     value={Math.round(settings.aiTemperature * 100)}
                     onChange={(e) => updateSetting('aiTemperature', parseInt(e.target.value) / 100)}
-                    className="flex-1 accent-primary"
+                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-[#6387ff]"
                   />
-                  <span className="text-xs text-muted-foreground">1</span>
-                  <span className="w-12 rounded-md border border-border bg-background px-2 py-1 text-right text-sm text-foreground">{settings.aiTemperature}</span>
+                  <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                    <span>Precise</span>
+                    <span>Creative</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -242,14 +271,24 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground">Account</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Basic profile details for your local workspace.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Firebase profile details for your Joyful workspace.</p>
             </div>
             <div className="overflow-hidden rounded-lg border border-border bg-card">
+              <div className="flex items-center gap-3 border-b border-border p-4">
+                <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-sm font-bold text-primary">
+                  {user?.photoURL ? <img src={user.photoURL} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : (user?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-card-foreground">{user?.displayName || 'Joyful user'}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user?.email || 'No email on this account'}</p>
+                </div>
+              </div>
               <div className="border-b border-border p-4">
                 <label className="text-sm font-medium text-card-foreground mb-2 block">Display Name</label>
                 <input
                   type="text"
-                  defaultValue="User"
+                  value={user?.displayName || ''}
+                  readOnly
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
                 />
               </div>
@@ -257,11 +296,21 @@ export function SettingsPage() {
                 <label className="text-sm font-medium text-card-foreground mb-2 block">Email</label>
                 <input
                   type="email"
-                  defaultValue="user@example.com"
+                  value={user?.email || ''}
+                  readOnly
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
                 />
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                void signOutUser().then(() => navigate('/'));
+              }}
+              className="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
+            >
+              Sign out
+            </button>
           </div>
         );
 

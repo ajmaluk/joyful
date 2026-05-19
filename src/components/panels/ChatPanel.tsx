@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Copy, RotateCcw, FileCode, Check, AlertCircle } from 'lucide-react';
 import type { ChatMessage } from '@/types';
+import { TypingText } from '@/components/ui/TypingText';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -77,22 +78,38 @@ export function ChatPanel({ messages, isGenerating, onSendMessage, onOpenFile, o
               <p className="text-xs text-gray-500">Try one of these to get started</p>
             </div>
             <div className="grid gap-2.5">
-              {suggestedPrompts.map((item) => (
+              {suggestedPrompts.map((item, index) => (
                 <button
                   key={item.prompt}
                   onClick={() => {
                     setInput(item.prompt);
                     textareaRef.current?.focus();
                   }}
-                  className="group relative flex w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-left transition-all duration-200 hover:border-gray-400 hover:bg-gray-100 hover:shadow-[0_8px_16px_rgba(0,0,0,0.3)]"
+                  className="group relative flex w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3.5 text-left transition-all duration-200 hover:border-gray-400 hover:bg-gray-100 hover:shadow-[0_8px_16px_rgba(0,0,0,0.3)] animate-[fade-in_400ms_ease-out]"
                 >
                   <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-100 text-base transition-all duration-200 group-hover:border-gray-400 group-hover:scale-110">
                     {item.icon}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-indigo-600 group-hover:text-indigo-600">{item.label}</p>
-                    <p className="text-sm leading-snug text-gray-700 group-hover:text-gray-900 truncate">
-                      {item.prompt}
+                    <p className="text-xs font-medium text-indigo-600 group-hover:text-indigo-600">
+                      <TypingText
+                        text={item.label}
+                        speed={60}
+                        delay={index * 400 + 200}
+                        enabled={messages.length === 0}
+                        className="inline"
+                        showCursor={false}
+                      />
+                    </p>
+                    <p className="text-sm leading-snug text-gray-700 group-hover:text-gray-900">
+                      <TypingText
+                        text={item.prompt}
+                        speed={20}
+                        delay={index * 400 + 600}
+                        enabled={messages.length === 0}
+                        className="inline"
+                        showCursor={false}
+                      />
                     </p>
                   </div>
                   <ArrowUp className="h-4 w-4 rotate-45 text-gray-500 transition-all duration-200 group-hover:text-indigo-600 group-hover:translate-x-0.5" />
@@ -122,7 +139,15 @@ export function ChatPanel({ messages, isGenerating, onSendMessage, onOpenFile, o
               </div>
             ) : msg.role === 'assistant' ? (
               <div className="w-full space-y-3">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">{msg.content}</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
+                  <TypingText
+                    text={msg.content}
+                    speed={10}
+                    delay={100}
+                    className="inline"
+                    showCursor={true}
+                  />
+                </p>
                 {msg.files && msg.files.length > 0 && (
                   <div className="space-y-2.5">
                     <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">📁 Files Updated</p>

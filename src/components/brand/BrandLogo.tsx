@@ -1,15 +1,22 @@
 type BrandLogoProps = {
   className?: string;
-  alt?: string;
+  showText?: boolean;
 };
 
-export function BrandLogo({ className = 'h-8 w-8', alt = 'Joyful' }: BrandLogoProps) {
+const brandIconUrl = '/brand-logo-180.png';
+
+export function BrandLogo({ className = 'h-7 w-7', showText = false }: BrandLogoProps) {
   return (
-    <img
-      src="/brand-logo.png"
-      alt={alt}
-      className={`shrink-0 object-contain ${className}`}
-      draggable={false}
-    />
+    <div className="flex items-center gap-2">
+      <img
+        src={brandIconUrl}
+        alt="Joyful"
+        className={`shrink-0 rounded-xl object-contain ${className}`}
+        draggable={false}
+      />
+      {showText && (
+        <span className="text-xl font-bold tracking-tight text-gray-950 dark:text-white">Joyful</span>
+      )}
+    </div>
   );
 }

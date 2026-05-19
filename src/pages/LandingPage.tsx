@@ -3,19 +3,14 @@ import {
   ArrowRight,
   Code2,
   Download,
-  Github,
   Layout,
-  Mail,
-  Mic,
   MousePointer2,
   Palette,
-  Plus,
-  Send,
   ShieldCheck,
-  Twitter,
+  Star,
   Wand2,
 } from 'lucide-react';
-import { BrandLogo } from '@/components/brand/BrandLogo';
+import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChrome';
 
 const templates = [
   { name: 'Founder Portfolio', desc: 'Personal work showcase', image: '/templates/portfolio.jpg' },
@@ -50,107 +45,25 @@ const features = [
   { icon: Download, title: 'Export ready', desc: 'Package the finished project into files you can keep and host.' },
 ];
 
-const examples = [
-  'A polished portfolio for a product designer',
-  'A SaaS homepage with pricing and FAQs',
-  'A restaurant site with menu highlights',
-];
-
 const stats = [
   { value: '6', label: 'starter templates' },
   { value: '100%', label: 'local project storage' },
   { value: '3', label: 'export-ready languages' },
 ];
 
-const footerLinks = {
-  Product: ['Dashboard', 'Templates', 'Builder', 'Pricing'],
-  Resources: ['Docs', 'Guides', 'Examples', 'Support'],
-  Company: ['About', 'Security', 'Contact', 'Status'],
-  Legal: ['Privacy', 'Terms', 'Cookies', 'Licenses'],
-};
-
-const footerRoutes: Record<string, string> = {
-  Dashboard: '/dashboard',
-  Templates: '/templates',
-  Builder: '/builder',
-  Pricing: '/pricing',
-};
-
-function PromptBox({ compact = false }: { compact?: boolean }) {
-  const navigate = useNavigate();
-
-  return (
-    <div className={`mx-auto w-full ${compact ? 'max-w-2xl' : 'max-w-4xl'}`}>
-      <div className="rounded-[1.45rem] border border-gray-200 bg-white p-3 text-left shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-black/5 dark:border-white/10 dark:bg-[#1d1f1d] dark:shadow-[0_28px_90px_rgba(0,0,0,0.38)] dark:ring-black/40">
-        <button
-          type="button"
-          onClick={() => navigate('/builder')}
-          className={`block w-full resize-none bg-transparent px-3 text-left font-medium text-gray-900 outline-none transition-colors hover:text-gray-950 dark:text-[#e7e4dc] dark:hover:text-white ${compact ? 'min-h-16 pt-2 text-sm' : 'min-h-28 pt-3 text-base sm:text-lg'}`}
-        >
-          Ask Joyful to create a dashboard for a coffee subscription...
-        </button>
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="Add context"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#aaa69d] dark:hover:bg-white/10 dark:hover:text-white"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-            {!compact && (
-              <div className="hidden gap-2 sm:flex">
-                {examples.slice(0, 2).map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    onClick={() => navigate('/builder')}
-                    className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-950 dark:border-white/10 dark:text-[#b9b5aa] dark:hover:border-white/20 dark:hover:text-white"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="hidden items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 sm:flex dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white"
-            >
-              Build <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Voice prompt"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white"
-            >
-              <Mic className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/builder')}
-              aria-label="Start building"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-950 text-white transition-transform hover:scale-105 dark:bg-[#f5f2ea] dark:text-[#181816]"
-            >
-              <Send className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+interface LandingPageProps {
+  onStartProject: (prompt: string) => void;
 }
 
-export function LandingPage() {
+export function LandingPage({ onStartProject }: LandingPageProps) {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-white text-gray-950 dark:bg-[#171816] dark:text-[#f6f2ea]">
-      <section className="relative isolate min-h-[calc(100vh-3rem)] overflow-hidden">
+      <section className="relative isolate min-h-screen overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_24%,#eef3ff_45%,#fff1f8_72%,#fff6ee_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.84)_0%,rgba(255,255,255,0.42)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-7xl flex-col items-center px-4 pb-16 pt-20 text-center sm:px-6 lg:px-8">
+        <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-4 py-20 text-center sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => navigate('/docs')}
@@ -164,41 +77,26 @@ export function LandingPage() {
           <h1 className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white">
             Build something Joyful
           </h1>
-          <p className="mt-5 max-w-2xl text-lg font-medium leading-8 text-gray-600 sm:text-xl dark:text-white/70">
-            Create polished websites by chatting with AI, then refine the code, preview, and export from one calm workspace.
+          <p className="mt-5 max-w-2xl text-lg font-medium leading-8 text-gray-850 sm:text-xl dark:text-white">
+            Create apps and websites by chatting with AI
           </p>
 
           <div className="mt-10 w-full">
-            <PromptBox />
-          </div>
-
-          <div className="mt-9 grid w-full max-w-3xl grid-cols-1 gap-2 text-left sm:grid-cols-3">
-            {examples.map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => navigate('/builder')}
-                className="group flex min-h-14 items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white/70 px-4 py-3 text-sm font-medium text-gray-700 backdrop-blur transition-colors hover:bg-white hover:text-gray-950 dark:border-white/12 dark:bg-black/14 dark:text-white/78 dark:hover:bg-black/24 dark:hover:text-white"
-              >
-                <span>{example}</span>
-                <ArrowRight className="h-4 w-4 flex-none opacity-0 transition-opacity group-hover:opacity-100" />
-              </button>
-            ))}
+            <PromptBox onSubmit={onStartProject} />
           </div>
         </div>
       </section>
 
       <section className="border-y border-gray-200 bg-white px-4 py-16 sm:px-6 lg:px-8 dark:border-white/8 dark:bg-[#171816]">
         <div className="mx-auto max-w-7xl">
-          <p className="text-center text-sm font-semibold text-gray-500 dark:text-[#9f9a8f]">
-            A practical builder for people who want the page, the code, and the finish.
-          </p>
-          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
-                <div key={feature.title} className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/8 dark:bg-[#21221f]">
-                  <Icon className="mb-4 h-5 w-5 text-[#8fa7ff]" />
+                <div key={feature.title} className="group relative rounded-xl border border-gray-200 bg-gray-50 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[#2f5bff]/30 hover:shadow-xl dark:border-white/8 dark:bg-[#21221f] dark:hover:border-white/18 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#2f5bff]/10 text-[#2f5bff] transition-all duration-300 group-hover:bg-[#2f5bff] group-hover:text-white">
+                    <Icon className="h-5 w-5" />
+                  </div>
                   <h3 className="text-sm font-semibold text-gray-950 dark:text-white">{feature.title}</h3>
                   <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-[#aaa69d]">{feature.desc}</p>
                 </div>
@@ -284,26 +182,38 @@ export function LandingPage() {
           </div>
 
           <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((template) => (
+            {templates.map((template, index) => (
               <button
                 key={template.name}
                 type="button"
                 onClick={() => navigate('/templates')}
-                className="group overflow-hidden rounded-lg border border-gray-200 bg-white text-left transition-colors hover:border-gray-300 dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18"
+                className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-2xl dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.35)]"
               >
-                <div className="aspect-[16/9] overflow-hidden bg-[#111]">
+                <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#1a1a18] dark:to-[#2a2a28]">
                   <img
                     src={template.image}
-                    alt={template.name}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    alt={`${template.name} preview`}
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
                   />
-                </div>
-                <div className="flex items-center justify-between gap-4 p-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-950 dark:text-white">{template.name}</h3>
-                    <p className="mt-1 text-xs text-gray-600 dark:text-[#aaa69d]">{template.desc}</p>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#2f5bff]/10 text-[#2f5bff]">
+                      <Layout className="h-8 w-8" />
+                    </div>
                   </div>
-                  <ArrowRight className="h-4 w-4 flex-none text-[#8fa7ff] opacity-0 transition-opacity group-hover:opacity-100" />
+                  {index < 3 && (
+                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-[#2f5bff] px-2.5 py-1 text-xs font-semibold text-white">
+                      <Star className="h-3 w-3 fill-white" /> Popular
+                    </span>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
+                </div>
+                <div className="p-4">
+                  <h3 className="text-base font-bold text-gray-950 dark:text-white">{template.name}</h3>
+                  <p className="mt-1.5 text-sm text-gray-600 dark:text-[#aaa69d]">{template.desc}</p>
                 </div>
               </button>
             ))}
@@ -317,8 +227,8 @@ export function LandingPage() {
           <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Built for fast starts, practical exports, and fewer scattered tools.</p>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {stats.map((stat) => (
-              <div key={stat.label} className="min-h-44 rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-white/8 dark:bg-[#22231f]">
-                <div className="text-5xl font-bold tracking-normal text-gray-950 dark:text-white">{stat.value}</div>
+              <div key={stat.label} className="group min-h-44 rounded-lg border border-gray-200 bg-gray-50 p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-lg dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/16 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+                <div className="text-5xl font-bold tracking-normal text-gray-950 transition-colors duration-300 dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
                 <div className="mt-16 text-sm font-medium text-gray-600 dark:text-[#aaa69d]">{stat.label}</div>
               </div>
             ))}
@@ -332,61 +242,11 @@ export function LandingPage() {
           <p className="text-sm font-semibold text-gray-600 dark:text-[#aaa69d]">AI App Builder</p>
           <h2 className="mt-2 text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">Ready to build?</h2>
           <div className="mt-8">
-            <PromptBox compact />
+            <PromptBox compact onSubmit={onStartProject} />
           </div>
         </div>
       </section>
-
-      <footer className="border-t border-gray-200 bg-gray-50 px-4 py-14 shadow-[0_-24px_80px_rgba(15,23,42,0.06)] sm:px-6 lg:px-8 dark:border-white/10 dark:bg-[#10110f] dark:shadow-[0_-24px_80px_rgba(0,0,0,0.28)]">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid gap-12 md:grid-cols-[1.1fr_3fr]">
-            <div>
-              <button type="button" onClick={() => navigate('/')} className="flex items-center gap-2">
-                <BrandLogo className="h-11 w-11" />
-                <span className="text-2xl font-bold text-gray-950 dark:text-white">joyful</span>
-              </button>
-              <p className="mt-5 max-w-sm text-base leading-7 text-gray-600 dark:text-[#aaa69d]">
-                Prompt, preview, edit, and export websites without losing the thread.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:gap-12">
-              {Object.entries(footerLinks).map(([category, links]) => (
-                <div key={category}>
-                  <h3 className="text-base font-bold text-gray-950 dark:text-white">{category}</h3>
-                  <ul className="mt-5 space-y-4">
-                    {links.map((link) => (
-                      <li key={link}>
-                        <button
-                          type="button"
-                          onClick={() => navigate(footerRoutes[link] ?? '/docs')}
-                          className="text-left text-base text-gray-600 transition-colors hover:text-gray-950 dark:text-[#aaa69d] dark:hover:text-white"
-                        >
-                          {link}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="mt-14 flex flex-col gap-5 border-t border-gray-200 pt-7 sm:flex-row sm:items-center sm:justify-between dark:border-white/8">
-            <p className="text-sm text-gray-600 dark:text-[#aaa69d]">&copy; 2026 joyful. All rights reserved.</p>
-            <div className="flex items-center gap-3">
-              {[Github, Twitter, Mail].map((Icon, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  aria-label="Social link"
-                  className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-600 transition-colors hover:bg-white hover:text-gray-950 dark:border-white/10 dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  <Icon className="h-4 w-4" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </footer>
+      <MarketingFooter />
     </div>
   );
 }

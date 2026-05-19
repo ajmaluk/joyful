@@ -9,7 +9,7 @@ export default function Home() {
       icon: FileText,
       title: 'New Project',
       desc: 'Start building a new website from scratch',
-      action: () => navigate('/dashboard'),
+      action: () => navigate('/builder'),
     },
     {
       icon: LayoutGrid,
@@ -49,7 +49,7 @@ export default function Home() {
           {/* CTA Buttons */}
           <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center justify-center pt-4">
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/builder')}
               className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-500 px-8 py-3.5 font-semibold text-white transition-all hover:shadow-lg hover:shadow-[#6366F1]/40 hover:-translate-y-0.5"
             >
               <span>Start Building</span>

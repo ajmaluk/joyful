@@ -12,7 +12,7 @@ import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSy
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, User, Settings, LogOut
+  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut
 } from 'lucide-react';
 
 interface BuilderPageProps {

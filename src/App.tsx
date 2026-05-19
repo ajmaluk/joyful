@@ -75,12 +75,10 @@ function AppLayout() {
 
   // Pages without sidebar/topbar
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
-  const isBuilderRoot = location.pathname === '/builder';
-  const isBuilder = isBuilderRoot || location.pathname.match(/^\/builder\/[^/]+$/);
   const isMarketingPage = marketingPaths.has(location.pathname);
 
-  // Show sidebar on all pages except auth and landing
-  const showSidebar = !isAuthPage && !isMarketingPage && !isBuilder;
+  // Show sidebar on all pages except auth and marketing surfaces
+  const showSidebar = !isAuthPage && !isMarketingPage;
   const showTopBar = isMarketingPage && location.pathname !== '/docs';
 
   const handleCreateProject = (name: string, description: string) => {

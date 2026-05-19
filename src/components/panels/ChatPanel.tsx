@@ -88,7 +88,7 @@ export function ChatPanel({
       />
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 space-y-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
           <div className="space-y-6 py-8">
             <SmartSuggestions
@@ -116,6 +116,11 @@ export function ChatPanel({
                 <FileDiffViewer diffs={lastDiffs} />
               </div>
             )}
+
+            {/* Subtle divider between messages */}
+            {index < messages.length - 1 && (
+              <div className="mx-8 border-t border-gray-100" />
+            )}
           </div>
         ))}
 
@@ -136,7 +141,7 @@ export function ChatPanel({
 
       {/* Show smart suggestions after generation */}
       {messages.length > 0 && !isGenerating && (
-        <div className="border-t border-gray-100 px-4 py-3">
+        <div className="border-t border-gray-100 px-4 py-3 bg-gradient-to-b from-gray-50/50 to-white">
           <SmartSuggestions
             files={files}
             nextSteps={nextSteps}

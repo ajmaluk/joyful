@@ -208,16 +208,6 @@ export function LeftSidebar({ onNewProject }: LeftSidebarProps) {
             <LogOut className="w-5 h-5 flex-shrink-0" />
             {expanded && <span className="truncate text-[13px] font-medium">Sign out</span>}
           </button>
-          {/* Free badge */}
-          {expanded && (
-            <div className="mx-2 mt-2 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 p-2.5">
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-emerald-300">Free forever</span>
-                <span className="text-[10px] text-emerald-400/60">All features included</span>
-              </div>
-            </div>
-          )}
         </div>
       </aside>
     </TooltipProvider>

@@ -32,6 +32,22 @@ export interface ChatMessage {
   timestamp: string;
   files?: FileOperation[];
   rating?: number;
+  actionType?: 'create' | 'modify' | 'delete' | 'generate';
+  metadata?: {
+    template?: string;
+    sections?: string[];
+    complexity?: 'simple' | 'medium' | 'complex';
+  };
+}
+
+// Chat action for history tracking
+export interface ChatAction {
+  id: string;
+  type: 'create' | 'modify' | 'delete' | 'generate';
+  description: string;
+  files: string[];
+  timestamp: string;
+  messageId: string;
 }
 
 // File operation from AI
@@ -46,9 +62,26 @@ export interface AIGenerationResponse {
   files: {
     path: string;
     content: string;
+    action?: 'create' | 'modify' | 'delete';
   }[];
   summary: string;
   nextSteps: string[];
+  metadata?: {
+    template: string;
+    sections: string[];
+    estimatedComplexity: 'simple' | 'medium' | 'complex';
+  };
+}
+
+// Streaming chunk from AI
+export interface AIStreamChunk {
+  type: 'file_start' | 'file_content' | 'file_end' | 'summary' | 'metadata';
+  data: {
+    path?: string;
+    content?: string;
+    summary?: string;
+    metadata?: AIGenerationResponse['metadata'];
+  };
 }
 
 // Template

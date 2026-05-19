@@ -52,42 +52,48 @@ function TreeNode({
 }) {
   const isExpanded = expandedFolders.has(node.path);
   const isSelected = node.type === 'file' && selectedFile?.path === node.path;
-  const paddingLeft = level * 10 + 10;
+  const paddingLeft = level * 16 + 12;
 
   if (node.type === 'folder') {
     return (
       <div>
         <button
           onClick={() => toggleFolder(node.path)}
-          className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left transition-colors hover:bg-gray-100"
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-all duration-150 hover:bg-gray-100/80 rounded-md mx-1"
           style={{ paddingLeft: `${paddingLeft}px` }}
         >
-          {isExpanded ? (
-            <ChevronDown className="h-3 w-3 text-gray-600" />
-          ) : (
-            <ChevronRight className="h-3 w-3 text-gray-600" />
-          )}
-          {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 text-yellow-700" />
-          ) : (
-            <Folder className="h-3.5 w-3.5 text-yellow-700" />
-          )}
-          <span className="truncate text-xs text-gray-700">{node.name}</span>
-        </button>
-        {isExpanded && node.children.map((child) => (
-          <TreeNode
-            key={child.path}
-            node={child}
-            level={level + 1}
-            selectedFile={selectedFile}
-            onSelectFile={onSelectFile}
-            allFiles={allFiles}
-            expandedFolders={expandedFolders}
-            toggleFolder={toggleFolder}
-            onDeleteFile={onDeleteFile}
-            readOnly={readOnly}
+          <ChevronDown
+            className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${
+              isExpanded ? 'rotate-0' : '-rotate-90'
+            }`}
           />
-        ))}
+          {isExpanded ? (
+            <FolderOpen className="h-4 w-4 text-amber-500 transition-colors" />
+          ) : (
+            <Folder className="h-4 w-4 text-amber-600 transition-colors" />
+          )}
+          <span className="truncate text-[13px] font-medium text-gray-700">{node.name}</span>
+        </button>
+        <div
+          className={`overflow-hidden transition-all duration-200 ease-in-out ${
+            isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
+          }`}
+        >
+          {node.children.map((child) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              level={level + 1}
+              selectedFile={selectedFile}
+              onSelectFile={onSelectFile}
+              allFiles={allFiles}
+              expandedFolders={expandedFolders}
+              toggleFolder={toggleFolder}
+              onDeleteFile={onDeleteFile}
+              readOnly={readOnly}
+            />
+          ))}
+        </div>
       </div>
     );
   }
@@ -97,29 +103,29 @@ function TreeNode({
 
   return (
     <div
-      className={`group flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
+      className={`group flex w-full items-center gap-2 px-3 py-1.5 text-left transition-all duration-150 rounded-md mx-1 ${
         isSelected
-          ? 'bg-gray-100 text-gray-900'
-          : 'hover:bg-gray-100'
+          ? 'bg-indigo-50 text-indigo-900 shadow-sm'
+          : 'hover:bg-gray-100/80'
       }`}
-      style={{ paddingLeft: `${paddingLeft + 16}px` }}
+      style={{ paddingLeft: `${paddingLeft + 20}px` }}
     >
-      <button onClick={() => onSelectFile(projectFile)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+      <button onClick={() => onSelectFile(projectFile)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
         <FileIcon type={node.fileType || 'other'} />
-        <span className={`truncate text-xs ${isSelected ? 'text-gray-900' : 'text-[#A7ABBC]'}`}>
+        <span className={`truncate text-[13px] ${isSelected ? 'font-semibold text-indigo-800' : 'text-gray-600'}`}>
           {node.name}
         </span>
       </button>
       {projectFile.isModified && (
-        <span className="w-1.5 h-1.5 rounded-full bg-[#6366F1] ml-auto flex-shrink-0" />
+        <span className="w-2 h-2 rounded-full bg-indigo-500 ml-auto flex-shrink-0 animate-pulse" />
       )}
       {!readOnly && (
         <button
           onClick={() => onDeleteFile(projectFile.path)}
-          className="rounded p-0.5 text-gray-500 opacity-0 transition-colors hover:bg-gray-200 hover:text-red-300 group-hover:opacity-100"
+          className="rounded p-1 text-gray-400 opacity-0 transition-all duration-150 hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
           title={`Delete ${node.name}`}
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
@@ -163,60 +169,76 @@ export function FileExplorer({
 
   const collapseAll = useCallback(() => setExpandedFolders(new Set()), []);
 
+  const fileCount = files.length;
+
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-r border-gray-300 bg-gray-100">
+    <div className="flex h-full min-h-0 w-full flex-col border-r border-gray-200 bg-gray-50">
       {/* Header */}
-      <div className="flex h-12 items-center justify-between border-b border-gray-300 px-3">
-        <div>
-          <h3 className="text-[13px] font-medium text-gray-900">Files</h3>
-          <p className="text-[10px] text-gray-500">{files.length} item{files.length === 1 ? '' : 's'}{readOnly ? ' · read-only' : ''}</p>
+      <div className="flex h-14 items-center justify-between border-b border-gray-200 px-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
+              <Folder className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Files</h3>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {fileCount} item{fileCount === 1 ? '' : 's'}{readOnly ? ' · read-only' : ''}
+              </p>
+            </div>
+          </div>
+          {fileCount > 0 && (
+            <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+              {fileCount}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5">
           {!readOnly && (
             <>
               <button
                 onClick={() => onCreateFile('new-file.html')}
-                className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
                 title="New File"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-4 h-4" />
               </button>
               <button
                 onClick={() => onCreateFile('new-folder/index.html')}
-                className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
                 title="New Folder"
               >
-                <FolderPlus className="w-3.5 h-3.5" />
+                <FolderPlus className="w-4 h-4" />
               </button>
             </>
           )}
           <button
             onClick={collapseAll}
-            className="rounded p-1 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-700"
             title="Collapse All"
           >
-            <Minus className="w-3.5 h-3.5" />
+            <Minus className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* File tree */}
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto py-2 px-1">
         {files.length === 0 ? (
-          <div className="mx-3 rounded-lg border border-dashed border-gray-300 bg-gray-100 p-4">
-            <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 text-gray-600">
-              <Folder className="h-4 w-4" />
+          <div className="mx-3 mt-4 rounded-xl border border-dashed border-gray-300 bg-white p-6 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-400 mx-auto">
+              <Folder className="h-6 w-6" />
             </div>
-            <p className="text-xs font-medium text-gray-900">No project files</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+            <p className="text-sm font-medium text-gray-700 mb-1">No project files</p>
+            <p className="text-xs leading-relaxed text-gray-500 mb-4">
               {readOnly ? 'Generated files will appear here for browsing.' : 'Generate from a prompt or create a file manually.'}
             </p>
             {!readOnly && (
               <button
                 onClick={() => onCreateFile('index.html')}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-gray-100 px-2.5 py-1.5 text-[11px] text-gray-900 transition-colors hover:border-gray-400 hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 shadow-sm"
               >
-                <Sparkles className="h-3 w-3 text-indigo-600" />
+                <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
                 Add index.html
               </button>
             )}

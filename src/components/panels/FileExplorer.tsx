@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  Folder, FolderOpen, ChevronRight, ChevronDown,
+  Folder, FolderOpen, ChevronDown,
   FileCode, FileJson, FileText, File, Plus, FolderPlus, Minus, Trash2, Sparkles
 } from 'lucide-react';
 import type { ProjectFile, FileType } from '@/types';

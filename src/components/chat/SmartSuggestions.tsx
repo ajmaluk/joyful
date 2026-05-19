@@ -58,11 +58,12 @@ export function SmartSuggestions({ files, nextSteps, onSelect, disabled }: Smart
   }
 
   return (
-    <div className="space-y-2">
-      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+    <div className="min-w-0 space-y-2 overflow-x-hidden">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {nextSteps && nextSteps.length > 0 ? 'Suggested next steps' : hasFiles ? 'Quick actions' : 'Get started'}
       </p>
-      <div className="grid gap-2">
+      <div className="relative">
+        <div className="flex gap-2 overflow-x-auto pb-1 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {suggestions.map((item, index) => (
           <motion.button
             key={item.label}
@@ -71,20 +72,24 @@ export function SmartSuggestions({ files, nextSteps, onSelect, disabled }: Smart
             transition={{ delay: index * 0.08, duration: 0.25, ease: 'easeOut' }}
             onClick={() => onSelect(item.prompt)}
             disabled={disabled}
-            className="group flex w-full items-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 text-left transition-all duration-200 hover:border-gray-400 hover:bg-gray-50 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="group flex min-h-16 w-[172px] flex-none snap-start items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-all duration-200 hover:border-primary/40 hover:bg-accent/60 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-gray-100 text-gray-600 transition-all duration-200 group-hover:border-indigo-300 group-hover:bg-indigo-50 group-hover:text-indigo-600">
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-all duration-200 group-hover:border-primary/40 group-hover:bg-primary/10 group-hover:text-primary">
               {item.icon}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
+              <p className="text-xs font-medium text-foreground transition-colors group-hover:text-primary">
                 {item.label}
               </p>
-              <p className="text-[11px] text-gray-500 truncate">{item.prompt}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{item.prompt}</p>
             </div>
-            <svg className="h-4 w-4 text-gray-400 transition-all duration-200 group-hover:text-indigo-500 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </motion.button>
         ))}
+          <div className="flex h-16 w-10 flex-none items-center justify-center rounded-xl border border-dashed border-border bg-card/70 text-sm font-semibold text-muted-foreground lg:flex">
+            ...
+          </div>
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-card to-transparent" />
       </div>
     </div>
   );

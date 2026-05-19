@@ -13,7 +13,26 @@ export interface UnsplashImage {
   height: number;
 }
 
-function mapResult(photo: any): UnsplashImage {
+interface UnsplashPhoto {
+  id: string;
+  urls: {
+    regular: string;
+    small: string;
+  };
+  alt_description?: string | null;
+  description?: string | null;
+  user: {
+    name: string;
+    links: {
+      html: string;
+    };
+  };
+  color: string;
+  width: number;
+  height: number;
+}
+
+function mapResult(photo: UnsplashPhoto): UnsplashImage {
   return {
     id: photo.id,
     url: photo.urls.regular,
@@ -43,7 +62,7 @@ export async function searchImages(
       headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` },
     });
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = await res.json() as { results?: UnsplashPhoto[] };
     return (data.results || []).map(mapResult);
   } catch {
     return [];
@@ -65,7 +84,7 @@ export async function getRandomImages(
       headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` },
     });
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = await res.json() as UnsplashPhoto | UnsplashPhoto[];
     const arr = Array.isArray(data) ? data : [data];
     return arr.map(mapResult);
   } catch {

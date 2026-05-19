@@ -1,11 +1,14 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { ChatMessage, ProjectFile } from '@/types';
-import { ChatToolbar, exportChatAsMarkdown } from '@/components/chat/ChatToolbar';
+import { ChatToolbar } from '@/components/chat/ChatToolbar';
+import { exportChatAsMarkdown } from '@/components/chat/chatExport';
 import { SmartSuggestions } from '@/components/chat/SmartSuggestions';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { PromptInput } from '@/components/chat/PromptInput';
-import { FileDiffViewer, buildDiffsFromFiles } from '@/components/chat/FileDiffViewer';
-import { ActionHistory, buildActionsFromFiles } from '@/components/chat/ActionHistory';
+import { FileDiffViewer } from '@/components/chat/FileDiffViewer';
+import { buildDiffsFromFiles } from '@/components/chat/fileDiffUtils';
+import { ActionHistory } from '@/components/chat/ActionHistory';
+import { buildActionsFromFiles } from '@/components/chat/actionHistoryUtils';
 import { WorkingProcess } from '@/components/chat/WorkingProcess';
 
 interface ChatPanelProps {
@@ -15,6 +18,7 @@ interface ChatPanelProps {
   onSendMessage: (content: string) => void;
   onOpenFile: (path: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onClearMessages?: () => void;
   files?: ProjectFile[];
 }
 
@@ -25,12 +29,11 @@ export function ChatPanel({
   onSendMessage,
   onOpenFile,
   onRegenerateMessage,
+  onClearMessages,
   files = [],
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
-  const [lastDiffs, setLastDiffs] = useState<ReturnType<typeof buildDiffsFromFiles>>([]);
-  const [actions, setActions] = useState<ReturnType<typeof buildActionsFromFiles>>([]);
   const [nextSteps, setNextSteps] = useState<string[] | undefined>();
 
   const scrollToBottom = useCallback(() => {
@@ -41,25 +44,44 @@ export function ChatPanel({
     scrollToBottom();
   }, [messages, isGenerating, scrollToBottom]);
 
-  // Track file changes from the last assistant message
-  useEffect(() => {
-    const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
-    if (lastAssistant?.files && lastAssistant.files.length > 0) {
-      const fileOps = lastAssistant.files.map(f => ({
+  const lastAssistantWithFiles = useMemo(
+    () => [...messages].reverse().find(m => m.role === 'assistant' && m.files && m.files.length > 0),
+    [messages]
+  );
+
+  const lastDiffs = useMemo(() => {
+    if (!lastAssistantWithFiles?.files?.length) return [];
+    return buildDiffsFromFiles(
+      lastAssistantWithFiles.files.map(f => ({
         path: f.path,
         content: f.content || '',
         action: f.action,
-      }));
-      setLastDiffs(buildDiffsFromFiles(fileOps, files));
-      setActions(prev => [...buildActionsFromFiles(fileOps, files), ...prev]);
-    }
-  }, [messages, files]);
+      })),
+      files
+    );
+  }, [files, lastAssistantWithFiles]);
+
+  const actions = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(message => {
+      if (message.role !== 'assistant' || !message.files?.length) return [];
+      const fileOps = message.files.map(f => ({ path: f.path, action: f.action }));
+      return buildActionsFromFiles(fileOps, files, {
+        idPrefix: message.id,
+        timestamp: message.timestamp,
+      });
+    }).filter(action => {
+      const key = `${action.path}:${action.type}:${action.timestamp}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).reverse();
+  }, [files, messages]);
 
   const handleClearChat = useCallback(() => {
-    setActions([]);
-    setLastDiffs([]);
+    onClearMessages?.();
     setNextSteps(undefined);
-  }, []);
+  }, [onClearMessages]);
 
   const handleExportChat = useCallback(() => {
     const markdown = exportChatAsMarkdown(messages);
@@ -77,7 +99,7 @@ export function ChatPanel({
   }, [onSendMessage]);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-background">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden bg-background">
       {/* Toolbar */}
       <ChatToolbar
         messageCount={messages.length}
@@ -88,9 +110,9 @@ export function ChatPanel({
       />
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="space-y-6 py-8">
+      <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-4">
+        {messages.length === 0 && files.length === 0 && (
+          <div className="min-w-0 space-y-6 py-8">
             <SmartSuggestions
               files={files}
               nextSteps={nextSteps}
@@ -101,7 +123,7 @@ export function ChatPanel({
         )}
 
         {messages.map((msg, index) => (
-          <div key={msg.id} className="space-y-3">
+          <div key={msg.id} className="min-w-0 space-y-3">
             <MessageBubble
               message={msg}
               isLatest={index === messages.length - 1 && msg.role === 'assistant'}
@@ -112,7 +134,7 @@ export function ChatPanel({
 
             {/* Show diffs after assistant messages with files */}
             {msg.role === 'assistant' && msg.files && msg.files.length > 0 && index === messages.length - 1 && (
-              <div className="ml-2 space-y-3">
+              <div className="ml-2 min-w-0 space-y-3 overflow-x-hidden">
                 <FileDiffViewer diffs={lastDiffs} />
               </div>
             )}
@@ -140,8 +162,8 @@ export function ChatPanel({
       </div>
 
       {/* Show smart suggestions after generation */}
-      {messages.length > 0 && !isGenerating && (
-        <div className="border-t border-border px-4 py-3 bg-gradient-to-b from-muted/20 to-background">
+      {messages.length > 0 && !isGenerating && nextSteps && nextSteps.length > 0 && (
+        <div className="min-w-0 overflow-x-hidden border-t border-border bg-card px-4 py-3">
           <SmartSuggestions
             files={files}
             nextSteps={nextSteps}

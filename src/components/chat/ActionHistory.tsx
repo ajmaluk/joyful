@@ -1,13 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, FileCode, FilePlus, FileEdit, Trash2, Clock } from 'lucide-react';
-
-interface Action {
-  id: string;
-  type: 'create' | 'modify' | 'delete';
-  path: string;
-  description: string;
-  timestamp: string;
-}
+import type { Action } from '@/components/chat/actionHistoryUtils';
 
 interface ActionHistoryProps {
   actions: Action[];
@@ -33,7 +26,7 @@ function getActionColor(type: string) {
 }
 
 export function ActionHistory({ actions, onActionClick }: ActionHistoryProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (actions.length === 0) return null;
 
@@ -79,25 +72,4 @@ export function ActionHistory({ actions, onActionClick }: ActionHistoryProps) {
       )}
     </div>
   );
-}
-
-export function buildActionsFromFiles(
-  files: { path: string; action?: string }[],
-  existingFiles: { path: string }[]
-): Action[] {
-  return files.map((file, index) => {
-    const action = file.action || (existingFiles.some(f => f.path === file.path) ? 'modify' : 'create');
-    const descriptions: Record<string, string> = {
-      create: `Created ${file.path}`,
-      modify: `Modified ${file.path}`,
-      delete: `Deleted ${file.path}`,
-    };
-    return {
-      id: `action_${Date.now()}_${index}`,
-      type: action as 'create' | 'modify' | 'delete',
-      path: file.path,
-      description: descriptions[action] || `Updated ${file.path}`,
-      timestamp: new Date().toISOString(),
-    };
-  });
 }

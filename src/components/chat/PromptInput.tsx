@@ -78,29 +78,29 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
   const charCount = input.length;
 
   return (
-    <div className="border-t border-gray-200 bg-gradient-to-b from-white to-gray-50 px-4 py-4">
+    <div className="min-w-0 overflow-x-hidden border-t border-border bg-card px-4 py-4">
       {/* Templates dropdown */}
       {showTemplates && (
-        <div className="mb-2 rounded-xl border border-gray-300 bg-white shadow-lg overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-200">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Quick Templates</p>
+        <div className="mb-2 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">
+          <div className="border-b border-border px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quick Templates</p>
           </div>
           <div className="p-1">
             {promptTemplates.map((template) => (
               <button
                 key={template.label}
                 onClick={() => insertTemplate(template.prompt)}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
               >
-                <span className="text-xs font-medium text-gray-900">{template.label}</span>
-                <span className="text-[11px] text-gray-500 truncate">{template.prompt}</span>
+                <span className="text-xs font-medium text-popover-foreground">{template.label}</span>
+                <span className="truncate text-[11px] text-muted-foreground">{template.prompt}</span>
               </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="flex flex-col rounded-2xl border border-gray-300 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-indigo-300 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.1),0_4px_16px_rgba(99,102,241,0.08)]">
+      <div className="flex min-w-0 flex-col rounded-2xl border border-border bg-background shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-primary/60 focus-within:ring-4 focus-within:ring-primary/10">
         <textarea
           ref={textareaRef}
           value={input}
@@ -109,14 +109,14 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
           placeholder={placeholder}
           rows={1}
           disabled={disabled}
-          className="max-h-[120px] resize-none bg-transparent px-4 py-3 text-sm leading-relaxed text-gray-900 outline-none placeholder:text-gray-600 disabled:opacity-50"
+          className="max-h-[120px] resize-none bg-transparent px-4 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-1">
             {/* Templates button */}
             <button
               onClick={() => setShowTemplates(!showTemplates)}
-              className={`rounded-md p-1.5 transition-colors ${showTemplates ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+              className={`rounded-md p-1.5 transition-colors ${showTemplates ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
               title="Prompt templates"
             >
               <Command className="h-3.5 w-3.5" />
@@ -131,7 +131,7 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
                     setInput(promptHistory[0]);
                   }
                 }}
-                className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title="Prompt history"
               >
                 <History className="h-3.5 w-3.5" />
@@ -140,7 +140,7 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
 
             {/* Voice input (UI only) */}
             <button
-              className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Voice input (coming soon)"
             >
               <Mic className="h-3.5 w-3.5" />
@@ -148,22 +148,22 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
 
             {/* Image upload (UI only) */}
             <button
-              className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Upload screenshot (coming soon)"
             >
               <Image className="h-3.5 w-3.5" />
             </button>
 
             {/* Keyboard shortcut hint */}
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-gray-400 ml-1">
-              <kbd className="rounded border border-gray-300 px-1 py-0.5 text-[9px] font-mono">⌘</kbd>
-              <kbd className="rounded border border-gray-300 px-1 py-0.5 text-[9px] font-mono">↵</kbd>
+            <span className="ml-1 hidden items-center gap-1 text-[10px] text-muted-foreground sm:inline-flex">
+              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">⌘</kbd>
+              <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[9px]">↵</kbd>
               <span>send</span>
             </span>
 
             {/* Character count */}
             {charCount > 0 && (
-              <span className={`text-[10px] ml-1 ${charCount > 500 ? 'text-orange-500' : 'text-gray-400'}`}>
+              <span className={`ml-1 text-[10px] ${charCount > 500 ? 'text-orange-500' : 'text-muted-foreground'}`}>
                 {charCount}
               </span>
             )}
@@ -172,7 +172,7 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
           <button
             onClick={handleSend}
             disabled={!input.trim() || disabled}
-            className="rounded-lg bg-gradient-to-r from-gray-100 to-gray-50 p-2.5 text-gray-900 transition-all duration-200 hover:from-white hover:to-gray-100 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
+            className="rounded-lg bg-primary p-2.5 text-primary-foreground transition-all duration-200 hover:bg-primary/90 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none"
           >
             <ArrowUp className="w-4 h-4" />
           </button>

@@ -18,6 +18,11 @@ export function useChat(projectId: string) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<number>(-1);
 
+  const clearMessages = useCallback(() => {
+    setMessages([]);
+    storage.saveChatHistory(projectId, []);
+  }, [projectId]);
+
   const sendMessage = useCallback(async (
     content: string,
     existingFiles: ProjectFile[]
@@ -51,7 +56,11 @@ export function useChat(projectId: string) {
         role: 'assistant',
         content: response.summary,
         timestamp: new Date().toISOString(),
-        files: response.files.map(f => ({ path: f.path, action: 'create', content: f.content })),
+        files: response.files.map(f => ({
+          path: f.path,
+          action: f.action || (existingFiles.some(file => file.path === f.path) ? 'modify' : 'create'),
+          content: f.content,
+        })),
       };
 
       const finalMessages = [...newMessages, assistantMsg];
@@ -76,5 +85,5 @@ export function useChat(projectId: string) {
     }
   }, [messages, projectId]);
 
-  return { messages, isGenerating, generationStep, sendMessage };
+  return { messages, isGenerating, generationStep, sendMessage, clearMessages };
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, RotateCcw, FileCode, Check, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, RotateCcw, Check, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { TypingText } from '@/components/ui/TypingText';
 

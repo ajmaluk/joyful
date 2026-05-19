@@ -12,7 +12,7 @@ import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSy
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut
+  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare
 } from 'lucide-react';
 
 interface BuilderPageProps {
@@ -36,12 +36,12 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null);
   const [openFiles, setOpenFiles] = useState<ProjectFile[]>([]);
   const [viewMode, setViewMode] = useState<'code' | 'preview'>('preview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showChatSidebar, setShowChatSidebar] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { messages, isGenerating, sendMessage } = useChat(projectId || 'default');
+  const { messages, isGenerating, sendMessage, clearMessages } = useChat(projectId || 'default');
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -273,17 +273,26 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-black p-0 text-gray-900 md:p-2">
-      <div className="relative flex h-full min-h-0 overflow-hidden border border-[#1A1A1A] bg-white shadow-2xl shadow-black/60 md:rounded-xl">
+    <div className="h-[100dvh] overflow-hidden bg-black p-0 text-foreground md:p-2">
+      <div className="relative flex h-full min-h-0 overflow-hidden border border-border bg-background shadow-2xl shadow-black/60 md:rounded-xl">
         {/* Main workspace area */}
-        <aside className={`${sidebarOpen ? 'flex' : 'hidden'} min-h-0 w-[230px] flex-shrink-0 flex-col border-r border-[#1A1A1A] bg-white md:flex xl:w-[260px]`}>
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-[#1A1A1A] bg-white px-4">
+        {sidebarOpen && (
+          <button
+            type="button"
+            className="absolute inset-0 z-30 bg-black/45 md:hidden"
+            aria-label="Close file sidebar overlay"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <aside className={`${sidebarOpen ? 'flex' : 'hidden'} absolute inset-y-0 left-0 z-40 min-h-0 w-[min(86vw,280px)] flex-shrink-0 flex-col border-r border-border bg-card shadow-2xl shadow-black/40 md:relative md:z-auto md:w-[248px] md:shadow-none xl:w-[280px]`}>
+          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-medium text-gray-900">Files</span>
+              <span className="truncate text-sm font-semibold text-foreground">Project files</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-gray-100 text-gray-700 transition-colors hover:border-gray-400 hover:bg-white"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent hover:text-foreground"
               title="Close file sidebar"
               aria-label="Close file sidebar"
             >
@@ -304,7 +313,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="fixed left-3 top-1/2 z-50 -translate-y-1/2 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-all hover:shadow-xl hover:border-gray-300 hover:text-indigo-600"
+            className="absolute left-3 top-1/2 z-40 -translate-y-1/2 flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-black/20 transition-all hover:border-primary/50 hover:text-primary"
             title="Open file sidebar"
           >
             Files
@@ -312,30 +321,33 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         )}
 
         <section className="relative min-w-0 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 gap-3 shadow-sm">
+          <div className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 shadow-sm">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden flex-shrink-0"
-                title="Toggle file explorer"
-              >
-                <Menu className="h-4 w-4" />
-              </button>
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="inline-flex flex-shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  title="Open file explorer"
+                  aria-label="Open file explorer"
+                >
+                  <Menu className="h-4 w-4" />
+                </button>
+              )}
               <button
                 onClick={() => navigate('/builder')}
-                className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-900 transition-colors hover:text-indigo-600 flex-shrink-0"
+                className="flex min-w-0 flex-shrink-0 items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-primary"
               >
                 <span className="truncate hidden sm:inline">Joyful AI Web Builder</span>
                 <span className="truncate sm:hidden">Joyful</span>
-                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
-              <div className="rounded-lg bg-gray-100 p-0.5 flex-shrink-0">
+              <div className="flex-shrink-0 rounded-lg border border-border bg-background p-0.5">
                 <button
                   onClick={handleShowPreview}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                     viewMode === 'preview'
                       ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
                   Preview
@@ -345,7 +357,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                     viewMode === 'code'
                       ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   }`}
                 >
                   Code
@@ -356,7 +368,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             <div className="relative flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title="Export ZIP"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -364,7 +376,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
               </button>
               <button
                 onClick={() => setProfileOpen((open) => !open)}
-                className="flex items-center gap-1.5 rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="flex items-center gap-1.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title="Profile"
                 aria-label="Open profile menu"
               >
@@ -373,23 +385,23 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 </div>
               </button>
               {profileOpen && (
-                <div className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-xl">
-                  <div className="border-b border-gray-100 px-4 py-3 flex items-center gap-3">
+                <div className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-border bg-popover text-left shadow-xl">
+                  <div className="flex items-center gap-3 border-b border-border px-4 py-3">
                     <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
                       {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">{user?.displayName || 'User'}</p>
-                      {user?.email && <p className="truncate text-xs text-gray-500">{user.email}</p>}
+                      <p className="truncate text-sm font-semibold text-popover-foreground">{user?.displayName || 'User'}</p>
+                      {user?.email && <p className="truncate text-xs text-muted-foreground">{user.email}</p>}
                     </div>
                   </div>
                   <div className="p-1.5">
                     <button
                       type="button"
                       onClick={() => { setProfileOpen(false); navigate('/settings'); }}
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-popover-foreground transition-colors hover:bg-accent"
                     >
-                      <Settings className="h-4 w-4 text-gray-400" /> Settings
+                      <Settings className="h-4 w-4 text-muted-foreground" /> Settings
                     </button>
                     <button
                       type="button"
@@ -406,7 +418,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
               )}
               <button
                 onClick={() => navigate('/builder')}
-                className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title="Close builder"
               >
                 <X className="h-4 w-4" />
@@ -431,14 +443,14 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           </div>
         </section>
 
-        <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] flex-shrink-0 flex-col border-l border-[#1A1A1A] bg-white xl:w-[400px]`}>
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-[#1A1A1A] bg-white px-4">
+        <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-border bg-card xl:w-[400px]`}>
+          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium text-gray-900">AI Chat</span>
+              <span className="truncate text-sm font-semibold text-foreground">AI Chat</span>
             </div>
             <button
               onClick={() => setShowChatSidebar(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-gray-100 text-gray-700 transition-colors hover:border-gray-400 hover:bg-white"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent hover:text-foreground"
               title="Close chat sidebar"
               aria-label="Close chat sidebar"
             >
@@ -449,9 +461,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             <ChatPanel
               messages={messages}
               isGenerating={isGenerating}
+              files={files}
               onSendMessage={handleSendMessage}
               onOpenFile={handleOpenFileFromChat}
               onRegenerateMessage={handleRegenerateMessage}
+              onClearMessages={clearMessages}
             />
           </div>
         </aside>
@@ -459,10 +473,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!showChatSidebar && (
           <button
             onClick={() => setShowChatSidebar(true)}
-            className="fixed right-3 top-1/2 z-50 hidden -translate-y-1/2 lg:flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-all hover:shadow-xl hover:border-gray-300 hover:text-indigo-600"
+            className="absolute right-3 top-1/2 z-40 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/95 text-muted-foreground shadow-lg shadow-black/20 backdrop-blur transition-all hover:border-primary/50 hover:bg-accent hover:text-primary lg:flex"
             title="Open chat sidebar"
+            aria-label="Open chat sidebar"
           >
-            Chat
+            <MessageSquare className="h-4 w-4" />
           </button>
         )}
 
@@ -470,22 +485,22 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           {!mobileChatOpen ? (
             <button
               onClick={() => setMobileChatOpen(true)}
-              className="ml-auto flex items-center gap-2 rounded-full border border-[#1A1A1A] bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-xl"
+              className="ml-auto flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground shadow-xl"
               title="Open AI chat"
             >
               AI Chat
               <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            <div className="overflow-hidden rounded-t-3xl border border-[#1A1A1A] bg-white shadow-2xl shadow-black/50">
-              <div className="flex h-12 items-center justify-between border-b border-[#1A1A1A] bg-white px-4">
+            <div className="overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl shadow-black/50">
+              <div className="flex h-12 items-center justify-between border-b border-border bg-card px-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-900">AI Chat</span>
-                  <span className="rounded-full border border-gray-300 px-2 py-0.5 text-[10px] text-gray-500">Overlay</span>
+                  <span className="text-sm font-semibold text-foreground">AI Chat</span>
+                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Overlay</span>
                 </div>
                 <button
                   onClick={() => setMobileChatOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-gray-100 text-gray-700"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground"
                   title="Close AI chat"
                   aria-label="Close AI chat"
                 >
@@ -496,9 +511,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 <ChatPanel
                   messages={messages}
                   isGenerating={isGenerating}
+                  files={files}
                   onSendMessage={handleSendMessage}
                   onOpenFile={handleOpenFileFromChat}
                   onRegenerateMessage={handleRegenerateMessage}
+                  onClearMessages={clearMessages}
                 />
               </div>
             </div>

@@ -132,7 +132,7 @@ function htmlDoc(title: string, head: string, body: string): string {
 </head>
 <body>
 ${body}
-  <script src="script.js"><\/script>
+  <script src="script.js"></script>
 </body>
 </html>`;
 }
@@ -682,7 +682,6 @@ function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analy
     summary = 'Enhanced responsive design with mobile-optimized breakpoints.';
     nextSteps.push('Test on devices', 'Add touch gestures');
   } else {
-    const p = pickPalette(analysis);
     const sectionName = lower.match(/add\s+(?:a\s+)?(\w+)/)?.[1] || 'section';
     const sectionHTML = `\n  <section class="fade-up" style="padding:5rem 2rem;text-align:center">\n    <h2 class="section-title">${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}</h2>\n    <p class="section-subtitle">This section was added based on your request.</p>\n    <div class="grid grid-3">\n      <div class="card"><div class="card-icon">&#128221;</div><h3>Feature One</h3><p>Description of the first feature.</p></div>\n      <div class="card"><div class="card-icon">&#128221;</div><h3>Feature Two</h3><p>Description of the second feature.</p></div>\n      <div class="card"><div class="card-icon">&#128221;</div><h3>Feature Three</h3><p>Description of the third feature.</p></div>\n    </div>\n  </section>\n`;
     html = html.replace('</body>', `${sectionHTML}</body>`);
@@ -740,7 +739,7 @@ export async function generateWithAI(
 export async function* generateWithAIStream(
   prompt: string,
   existingFiles: ProjectFile[],
-  conversationHistory: { role: string; content: string }[] = []
+  _conversationHistory: { role: string; content: string }[] = []
 ): AsyncGenerator<AIStreamChunk> {
   const analysis = analyzePrompt(prompt, existingFiles);
 

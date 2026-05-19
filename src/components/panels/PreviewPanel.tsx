@@ -57,10 +57,10 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
     return () => clearTimeout(timer);
   }, [files, refreshPreview]);
 
-  const deviceWidths: Record<DeviceMode, string> = {
-    desktop: '100%',
-    tablet: '768px',
-    mobile: '390px',
+  const deviceFrames: Record<DeviceMode, { width: string; height: string }> = {
+    desktop: { width: '100%', height: '100%' },
+    tablet: { width: '768px', height: '1024px' },
+    mobile: { width: '390px', height: '844px' },
   };
 
   const tabConfig: { tab: BottomTab; icon: typeof Terminal; label: string; badge?: number }[] = [
@@ -70,20 +70,20 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
   ];
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-l border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100">
+    <div className="flex h-full min-h-0 w-full flex-col border-l border-border bg-background">
       {/* Browser chrome — polished */}
-      <div className="flex h-12 items-center justify-between border-b border-gray-200 bg-gradient-to-r from-gray-50 via-white to-gray-50 px-3 shadow-sm">
+      <div className="flex h-12 items-center justify-between border-b border-border bg-card px-3 shadow-sm">
         <div className="flex items-center gap-1">
           <button
             onClick={refreshPreview}
-            className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-700 hover:shadow-sm"
+            className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
             title="Home"
           >
             <Home className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={refreshPreview}
-            className="rounded-lg p-1.5 text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-700 hover:shadow-sm"
+            className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
             title="Refresh preview"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -92,14 +92,14 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
         {/* Address bar — realistic */}
         <div className="flex-1 mx-3 min-w-0">
-          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 shadow-inner shadow-gray-100">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 shadow-inner">
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-[#66D28E] shadow-sm shadow-green-200" />
-              <span className="text-[10px] font-medium text-gray-400">HTTPS</span>
+              <span className="text-[10px] font-medium text-muted-foreground">HTTPS</span>
             </div>
-            <div className="h-3 w-px bg-gray-200" />
-            <span className="truncate text-xs text-gray-600 font-mono">localhost:preview</span>
-            <span className="ml-auto hidden items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 sm:flex">
+            <div className="h-3 w-px bg-border" />
+            <span className="truncate font-mono text-xs text-muted-foreground">localhost:preview</span>
+            <span className="ml-auto hidden items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 sm:flex dark:text-emerald-300">
               <ShieldCheck className="h-3 w-3" />
               Safe preview
             </span>
@@ -107,13 +107,13 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
         </div>
 
         {/* Device toggle — button group */}
-        <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+        <div className="flex items-center rounded-lg border border-border bg-background p-0.5">
           <button
             onClick={() => setDevice('desktop')}
             className={`rounded-md px-2 py-1.5 transition-all ${
               device === 'desktop'
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'border border-border bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Desktop preview"
           >
@@ -123,8 +123,8 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             onClick={() => setDevice('tablet')}
             className={`rounded-md px-2 py-1.5 transition-all ${
               device === 'tablet'
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'border border-border bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Tablet preview"
           >
@@ -134,8 +134,8 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             onClick={() => setDevice('mobile')}
             className={`rounded-md px-2 py-1.5 transition-all ${
               device === 'mobile'
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                ? 'border border-border bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Mobile preview"
           >
@@ -144,7 +144,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
         </div>
 
         <button
-          className="ml-1.5 rounded-lg p-1.5 text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-700 hover:shadow-sm"
+          className="ml-1.5 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
           title="Open preview in new tab"
           onClick={() => {
             const html = generatePreview(files);
@@ -160,16 +160,16 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
       {/* Inspector bar — polished */}
       <div className={`flex items-center justify-between px-3 py-1.5 border-b flex-shrink-0 transition-all duration-200 ${
         inspectorEnabled
-          ? 'border-indigo-200 bg-gradient-to-r from-indigo-50 via-white to-indigo-50'
-          : 'border-gray-100 bg-white'
+          ? 'border-primary/30 bg-primary/10'
+          : 'border-border bg-card'
       }`}>
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggleInspector(!inspectorEnabled)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
               inspectorEnabled
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200 hover:bg-indigo-600'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 border border-gray-200'
+                ? 'bg-primary text-primary-foreground shadow-md shadow-primary/15 hover:bg-primary/90'
+                : 'border border-border text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title={inspectorEnabled ? 'Disable inspector' : 'Enable element inspector'}
           >
@@ -177,39 +177,39 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             <span className="hidden sm:inline">Inspect</span>
           </button>
           {inspectorEnabled && inspectorSelection && (
-            <div className="flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs shadow-sm">
-              <span className="font-bold text-indigo-700 font-mono">&lt;{inspectorSelection.tag}&gt;</span>
+            <div className="flex items-center gap-2 rounded-lg border border-primary/25 bg-background px-3 py-1.5 text-xs shadow-sm">
+              <span className="font-mono font-bold text-primary">&lt;{inspectorSelection.tag}&gt;</span>
               {inspectorSelection.id && (
-                <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-mono font-semibold text-indigo-700">#{inspectorSelection.id}</span>
+                <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">#{inspectorSelection.id}</span>
               )}
               {inspectorSelection.classes.length > 0 && (
-                <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-mono font-semibold text-indigo-700">
+                <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
                   .{inspectorSelection.classes[0]}
                 </span>
               )}
-              <div className="h-3 w-px bg-indigo-200" />
-              <span className="text-indigo-500 tabular-nums font-medium">{inspectorSelection.width} x {inspectorSelection.height}</span>
+              <div className="h-3 w-px bg-border" />
+              <span className="font-medium tabular-nums text-primary">{inspectorSelection.width} x {inspectorSelection.height}</span>
             </div>
           )}
           {inspectorEnabled && !inspectorSelection && (
-            <div className="flex items-center gap-1.5 text-[10px] text-indigo-500">
-              <div className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" />
+            <div className="flex items-center gap-1.5 text-[10px] text-primary">
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               Click an element in the preview...
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
+        <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
           {metrics.domNodes > 0 && (
-            <span className="rounded-md bg-gray-100 px-2 py-0.5">{metrics.domNodes} nodes</span>
+            <span className="rounded-md bg-background px-2 py-0.5">{metrics.domNodes} nodes</span>
           )}
           {metrics.heapMB > 0 && (
-            <span className="rounded-md bg-gray-100 px-2 py-0.5">{metrics.heapMB} MB</span>
+            <span className="rounded-md bg-background px-2 py-0.5">{metrics.heapMB} MB</span>
           )}
         </div>
       </div>
 
       {/* Preview iframe — polished */}
-      <div className="flex min-h-0 flex-1 justify-center overflow-auto bg-gradient-to-br from-gray-50 to-gray-100 p-4" style={{ flex: bottomOpen ? `1 1 calc(100% - ${BOTTOM_HEIGHT}px)` : '1 1 100%' }}>
+      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-muted/25 p-4" style={{ flex: bottomOpen ? `1 1 calc(100% - ${BOTTOM_HEIGHT}px)` : '1 1 100%' }}>
         {files.length === 0 ? (
           <div className="flex w-full max-w-[460px] flex-col justify-center">
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xl shadow-gray-200/50">
@@ -246,12 +246,18 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
           </div>
         ) : (
           <div
-            className={`relative min-h-full overflow-hidden rounded-xl border bg-white transition-all duration-300 ${
+            className={`relative overflow-hidden rounded-xl border bg-white transition-all duration-300 ${
+              device === 'desktop' ? 'h-full min-h-full' : 'shrink-0'
+            } ${
               isLoading
                 ? 'border-gray-200 shadow-lg shadow-gray-200/30'
                 : 'border-gray-200 shadow-2xl shadow-gray-300/40'
             }`}
-            style={{ width: deviceWidths[device], maxWidth: '100%' }}
+            style={{
+              width: deviceFrames[device].width,
+              height: deviceFrames[device].height,
+              maxWidth: '100%',
+            }}
           >
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10">
@@ -274,9 +280,9 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
       {/* DevTools bottom panel — Chrome DevTools style */}
       {bottomOpen && (
-        <div className="border-t border-gray-200 bg-white flex-shrink-0 shadow-lg shadow-gray-200/50" style={{ height: BOTTOM_HEIGHT }}>
+        <div className="flex-shrink-0 border-t border-border bg-card shadow-lg shadow-black/10" style={{ height: BOTTOM_HEIGHT }}>
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white px-2 flex-shrink-0">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-border bg-card px-2">
               <div className="flex items-center">
                 {tabConfig.map(tc => {
                   const Icon = tc.icon;
@@ -286,8 +292,8 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
                       onClick={() => setBottomTab(tc.tab)}
                       className={`relative flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-all ${
                         bottomTab === tc.tab
-                          ? 'text-indigo-600 bg-white'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                          ? 'bg-background text-primary'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -298,7 +304,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
                         </span>
                       )}
                       {bottomTab === tc.tab && (
-                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary" />
                       )}
                     </button>
                   );
@@ -306,7 +312,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
               </div>
               <button
                 onClick={() => setBottomOpen(false)}
-                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 title="Close panel"
               >
                 <ChevronDown className="h-4 w-4" />
@@ -323,10 +329,10 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
 
       {/* DevTools toggle — polished toolbar */}
       {!bottomOpen && (
-        <div className="flex items-center justify-center border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white py-1.5 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-center border-t border-border bg-card py-1.5">
           <button
             onClick={() => setBottomOpen(true)}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:shadow-md hover:text-gray-800 transition-all"
+            className="flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-foreground hover:shadow-md"
           >
             <ChevronUp className="h-3 w-3" />
             <span>DevTools</span>

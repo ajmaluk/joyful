@@ -77,7 +77,7 @@ export function ChatPanel({
   }, [onSendMessage]);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col bg-white">
+    <div className="flex h-full min-h-0 w-full flex-col bg-background">
       {/* Toolbar */}
       <ChatToolbar
         messageCount={messages.length}
@@ -119,7 +119,7 @@ export function ChatPanel({
 
             {/* Subtle divider between messages */}
             {index < messages.length - 1 && (
-              <div className="mx-8 border-t border-gray-100" />
+              <div className="mx-8 border-t border-border" />
             )}
           </div>
         ))}
@@ -141,7 +141,7 @@ export function ChatPanel({
 
       {/* Show smart suggestions after generation */}
       {messages.length > 0 && !isGenerating && (
-        <div className="border-t border-gray-100 px-4 py-3 bg-gradient-to-b from-gray-50/50 to-white">
+        <div className="border-t border-border px-4 py-3 bg-gradient-to-b from-muted/20 to-background">
           <SmartSuggestions
             files={files}
             nextSteps={nextSteps}

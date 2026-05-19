@@ -304,7 +304,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="fixed left-3 top-1/2 z-50 -translate-y-1/2 rounded-full border border-[#1A1A1A] bg-white px-3 py-2 text-xs font-medium text-gray-900 shadow-lg transition-colors hover:bg-gray-100"
+            className="fixed left-3 top-1/2 z-50 -translate-y-1/2 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-all hover:shadow-xl hover:border-gray-300 hover:text-indigo-600"
             title="Open file sidebar"
           >
             Files
@@ -312,40 +312,40 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         )}
 
         <section className="relative min-w-0 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-[#1A1A1A] bg-white px-3 gap-3">
+          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3 gap-3 shadow-sm">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white hover:text-gray-900 md:hidden flex-shrink-0"
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 md:hidden flex-shrink-0"
                 title="Toggle file explorer"
               >
                 <Menu className="h-4 w-4" />
               </button>
               <button
                 onClick={() => navigate('/builder')}
-                className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-gray-900 transition-colors hover:text-gray-600 flex-shrink-0"
+                className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-900 transition-colors hover:text-indigo-600 flex-shrink-0"
               >
                 <span className="truncate hidden sm:inline">Joyful AI Web Builder</span>
                 <span className="truncate sm:hidden">Joyful</span>
-                <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
               </button>
-              <div className="rounded-lg bg-white p-1 flex-shrink-0 border border-gray-200">
+              <div className="rounded-lg bg-gray-100 p-0.5 flex-shrink-0">
                 <button
                   onClick={handleShowPreview}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                     viewMode === 'preview'
-                      ? 'bg-[#4A4A4D] text-white shadow-sm'
-                      : 'text-[#9EA2B2] hover:text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Preview
                 </button>
                 <button
                   onClick={handleShowCode}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                     viewMode === 'code'
-                      ? 'bg-[#4A4A4D] text-white shadow-sm'
-                      : 'text-[#9EA2B2] hover:text-white'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   Code
@@ -356,47 +356,57 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             <div className="relative flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="rounded-md p-1.5 text-[#C9CBD4] transition-colors hover:bg-white hover:text-white"
+                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 title="Export ZIP"
               >
-                <Download className="h-4 w-4" />
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Export</span>
               </button>
               <button
                 onClick={() => setProfileOpen((open) => !open)}
-                className="rounded-md p-1.5 text-[#C9CBD4] transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="flex items-center gap-1.5 rounded-md p-1.5 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 title="Profile"
                 aria-label="Open profile menu"
               >
-                <User className="h-4 w-4" />
+                <div className="h-6 w-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-600">
+                  {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                </div>
               </button>
               {profileOpen && (
-                <div className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 text-left shadow-2xl">
-                  <div className="border-b border-gray-200 px-3 py-2">
-                    <p className="truncate text-sm font-bold text-gray-900">{user?.displayName || user?.email || 'Profile'}</p>
-                    {user?.email && <p className="truncate text-xs text-gray-500">{user.email}</p>}
+                <div className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-xl">
+                  <div className="border-b border-gray-100 px-4 py-3 flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
+                      {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-900">{user?.displayName || 'User'}</p>
+                      {user?.email && <p className="truncate text-xs text-gray-500">{user.email}</p>}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { setProfileOpen(false); navigate('/settings'); }}
-                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
-                  >
-                    <Settings className="h-4 w-4" /> Settings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      void signOutUser().then(() => navigate('/'));
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10"
-                  >
-                    <LogOut className="h-4 w-4" /> Sign out
-                  </button>
+                  <div className="p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setProfileOpen(false); navigate('/settings'); }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <Settings className="h-4 w-4 text-gray-400" /> Settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        void signOutUser().then(() => navigate('/'));
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" /> Sign out
+                    </button>
+                  </div>
                 </div>
               )}
               <button
                 onClick={() => navigate('/builder')}
-                className="rounded-md p-1.5 text-[#C9CBD4] transition-colors hover:bg-white hover:text-white"
+                className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                 title="Close builder"
               >
                 <X className="h-4 w-4" />
@@ -449,7 +459,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!showChatSidebar && (
           <button
             onClick={() => setShowChatSidebar(true)}
-            className="fixed right-3 top-1/2 z-50 hidden -translate-y-1/2 rounded-full border border-[#1A1A1A] bg-white px-3 py-2 text-xs font-medium text-gray-900 shadow-lg transition-colors hover:bg-gray-100 lg:flex"
+            className="fixed right-3 top-1/2 z-50 hidden -translate-y-1/2 lg:flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-all hover:shadow-xl hover:border-gray-300 hover:text-indigo-600"
             title="Open chat sidebar"
           >
             Chat

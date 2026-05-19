@@ -3,13 +3,13 @@ import { TopBar } from '@/components/layout/TopBar';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
 import { LandingPage } from '@/pages/LandingPage';
 import { BuilderPage } from '@/pages/BuilderPage';
+import { DashboardPage } from '@/pages/DashboardPage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { DocsPage } from '@/pages/DocsPage';
 import { PricingPage } from '@/pages/PricingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { SignupPage } from '@/pages/SignupPage';
-import { BuilderStartPage } from '@/pages/BuilderStartPage';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/useToast';
@@ -45,7 +45,7 @@ function AuthGate({ children }: { children: ReactNode }) {
 function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { projects, createProject, updateProject } = useProjects();
+  const { projects, createProject, updateProject, removeProject } = useProjects();
   const { toasts, addToast, removeToast } = useToast();
   const { isAuthed, isAuthReady } = useAuth();
 
@@ -75,7 +75,8 @@ function AppLayout() {
 
   // Pages without sidebar/topbar
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
-  const isBuilder = location.pathname.match(/^\/builder\/[^/]+$/);
+  const isBuilderRoot = location.pathname === '/builder';
+  const isBuilder = isBuilderRoot || location.pathname.match(/^\/builder\/[^/]+$/);
   const isMarketingPage = marketingPaths.has(location.pathname);
 
   // Show sidebar on all pages except auth and landing
@@ -166,9 +167,10 @@ function AppLayout() {
                   path="/builder"
                   element={
                     <AuthGate>
-                      <BuilderStartPage
+                      <DashboardPage
                         projects={projects}
-                        onStartProject={handleStartProject}
+                        onCreateProject={handleCreateProject}
+                        onDeleteProject={removeProject}
                       />
                     </AuthGate>
                   }

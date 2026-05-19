@@ -78,7 +78,7 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
   const charCount = input.length;
 
   return (
-    <div className="border-t border-gray-300 bg-white px-4 py-3.5">
+    <div className="border-t border-gray-200 bg-gradient-to-b from-white to-gray-50 px-4 py-4">
       {/* Templates dropdown */}
       {showTemplates && (
         <div className="mb-2 rounded-xl border border-gray-300 bg-white shadow-lg overflow-hidden">
@@ -100,7 +100,7 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to bui
         </div>
       )}
 
-      <div className="flex flex-col rounded-2xl border border-gray-300 bg-white shadow-[0_1px_0_rgba(0,0,0,0.04)_inset] transition-all duration-200 focus-within:border-gray-400 focus-within:shadow-[0_0_12px_rgba(99,102,241,0.1)]">
+      <div className="flex flex-col rounded-2xl border border-gray-300 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-200 focus-within:border-indigo-300 focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.1),0_4px_16px_rgba(99,102,241,0.08)]">
         <textarea
           ref={textareaRef}
           value={input}

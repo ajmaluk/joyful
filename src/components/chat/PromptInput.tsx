@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { ChevronDown, ListChecks, Send, Square, Wand2 } from 'lucide-react';
+import { ArrowUp, ChevronDown, ListChecks, Mic, Plus, Square, Wand2 } from 'lucide-react';
 import type { ChatMode } from '@/types';
 
 interface PromptInputProps {
@@ -87,6 +87,15 @@ export function PromptInput({
   }, []);
 
   const charCount = input.length;
+  const trimmedInput = input.trim();
+  const canSend = Boolean(trimmedInput) && !disabled && !isGenerating;
+  const sendButtonLabel = isGenerating
+    ? 'Generating'
+    : canSend
+      ? mode === 'plan'
+        ? 'Create implementation plan'
+        : 'Start building'
+      : "Can't submit an empty request";
 
   return (
     <div className="relative z-30 min-w-0 overflow-visible border-t border-border bg-background px-4 py-4">
@@ -102,12 +111,14 @@ export function PromptInput({
           aria-label="Describe what you want Joyful to build"
           className="min-h-16 max-h-[120px] resize-none bg-transparent px-2 pt-1 text-left text-sm font-medium leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">
-              {isGenerating ? 'Building...' : 'Press Ctrl+Enter to send'}
-            </span>
-          </div>
+        <div className="flex items-center justify-between gap-3 pt-1.5">
+          <button
+            type="button"
+            aria-label="Add context"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
           <div className="flex items-center gap-2">
             {isGenerating && onCancel ? (
               <button
@@ -119,61 +130,73 @@ export function PromptInput({
                 Stop
               </button>
             ) : (
-              <div className="relative hidden overflow-visible sm:block">
+              <>
+                <div className="relative hidden overflow-visible sm:block">
+                  <button
+                    type="button"
+                    onClick={() => setModeMenuOpen(prev => !prev)}
+                    disabled={disabled}
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-haspopup="menu"
+                    aria-expanded={modeMenuOpen}
+                  >
+                    <ActiveIcon className="h-3.5 w-3.5 text-primary" />
+                    {activeMode.label}
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                  {modeMenuOpen && (
+                    <div className="absolute bottom-full right-0 z-[100] mb-2 w-56 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-2xl shadow-black/30">
+                      {modeOptions.map((option) => {
+                        const Icon = option.icon;
+                        const selected = option.value === mode;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              onModeChange?.(option.value);
+                              setModeMenuOpen(false);
+                            }}
+                            className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                              selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                            }`}
+                          >
+                            <Icon className="mt-0.5 h-3.5 w-3.5 text-primary" />
+                            <span className="min-w-0">
+                              <span className="block text-xs font-semibold">{option.label}</span>
+                              <span className="block text-[10px] leading-snug text-muted-foreground">{option.hint}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
-                  onClick={() => setModeMenuOpen(prev => !prev)}
-                  disabled={disabled}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                  aria-haspopup="menu"
-                  aria-expanded={modeMenuOpen}
+                  aria-label="Voice prompt"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <ActiveIcon className="h-3.5 w-3.5 text-primary" />
-                  {activeMode.label}
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Mic className="h-4 w-4" />
                 </button>
-                {modeMenuOpen && (
-                  <div className="absolute bottom-full right-0 z-[100] mb-2 w-56 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-2xl shadow-black/30">
-                    {modeOptions.map((option) => {
-                      const Icon = option.icon;
-                      const selected = option.value === mode;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => {
-                            onModeChange?.(option.value);
-                            setModeMenuOpen(false);
-                          }}
-                          className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
-                            selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                          }`}
-                        >
-                          <Icon className="mt-0.5 h-3.5 w-3.5 text-primary" />
-                          <span className="min-w-0">
-                            <span className="block text-xs font-semibold">{option.label}</span>
-                            <span className="block text-[10px] leading-snug text-muted-foreground">{option.hint}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!canSend && !isGenerating}
+                  aria-label={sendButtonLabel}
+                  title={sendButtonLabel}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
+                    isGenerating
+                      ? 'bg-red-500 text-white shadow-red-500/20 hover:scale-105'
+                      : canSend
+                        ? 'bg-primary text-primary-foreground shadow-primary/20 hover:scale-105'
+                        : 'bg-secondary text-secondary-foreground shadow-none hover:scale-100 disabled:cursor-not-allowed disabled:opacity-70'}
+                  `}
+                >
+                  {isGenerating ? <Square className="h-3.5 w-3.5" /> : <ArrowUp className="h-4 w-4" />}
+                </button>
+              </>
             )}
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={disabled}
-              aria-label={mode === 'plan' ? 'Create implementation plan' : 'Start building'}
-              className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
-                isGenerating
-                  ? 'bg-red-500 shadow-red-500/20 hover:scale-105'
-                  : 'bg-primary shadow-primary/20 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100'
-              } text-primary-foreground`}
-            >
-              {isGenerating ? <Square className="h-3.5 w-3.5" /> : <Send className="h-4 w-4" />}
-            </button>
             {charCount > 0 && (
               <span className={`hidden text-[10px] sm:inline ${charCount > 500 ? 'text-orange-500' : 'text-muted-foreground'}`}>
                 {charCount}

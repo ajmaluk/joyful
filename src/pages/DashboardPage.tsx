@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
+  ArrowUp,
   ChevronDown,
   Clock,
   Download,
@@ -12,7 +13,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Send,
   Sparkles,
   Trash2,
   Wand2,
@@ -76,17 +76,24 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
   const handlePromptSubmit = () => {
     const trimmed = prompt.trim();
-    if (onStartProject) {
-      onStartProject(trimmed, promptMode);
+    if (!trimmed) {
+      textareaRef.current?.focus();
       return;
     }
-    if (!trimmed) {
-      setShowNewProject(true);
+    if (onStartProject) {
+      onStartProject(trimmed, promptMode);
       return;
     }
     const project = onCreateProject(trimmed.slice(0, 54), trimmed);
     navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmed, initialMode: promptMode } });
   };
+
+  const canSubmitPrompt = prompt.trim().length > 0;
+  const promptButtonLabel = canSubmitPrompt
+    ? promptMode === 'plan'
+      ? 'Create implementation plan'
+      : 'Start building'
+    : "Can't submit an empty request";
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -110,7 +117,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#edf1ff_26%,#7890ff_50%,#d76cd1_69%,#f34f78_84%,#ff7748_100%)] dark:bg-[linear-gradient(180deg,#111214_0%,#1d2d50_28%,#586fe4_52%,#b656b7_70%,#d83e69_86%,#e9643d_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.88)_24%,rgba(255,255,255,0.26)_48%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.09),transparent_40%),linear-gradient(180deg,rgba(12,13,15,0.88)_0%,rgba(12,13,15,0.2)_45%,rgba(12,13,15,0)_100%)]" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center py-4 text-center sm:min-h-[38vh] sm:py-6">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center py-4 text-center sm:min-h-[80vh] sm:py-6">
           <button
             type="button"
             onClick={() => navigate('/docs')}
@@ -206,10 +213,16 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                 <button
                   type="button"
                   onClick={handlePromptSubmit}
-                  aria-label="Start building"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none"
+                  disabled={!canSubmitPrompt}
+                  aria-label={promptButtonLabel}
+                  title={promptButtonLabel}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-transform ${
+                    canSubmitPrompt
+                      ? 'bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-[#2f5bff]/20 hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none'
+                      : 'bg-secondary text-secondary-foreground shadow-none hover:scale-100 dark:bg-white/10 dark:text-[#f5f2ea]'
+                  } disabled:cursor-not-allowed disabled:opacity-70`}
                 >
-                  <Send className="h-4 w-4" />
+                    <ArrowUp className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -218,9 +231,9 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
       </section>
 
       <section className="relative z-10 bg-transparent px-4 py-5 sm:px-6 lg:px-10">
-        <div className="mx-auto w-full max-w-7xl rounded-lg border border-gray-200 bg-white/96 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.1)] backdrop-blur sm:p-5 dark:border-white/10 dark:bg-[#18191d]/96 dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
+        <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-[#2f5bff]/12 bg-white/96 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.1)] backdrop-blur sm:p-5 dark:border-white/10 dark:bg-[#18191d]/96 dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
               {tabs.map((tab) => (
                 <button
                   key={tab}
@@ -267,7 +280,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               { label: 'Files', value: totalFiles },
               { label: 'Drafts', value: projects.filter((project) => project.status === 'draft').length },
             ].map((stat) => (
-              <div key={stat.label} className="group rounded-lg border border-gray-200 bg-gray-50 p-3.5 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
+              <div key={stat.label} className="group rounded-2xl border border-gray-200 bg-gray-50 p-3.5 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
                 <div className="text-xl font-bold text-gray-950 transition-colors duration-300 group-hover:text-[#2f5bff] dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
                 <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-gray-500 dark:text-[#aaa69d]">{stat.label}</div>
               </div>
@@ -275,9 +288,9 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
           </div>
 
           {projects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-20 text-center dark:border-white/12 dark:bg-white/[0.02]">
-              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-[#6387ff]/20 to-[#f23c78]/20">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-[#2f5bff]/18 bg-[#2f5bff]/4 px-6 py-20 text-center dark:border-white/12 dark:bg-white/[0.02]">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[#2f5bff]/10 ring-1 ring-[#2f5bff]/15">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2f5bff] text-white shadow-lg shadow-[#2f5bff]/20">
                   <Sparkles className="h-6 w-6" />
                 </div>
               </div>
@@ -302,7 +315,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               </div>
             </div>
           ) : visibleProjects.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-6 py-20 text-center dark:border-white/8 dark:bg-white/[0.02]">
+            <div className="flex flex-col items-center justify-center rounded-[2rem] border border-gray-200 bg-gray-50 px-6 py-20 text-center dark:border-white/8 dark:bg-white/[0.02]">
               <Search className="mb-4 h-8 w-8 text-gray-400 dark:text-[#aaa69d]" />
               <h2 className="text-lg font-bold text-gray-950 dark:text-white">No matching projects</h2>
               <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Try a different search term.</p>

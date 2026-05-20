@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, ArrowRight, Play, FileText, Zap, LayoutGrid } from 'lucide-react';
+import { Sparkles, ArrowRight, Play, FileText, Zap, LayoutGrid, CreditCard, Mail } from 'lucide-react';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -16,6 +16,18 @@ export default function Home() {
       title: 'Browse Templates',
       desc: 'Choose from professionally designed templates',
       action: () => navigate('/templates'),
+    },
+    {
+      icon: CreditCard,
+      title: 'Pricing',
+      desc: 'See the plan details and compare options',
+      action: () => navigate('/pricing'),
+    },
+    {
+      icon: Mail,
+      title: 'Contact Form',
+      desc: 'Open the contact experience and messaging flow',
+      action: () => navigate('/contact'),
     },
     {
       icon: Zap,
@@ -64,16 +76,16 @@ export default function Home() {
           {/* Quick Actions Grid */}
           <div className="pt-12">
             <p className="text-sm text-gray-600 mb-6 font-medium">Quick Actions</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {quickActions.map((action) => {
                 const Icon = action.icon;
                 return (
                   <button
                     key={action.title}
                     onClick={action.action}
-                    className="group flex flex-col items-start justify-between rounded-lg border border-gray-300 bg-white p-6 transition-all hover:border-gray-400 hover:bg-gray-50 hover:shadow-lg hover:shadow-[#6366F1]/10"
+                    className="group flex min-h-40 flex-col items-start justify-between rounded-2xl border border-gray-200 bg-white p-6 text-left transition-all hover:-translate-y-0.5 hover:border-[#6366F1]/35 hover:bg-gray-50 hover:shadow-lg hover:shadow-[#6366F1]/10"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-[#6366F1]/10 flex items-center justify-center mb-3 group-hover:bg-[#6366F1]/20 transition-colors">
+                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#6366F1]/10 text-[#6366F1] transition-colors group-hover:bg-[#6366F1]/15">
                       <Icon className="w-5 h-5 text-[#6366F1]" />
                     </div>
                     <div className="text-left">

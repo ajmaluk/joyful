@@ -151,9 +151,6 @@ export function SmartSuggestions({ files, activeFile, onSelect, disabled }: Smar
 
   return (
     <div className="min-w-0 space-y-2 overflow-x-hidden">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {hasFiles ? 'Quick actions' : 'Get started'}
-      </p>
       <div className="relative">
         <div className="flex gap-2 overflow-x-auto pb-1 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {suggestions.map((item, index) => (

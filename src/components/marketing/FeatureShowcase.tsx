@@ -64,19 +64,19 @@ export function FeatureShowcase() {
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section ref={ref} className="px-4 py-24 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <section ref={ref} className="px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <p className="text-sm font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Capabilities</p>
-          <h2 className="mt-3 text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">
+          <p className="text-xs font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Capabilities</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-normal text-gray-950 sm:text-4xl dark:text-white">
             Everything you need to build and ship
           </h2>
-          <p className="mt-4 text-base text-gray-600 dark:text-[#aaa69d]">Four pillars. One workspace. Zero vendor lock-in.</p>
+          <p className="mt-3 text-sm text-gray-600 dark:text-[#aaa69d]">Four pillars. One workspace. Zero vendor lock-in.</p>
         </motion.div>
 
         {/* Tab bar */}
@@ -84,14 +84,14 @@ export function FeatureShowcase() {
           initial={{ opacity: 0, y: 12 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.4, delay: 0.15 }}
-          className="mt-12 flex justify-center"
+          className="mt-8 flex justify-center"
         >
-          <div className="inline-flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-[#1d1f1d]">
+          <div className="inline-flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-[#1d1f1d]">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors ${
+                className={`relative rounded-md px-4 py-2 text-xs font-semibold transition-colors ${
                   activeTab === tab.id
                     ? 'text-white'
                     : 'text-gray-600 hover:text-gray-950 dark:text-[#aaa69d] dark:hover:text-white'
@@ -100,7 +100,7 @@ export function FeatureShowcase() {
                 {activeTab === tab.id && (
                   <motion.div
                     layoutId="activeTab"
-                    className="absolute inset-0 rounded-lg bg-gray-950 dark:bg-[#f5f2ea]"
+                    className="absolute inset-0 rounded-md bg-gray-950 dark:bg-[#f5f2ea]"
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -118,7 +118,7 @@ export function FeatureShowcase() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25 }}
-            className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
+            className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
           >
             {currentTab.features.map((feature, index) => {
               const Icon = feature.icon;
@@ -128,13 +128,13 @@ export function FeatureShowcase() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.08, duration: 0.35 }}
-                  className="group relative rounded-xl border border-gray-200 bg-gray-50 p-6 transition-all duration-300 hover:-translate-y-1 hover:border-[#2f5bff]/30 hover:shadow-xl dark:border-white/8 dark:bg-[#21221f] dark:hover:border-white/18 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
+                  className="group relative rounded-lg border border-gray-200 bg-gray-50 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-[#2f5bff]/30 hover:shadow-lg dark:border-white/8 dark:bg-[#21221f] dark:hover:border-white/18 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
                 >
-                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-lg bg-[#2f5bff]/10 text-[#2f5bff] transition-all duration-300 group-hover:bg-[#2f5bff] group-hover:text-white">
-                    <Icon className="h-5 w-5" />
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-[#2f5bff]/10 text-[#2f5bff] transition-all duration-300 group-hover:bg-[#2f5bff] group-hover:text-white">
+                    <Icon className="h-4 w-4" />
                   </div>
                   <h3 className="text-sm font-bold text-gray-950 dark:text-white">{feature.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">{feature.desc}</p>
+                  <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-[#aaa69d]">{feature.desc}</p>
                 </motion.div>
               );
             })}

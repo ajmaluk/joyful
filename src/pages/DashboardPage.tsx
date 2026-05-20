@@ -101,10 +101,10 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-white text-gray-950 dark:bg-[#0f100f] dark:text-[#f6f2ea]">
+    <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
       <section className="relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-14 lg:px-10">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#171816_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.84)_0%,rgba(255,255,255,0.42)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(15,16,15,0.86)_0%,rgba(15,16,15,0.12)_48%,rgba(15,16,15,0)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#171816_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(15,16,15,0.86)_0%,rgba(15,16,15,0.12)_48%,rgba(15,16,15,0)_100%)]" />
 
         <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center justify-center py-8 text-center sm:min-h-[48vh]">
           <button
@@ -175,7 +175,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         </div>
       </section>
 
-      <section className="relative z-10 bg-white px-4 py-8 sm:px-6 lg:px-10 dark:bg-[#0f100f]">
+      <section className="relative z-10 bg-transparent px-4 py-8 sm:px-6 lg:px-10">
         <div className="mx-auto w-full max-w-none rounded-lg border border-gray-200 bg-white p-4 shadow-[0_30px_90px_rgba(15,23,42,0.08)] sm:p-6 dark:border-white/10 dark:bg-[#17120f] dark:shadow-[0_30px_90px_rgba(0,0,0,0.36)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">

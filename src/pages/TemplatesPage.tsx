@@ -66,7 +66,7 @@ export function TemplatesPage({ onCreateProject, onUpdateProject }: TemplatesPag
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-white text-gray-950 dark:bg-[#0f100f] dark:text-[#f6f2ea]">
+    <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
         <div className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-[0_20px_70px_rgba(15,23,42,0.08)] sm:p-5 lg:flex-row lg:items-center lg:justify-between dark:border-white/8 dark:bg-[#17120f] dark:shadow-none">
           <div className="flex flex-wrap items-center gap-2">

@@ -12,7 +12,7 @@ import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSy
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare
+  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles
 } from 'lucide-react';
 
 interface BuilderPageProps {
@@ -127,7 +127,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       addToast('success', `Applied ${changedCount} file operation${changedCount > 1 ? 's' : ''}`);
       setViewMode('preview');
     }
-  }, [files, sendMessage, persistFiles, addToast]);
+  }, [files, selectedFile, sendMessage, persistFiles, addToast]);
 
   useEffect(() => {
     if (!project || hasSubmittedInitialPrompt.current || !initialPromptRef.current) return;
@@ -292,8 +292,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-muted p-0 text-foreground dark:bg-black md:p-2">
-      <div className="relative flex h-full min-h-0 overflow-hidden border border-border bg-background shadow-2xl shadow-black/60 md:rounded-xl">
+    <div className="relative isolate h-[100dvh] overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] p-0 text-foreground dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] md:p-2">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.7)_0%,rgba(255,255,255,0.3)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
+      <div className="relative flex h-full min-h-0 overflow-hidden border border-white/70 bg-white/78 shadow-2xl shadow-indigo-950/10 backdrop-blur-xl dark:border-border/80 dark:bg-background/95 dark:shadow-black/40 md:rounded-2xl">
         {/* Main workspace area */}
         {sidebarOpen && (
           <button
@@ -304,9 +306,12 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           />
         )}
 
-        <aside className={`${sidebarOpen ? 'flex' : 'hidden'} absolute inset-y-0 left-0 z-40 min-h-0 w-[min(86vw,280px)] flex-shrink-0 flex-col border-r border-border bg-card shadow-2xl shadow-black/40 md:relative md:z-auto md:w-[248px] md:shadow-none xl:w-[280px]`}>
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4">
+        <aside className={`${sidebarOpen ? 'flex' : 'hidden'} absolute inset-y-0 left-0 z-40 min-h-0 w-[min(86vw,280px)] flex-shrink-0 flex-col border-r border-gray-200/70 bg-white/72 backdrop-blur-xl shadow-2xl shadow-indigo-950/10 transition-all duration-300 dark:border-border/60 dark:bg-card/80 dark:shadow-black/20 md:relative md:z-auto md:w-[248px] md:shadow-none xl:w-[280px]`}>
+          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/62 px-4 backdrop-blur-sm dark:border-border/60 dark:bg-card/50">
             <div className="flex min-w-0 items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 shadow-md shadow-indigo-500/20">
+                <span className="text-xs font-bold text-white">P</span>
+              </div>
               <span className="truncate text-sm font-semibold text-foreground">Project files</span>
             </div>
             <button
@@ -331,15 +336,16 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute left-3 top-1/2 z-40 -translate-y-1/2 flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-lg shadow-black/20 transition-all hover:border-primary/50 hover:text-primary"
+            className="absolute left-3 top-1/2 z-40 -translate-y-1/2 flex items-center gap-1.5 rounded-xl border border-border/60 bg-card/90 px-3 py-2.5 text-xs font-semibold text-foreground shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:text-primary hover:shadow-xl"
             title="Open file sidebar"
           >
+            <Menu className="h-3.5 w-3.5" />
             Files
           </button>
         )}
 
         <section className="relative min-w-0 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 shadow-sm">
+          <div className="flex h-12 flex-shrink-0 items-center justify-between gap-3 border-b border-gray-200/70 bg-white/62 px-3 shadow-sm backdrop-blur-sm dark:border-border/60 dark:bg-card/50">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               {!sidebarOpen && (
                 <button
@@ -359,23 +365,23 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 <span className="truncate sm:hidden">Joyful</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
-              <div className="flex-shrink-0 rounded-lg border border-border bg-background p-0.5">
+              <div className="flex-shrink-0 rounded-xl border border-border/60 bg-background/80 p-1 shadow-inner">
                 <button
                   onClick={handleShowPreview}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 ${
                     viewMode === 'preview'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-500/25'
+                      : 'text-muted-foreground hover:bg-accent/80 hover:text-foreground'
                   }`}
                 >
                   Preview
                 </button>
                 <button
                   onClick={handleShowCode}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 ${
                     viewMode === 'code'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-500/25'
+                      : 'text-muted-foreground hover:bg-accent/80 hover:text-foreground'
                   }`}
                 >
                   Code
@@ -386,7 +392,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             <div className="relative flex items-center gap-1 flex-shrink-0">
               <button
                 onClick={handleExport}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:bg-accent/80 hover:text-foreground hover:shadow-sm"
                 title="Export ZIP"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -460,9 +466,12 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           </div>
         </section>
 
-        <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-border bg-card xl:w-[400px]`}>
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4">
+        <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-gray-200/70 bg-white/72 backdrop-blur-xl dark:border-border/60 dark:bg-card/80 xl:w-[400px]`}>
+          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/62 px-4 backdrop-blur-sm dark:border-border/60 dark:bg-card/50">
             <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 shadow-md shadow-pink-500/20">
+                <Sparkles className="h-3.5 w-3.5 text-white" />
+              </div>
               <span className="truncate text-sm font-semibold text-foreground">AI Chat</span>
             </div>
             <button
@@ -491,7 +500,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         {!showChatSidebar && (
           <button
             onClick={() => setShowChatSidebar(true)}
-            className="absolute right-3 top-1/2 z-40 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/95 text-muted-foreground shadow-lg shadow-black/20 backdrop-blur transition-all hover:border-primary/50 hover:bg-accent hover:text-primary lg:flex"
+            className="absolute right-3 top-1/2 z-40 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl border border-border/60 bg-card/95 text-muted-foreground shadow-lg shadow-black/20 backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:bg-accent hover:text-primary lg:flex"
             title="Open chat sidebar"
             aria-label="Open chat sidebar"
           >
@@ -503,18 +512,22 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           {!mobileChatOpen ? (
             <button
               onClick={() => setMobileChatOpen(true)}
-              className="ml-auto flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground shadow-xl"
+              className="ml-auto flex items-center gap-2 rounded-full border border-border/60 bg-card/90 px-4 py-2.5 text-sm font-semibold text-foreground shadow-xl backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-2xl"
               title="Open AI chat"
             >
+              <Sparkles className="h-4 w-4 text-indigo-500" />
               AI Chat
               <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            <div className="overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl shadow-black/50">
-              <div className="flex h-12 items-center justify-between border-b border-border bg-card px-4">
+            <div className="overflow-hidden rounded-t-3xl border border-border/60 bg-card/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
+              <div className="flex h-12 items-center justify-between border-b border-border/60 bg-card/50 backdrop-blur-sm px-4">
                 <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 shadow-md shadow-pink-500/20">
+                    <Sparkles className="h-3.5 w-3.5 text-white" />
+                  </div>
                   <span className="text-sm font-semibold text-foreground">AI Chat</span>
-                  <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">Overlay</span>
+                  <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">Overlay</span>
                 </div>
                 <button
                   onClick={() => setMobileChatOpen(false)}

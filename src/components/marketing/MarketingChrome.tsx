@@ -57,7 +57,7 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
 
   return (
     <div className={`mx-auto w-full ${compact ? 'max-w-2xl' : 'max-w-4xl'}`}>
-      <div className="rounded-[1.45rem] border border-gray-200 bg-white p-3 text-left shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-black/5 dark:border-white/10 dark:bg-[#1d1f1d] dark:shadow-[0_28px_90px_rgba(0,0,0,0.38)] dark:ring-black/40">
+      <div className="rounded-[1.45rem] border border-gray-200/80 bg-white/90 p-3 text-left shadow-[0_28px_90px_rgba(15,23,42,0.12)] ring-1 ring-black/5 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_32px_100px_rgba(15,23,42,0.16)] dark:border-white/10 dark:bg-[#1d1f1d]/90 dark:shadow-[0_28px_90px_rgba(0,0,0,0.32)] dark:ring-black/40 dark:hover:shadow-[0_32px_100px_rgba(0,0,0,0.4)]">
         <textarea
           ref={textareaRef}
           value={prompt}
@@ -77,7 +77,7 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             <button
               type="button"
               aria-label="Add context"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#aaa69d] dark:hover:bg-white/10 dark:hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100/80 text-gray-500 transition-all duration-200 hover:bg-gray-200 hover:text-gray-950 hover:scale-105 hover:shadow-md dark:bg-white/5 dark:text-[#aaa69d] dark:hover:bg-white/10 dark:hover:text-white"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -101,7 +101,7 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
               type="button"
               onClick={handleSubmit}
               aria-label="Start building"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/25 transition-transform hover:scale-105 hover:shadow-xl"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/25 transition-all duration-200 hover:scale-110 hover:shadow-xl hover:shadow-[#2f5bff]/40 active:scale-95"
             >
               <Send className="h-4 w-4" />
             </button>

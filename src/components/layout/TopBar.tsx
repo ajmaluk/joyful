@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Undo2, Redo2, RotateCcw, Monitor, Share2, Sparkles, Menu, X, LogOut, Settings, User, Moon, Sun } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +12,7 @@ export function TopBar() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const isWorkspace = location.pathname.match(/^\/builder\/[^/]+$/);
   const isMarketingPage = marketingPaths.has(location.pathname);
   const { user } = useAuth();
@@ -27,9 +28,35 @@ export function TopBar() {
     navigate('/');
   };
 
+  useEffect(() => {
+    if (!isMarketingPage) {
+      setIsScrolled(false);
+      return;
+    }
+
+    const scrollContainer = document.querySelector('main');
+    const getScrollTop = () => Math.max(window.scrollY, scrollContainer?.scrollTop ?? 0);
+    const handleScroll = () => setIsScrolled(getScrollTop() > 10);
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      scrollContainer?.removeEventListener('scroll', handleScroll);
+    };
+  }, [isMarketingPage, location.pathname]);
+
   if (isMarketingPage) {
     return (
-      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-center border-b border-transparent bg-transparent px-4">
+      <header
+        className={`fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-center px-4 transition-all duration-300 ${
+          isScrolled
+            ? 'border-b border-gray-200/70 bg-white/72 shadow-[0_12px_36px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-[#10110f]/72 dark:shadow-[0_12px_36px_rgba(0,0,0,0.24)]'
+            : 'border-b border-transparent bg-transparent shadow-none'
+        }`}
+      >
         <div className="flex w-full max-w-7xl items-center justify-between">
           <button
             onClick={() => navigate('/')}

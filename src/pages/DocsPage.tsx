@@ -933,8 +933,8 @@ export function DocsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-white text-gray-950 dark:bg-[#090a0d] dark:text-white">
-      <div className="mx-auto min-h-screen max-w-[1680px] rounded-b-2xl border-x border-b border-gray-200 bg-white shadow-[0_20px_80px_rgba(15,23,42,0.08)] dark:border-white/8 dark:bg-[#090a0d] dark:shadow-[0_30px_120px_rgba(0,0,0,0.32)]">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-white">
+      <div className="mx-auto min-h-screen max-w-[1680px] rounded-b-2xl border-x border-b border-gray-200/60 bg-white/60 shadow-[0_20px_80px_rgba(15,23,42,0.08)] backdrop-blur-sm dark:border-white/8 dark:bg-[#090a0d]/60 dark:shadow-[0_30px_120px_rgba(0,0,0,0.32)]">
         {/* Header */}
         <header className="border-b border-gray-200 px-5 py-4 sm:px-8 dark:border-white/8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

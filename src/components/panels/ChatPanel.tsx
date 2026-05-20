@@ -10,6 +10,7 @@ import { buildDiffsFromFiles } from '@/components/chat/fileDiffUtils';
 import { ActionHistory } from '@/components/chat/ActionHistory';
 import { buildActionsFromFiles } from '@/components/chat/actionHistoryUtils';
 import { WorkingProcess } from '@/components/chat/WorkingProcess';
+import { TodoList, type TodoItem } from '@/components/chat/TodoList';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -34,6 +35,8 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [showTodos, setShowTodos] = useState(false);
   const nextSteps = useMemo(
     () => [...messages].reverse().find(message => message.role === 'assistant' && message.nextSteps?.length)?.nextSteps,
     [messages]
@@ -100,6 +103,18 @@ export function ChatPanel({
     onSendMessage(prompt);
   }, [onSendMessage]);
 
+  const handleToggleTodo = useCallback((id: string) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+  }, []);
+
+  const handleAddTodo = useCallback((text: string) => {
+    setTodos(prev => [...prev, { id: `todo_${Date.now()}`, text, completed: false }]);
+  }, []);
+
+  const handleRemoveTodo = useCallback((id: string) => {
+    setTodos(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden bg-background">
       {/* Toolbar */}
@@ -109,6 +124,8 @@ export function ChatPanel({
         onClearChat={handleClearChat}
         onExportChat={handleExportChat}
         onRenameSession={setSessionName}
+        onToggleTodos={() => setShowTodos(prev => !prev)}
+        todoCount={todos.length}
       />
 
       {/* Messages */}
@@ -171,6 +188,18 @@ export function ChatPanel({
             nextSteps={nextSteps}
             onSelect={handleSuggestionSelect}
             disabled={isGenerating}
+          />
+        </div>
+      )}
+
+      {/* Todo list */}
+      {showTodos && (
+        <div className="min-w-0 overflow-x-hidden border-t border-border/60 bg-card/40 px-4 py-3">
+          <TodoList
+            todos={todos}
+            onToggle={handleToggleTodo}
+            onAdd={handleAddTodo}
+            onRemove={handleRemoveTodo}
           />
         </div>
       )}

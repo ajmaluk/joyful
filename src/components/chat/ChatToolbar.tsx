@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Download, MessageSquare, Edit3, Check, X } from 'lucide-react';
+import { Trash2, Download, MessageSquare, Edit3, Check, X, ListTodo } from 'lucide-react';
 
 interface ChatToolbarProps {
   messageCount: number;
@@ -7,6 +7,8 @@ interface ChatToolbarProps {
   onClearChat: () => void;
   onExportChat: () => void;
   onRenameSession?: (name: string) => void;
+  onToggleTodos?: () => void;
+  todoCount?: number;
 }
 
 export function ChatToolbar({
@@ -15,6 +17,8 @@ export function ChatToolbar({
   onClearChat,
   onExportChat,
   onRenameSession,
+  onToggleTodos,
+  todoCount = 0,
 }: ChatToolbarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(sessionName);
@@ -81,6 +85,19 @@ export function ChatToolbar({
       </div>
 
       <div className="flex items-center gap-0.5 flex-shrink-0">
+        {onToggleTodos && (
+          <button
+            onClick={onToggleTodos}
+            className={`rounded-lg p-2 transition-all ${
+              todoCount > 0
+                ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/15'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
+            title="Toggle todo list"
+          >
+            <ListTodo className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           onClick={onExportChat}
           className="rounded-lg p-2 text-muted-foreground transition-all hover:bg-accent hover:text-foreground"

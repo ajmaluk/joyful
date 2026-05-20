@@ -137,7 +137,7 @@ function AppLayout() {
   }, [handleStartProject, isAuthPage, isAuthReady, isAuthed, location.state, navigate]);
 
   return (
-    <div className="h-screen overflow-hidden bg-background text-foreground">
+    <div className="h-screen overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] text-foreground">
       {showTopBar && <TopBar />}
 
       <div className="flex h-full min-h-0">

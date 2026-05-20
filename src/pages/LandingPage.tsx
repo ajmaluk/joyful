@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
+  Code2,
   Download,
   Layout,
   Star,
@@ -10,7 +11,7 @@ import {
   Heart,
 } from 'lucide-react';
 import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChrome';
 import { FeatureShowcase } from '@/components/marketing/FeatureShowcase';
 import { AnimatedDemo } from '@/components/marketing/AnimatedDemo';
@@ -62,6 +63,127 @@ interface LandingPageProps {
   onStartProject: (prompt: string) => void;
 }
 
+const joyfulCode = [
+  '<section class="hero">',
+  '  <h1>Build something Joyful</h1>',
+  '  <button>Launch site</button>',
+  '</section>',
+];
+
+function AnimatedJoyfulIcon() {
+  return (
+    <motion.div
+      className="absolute flex h-40 w-40 items-center justify-center"
+      initial={{ opacity: 0, scale: 0.72, y: 8 }}
+      animate={{
+        opacity: [0, 1, 1, 0],
+        scale: [0.72, 1, 1.04, 0.66],
+        y: [8, 0, -8, -32],
+      }}
+      transition={{ duration: 3.4, repeat: Infinity, repeatDelay: 2.4, ease: 'easeInOut' }}
+      aria-hidden="true"
+    >
+      <motion.div
+        className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.96),rgba(255,218,229,0.5)_34%,rgba(99,102,241,0.2)_66%,transparent_78%)] blur-xl"
+        animate={{ opacity: [0.48, 0.92, 0.48], scale: [0.86, 1.12, 0.86] }}
+        transition={{ duration: 2.7, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.img
+        src="/brand-logo-180.png"
+        alt=""
+        className="relative h-28 w-28 rounded-full object-cover drop-shadow-[0_24px_46px_rgba(99,102,241,0.32)]"
+        style={{ clipPath: 'circle(48% at 50% 50%)' }}
+        animate={{ scale: [1, 1.025, 1], y: [0, -3, 0] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.span
+        className="absolute left-4 top-9 h-4 w-4 rounded-full bg-white shadow-[0_0_22px_rgba(255,255,255,0.95)]"
+        animate={{ opacity: [0.18, 0.9, 0.18], scale: [0.62, 1.16, 0.62] }}
+        transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.span
+        className="absolute right-7 top-5 h-3 w-3 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.9)]"
+        animate={{ opacity: [0.12, 0.78, 0.12], scale: [0.58, 1.12, 0.58] }}
+        transition={{ duration: 2.7, repeat: Infinity, ease: 'easeInOut', delay: 0.45 }}
+      />
+      <motion.span
+        className="absolute inset-x-8 top-10 h-10 rounded-full bg-white/25 blur-md"
+        animate={{ opacity: [0.12, 0.42, 0.12], x: ['-14%', '14%', '-14%'] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </motion.div>
+  );
+}
+
+function JoyfulMorphAnimation() {
+  const [typed, setTyped] = useState('');
+  const code = joyfulCode.join('\n');
+
+  useEffect(() => {
+    let index = 0;
+    let interval: number | undefined;
+    const start = window.setTimeout(() => {
+      interval = window.setInterval(() => {
+        index += 1;
+        if (index > code.length + 54) {
+          index = 0;
+        }
+        setTyped(code.slice(0, Math.min(index, code.length)));
+      }, 26);
+    }, 1300);
+    return () => {
+      window.clearTimeout(start);
+      if (interval) window.clearInterval(interval);
+    };
+  }, [code]);
+
+  return (
+    <div className="relative flex h-full min-h-80 items-center justify-center overflow-hidden rounded-md bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_52%,#fff1f8_100%)] dark:bg-[#191a18]">
+      <motion.div
+        className="absolute h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(99,135,255,0.22),rgba(242,60,120,0.14)_52%,transparent_72%)] blur-2xl"
+        animate={{ scale: [0.9, 1.14, 0.9], opacity: [0.5, 0.95, 0.5] }}
+        transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      <AnimatedJoyfulIcon />
+
+      <motion.div
+        className="relative w-[min(92%,21rem)] overflow-hidden rounded-xl border border-gray-200 bg-[#101116] text-left shadow-2xl shadow-indigo-950/20"
+        initial={{ opacity: 0, scale: 0.82, rotateX: 18, y: 24 }}
+        animate={{
+          opacity: [0, 0, 1, 1, 0],
+          scale: [0.82, 0.82, 1, 1, 0.94],
+          rotateX: [18, 18, 0, 0, -8],
+          y: [24, 24, 0, 0, -12],
+        }}
+        transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <div className="flex h-9 items-center justify-between border-b border-white/10 bg-white/[0.04] px-3">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-white/60">
+            <Code2 className="h-3 w-3" />
+            index.html
+          </div>
+        </div>
+        <pre className="min-h-44 whitespace-pre-wrap px-4 py-4 font-mono text-[12px] leading-6 text-[#dbe4ff]">
+          <code>{typed}<span className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse bg-[#8fa7ff]" /></code>
+        </pre>
+        <motion.div
+          className="absolute bottom-3 right-3 rounded-full bg-green-400/15 px-2.5 py-1 text-[11px] font-semibold text-green-300"
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 1.4, repeat: Infinity }}
+        >
+          building
+        </motion.div>
+      </motion.div>
+    </div>
+  );
+}
+
 function WorkflowSection() {
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
@@ -108,12 +230,7 @@ function WorkflowSection() {
           className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/8 dark:bg-[#22231f]"
         >
           <div className="grid gap-4 sm:grid-cols-[0.85fr_1.15fr]">
-            <div className="flex min-h-80 items-center justify-center rounded-md bg-white dark:bg-[#191a18]">
-              <div className="relative h-48 w-48">
-                <div className="absolute left-2 right-2 top-7 h-24 rounded-t-full bg-[linear-gradient(135deg,#ff7340,#e94483_48%,#556fff)] opacity-80" />
-                <div className="absolute bottom-8 left-1/2 h-28 w-28 -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_30%_25%,#9fb8ff,#e566d6_48%,#ff4c54_76%)] shadow-[0_22px_70px_rgba(233,102,214,0.35)]" />
-              </div>
-            </div>
+            <JoyfulMorphAnimation />
             <div className="rounded-md bg-white p-4 dark:bg-[#181916]">
               <div className="flex items-center gap-2 border-b border-gray-200 pb-4 dark:border-white/8">
                 <Wand2 className="h-4 w-4 text-[#8fa7ff]" />
@@ -279,29 +396,32 @@ function CTASection({ onStartProject }: { onStartProject: (prompt: string) => vo
   const inView = useInView(ref, { once: true, margin: '-60px' });
 
   return (
-    <section className="relative overflow-hidden px-4 pb-20 pt-20 sm:px-6 lg:px-8">
-      <div className="absolute inset-x-0 bottom-0 h-72 bg-[linear-gradient(180deg,rgba(255,255,255,0),#eef3ff_42%,#fff1f8_72%,#fff6ee_100%)] dark:bg-[linear-gradient(180deg,rgba(23,24,22,0),#557fff_42%,#f172d4_70%,#ff4c78_100%)]" />
+    <section className="relative isolate min-h-screen overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
       <motion.div
         ref={ref}
         initial={{ opacity: 0, y: 20 }}
         animate={inView ? { opacity: 1, y: 0 } : {}}
         transition={{ duration: 0.5 }}
-        className="relative z-10 mx-auto max-w-5xl text-center"
+        className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-center px-4 py-20 text-center sm:px-6 lg:px-8"
       >
-        <p className="text-sm font-semibold text-gray-600 dark:text-[#aaa69d]">AI App Builder</p>
-        <h2 className="mt-2 text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">Ready to build?</h2>
+        <div className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 px-4 py-2 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white">
+          AI App Builder
+        </div>
+        <h2 className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white">Ready to build?</h2>
         <div className="mt-4 flex items-center justify-center gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-medium text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-[#aaa69d]">
-            <ShieldCheck className="h-3 w-3 text-green-500" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur dark:border-white/18 dark:bg-[#101116]/58 dark:text-white dark:shadow-black/20">
+            <ShieldCheck className="h-3 w-3 text-green-500 dark:text-[#66d28e]" />
             No signup required
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-medium text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-[#aaa69d]">
-            <Heart className="h-3 w-3 text-[#f23c78]" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur dark:border-white/18 dark:bg-[#101116]/58 dark:text-white dark:shadow-black/20">
+            <Heart className="h-3 w-3 text-[#f23c78] dark:text-[#ff7aa8]" />
             Free forever
           </span>
         </div>
-        <div className="mt-8">
-          <PromptBox compact onSubmit={onStartProject} />
+        <div className="mt-10 w-full">
+          <PromptBox onSubmit={onStartProject} />
         </div>
       </motion.div>
     </section>
@@ -312,32 +432,50 @@ export function LandingPage({ onStartProject }: LandingPageProps) {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-white text-gray-950 dark:bg-[#171816] dark:text-[#f6f2ea]">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
       {/* Hero */}
       <section className="relative isolate min-h-screen overflow-hidden">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_24%,#eef3ff_45%,#fff1f8_72%,#fff6ee_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.84)_0%,rgba(255,255,255,0.42)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
         <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-4 py-20 text-center sm:px-6 lg:px-8">
-          <button
+          <motion.button
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
             type="button"
             onClick={() => navigate('/docs')}
-            className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/85 p-1 pr-4 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur transition-colors hover:border-gray-300 dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
+            className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 p-1 pr-4 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur transition-all duration-200 hover:border-gray-300 hover:scale-[1.02] hover:shadow-2xl dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
           >
             <span className="rounded-full bg-[#2f5bff] px-3 py-1 text-xs">New</span>
             <span className="truncate">Advanced sandbox with console and inspector</span>
             <ArrowRight className="h-4 w-4 flex-none" />
-          </button>
+          </motion.button>
 
-          <h1 className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white"
+          >
             Build something Joyful
-          </h1>
-          <p className="mt-5 max-w-2xl text-lg font-medium leading-8 text-gray-850 sm:text-xl dark:text-white">
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mt-5 max-w-2xl text-lg font-medium leading-8 text-gray-850 sm:text-xl dark:text-white"
+          >
             Create apps and websites by chatting with AI
-          </p>
+          </motion.p>
 
-          <div className="mt-10 w-full">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-10 w-full"
+          >
             <PromptBox onSubmit={onStartProject} />
-          </div>
+          </motion.div>
         </div>
       </section>
 

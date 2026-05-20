@@ -114,6 +114,11 @@ export interface UserSettings {
   theme: 'dark' | 'light' | 'system';
   editorFontSize: number;
   editorLineHeight: number;
+  editorFontFamily: 'jetbrains-mono' | 'fira-code' | 'source-code-pro' | 'ibm-plex-mono';
+  editorMinimap: boolean;
+  editorWordWrap: boolean;
+  editorLineNumbers: boolean;
+  explorerDensity: 'comfortable' | 'compact';
   autoSave: boolean;
   livePreview: boolean;
   aiProvider: 'local' | 'joyful' | 'openai' | 'anthropic' | 'openrouter' | 'google' | 'mistral' | 'groq';

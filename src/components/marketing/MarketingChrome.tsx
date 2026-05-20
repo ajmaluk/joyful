@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
-import { ChevronDown, Github, ListChecks, Mail, Mic, Plus, Send, Twitter, Heart, Wand2, Zap } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react';
+import { ChevronDown, Github, ListChecks, Loader2, Mail, Mic, Pause, Plus, Twitter, Heart, Wand2, Zap, ArrowUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { marketingFooterLinks, marketingFooterRoutes } from '@/components/marketing/marketingRoutes';
 import type { ChatMode } from '@/types';
+import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 const promptExamples = [
   "Landing page for a SaaS startup",
@@ -26,6 +28,9 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   const [placeholder, setPlaceholder] = useState(promptExamples[0]);
   const [mode, setMode] = useState<ChatMode>('build');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
 
   useEffect(() => {
     if (compact) return;
@@ -38,6 +43,10 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
 
   const handleSubmit = () => {
     const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt) {
+      textareaRef.current?.focus();
+      return;
+    }
     if (onSubmit) {
       onSubmit(trimmedPrompt, mode);
     } else {
@@ -46,11 +55,25 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
     setModeMenuOpen(false);
   };
 
-  const handleInput = () => {
+  const handleInput = useCallback(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, compact ? 112 : 180)}px`;
-  };
+  }, [compact]);
+
+  const handleVoiceTranscript = useCallback((transcript: string) => {
+    setPrompt(prev => mergeVoiceTranscript(prev, transcript));
+    requestAnimationFrame(() => handleInput());
+  }, [handleInput]);
+
+  const {
+    isSupported: isVoiceSupported,
+    isRecording,
+    isProcessing,
+    toggleRecording,
+  } = useVoiceInput({
+    onTranscript: handleVoiceTranscript,
+  });
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -87,7 +110,7 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative">
+            <div ref={modeMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setModeMenuOpen(prev => !prev)}
@@ -134,18 +157,42 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             </div>
             <button
               type="button"
-              aria-label="Voice prompt"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white"
+              onClick={() => {
+                if (isProcessing) return;
+                toggleRecording();
+              }}
+              disabled={(!isVoiceSupported && !isRecording && !isProcessing) || isProcessing}
+              aria-label={isProcessing ? 'Processing voice input' : isRecording ? 'Pause recording' : isVoiceSupported ? 'Start voice input' : 'Voice input is not supported in this browser'}
+              title={isProcessing ? 'Processing voice input' : isRecording ? 'Pause recording' : isVoiceSupported ? 'Start voice input' : 'Voice input is not supported in this browser'}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                isRecording
+                  ? 'bg-red-500 text-white hover:bg-red-500/90'
+                  : isProcessing
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white'
+              }`}
             >
-              <Mic className="h-3.5 w-3.5" />
+              {isProcessing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : isRecording ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Mic className="h-3.5 w-3.5" />
+              )}
             </button>
             <button
               type="button"
               onClick={handleSubmit}
-              aria-label="Start building"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/25 transition-all duration-200 hover:scale-110 hover:shadow-xl hover:shadow-[#2f5bff]/40 active:scale-95"
+              disabled={!prompt.trim()}
+              aria-label={prompt.trim() ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
+              title={prompt.trim() ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
+              className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
+                prompt.trim()
+                  ? 'bg-[#2f5bff] text-white shadow-[#2f5bff]/25 hover:scale-105'
+                  : 'bg-gray-200 text-gray-500 shadow-none hover:scale-100 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-white/10 dark:text-[#aaa69d]'
+              }`}
             >
-              <Send className="h-3.5 w-3.5" />
+              <ArrowUp className="h-4 w-4" />
             </button>
           </div>
         </div>

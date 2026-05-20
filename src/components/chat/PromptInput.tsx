@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
-import { ArrowUp, ChevronDown, ListChecks, Mic, Plus, Square, Wand2 } from 'lucide-react';
+import { ArrowUp, ChevronDown, Loader2, ListChecks, Mic, Pause, Plus, Square, Wand2 } from 'lucide-react';
 import type { ChatMode } from '@/types';
+import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface PromptInputProps {
   onSend: (content: string, mode?: ChatMode) => void;
@@ -31,8 +33,25 @@ export function PromptInput({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
   const activeMode = modeOptions.find(option => option.value === mode) || modeOptions[0];
   const ActiveIcon = activeMode.icon;
+
+  useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
+
+  const appendTranscript = useCallback((transcript: string) => {
+    setInput(prev => mergeVoiceTranscript(prev, transcript));
+    requestAnimationFrame(() => handleTextareaInput());
+  }, []);
+
+  const {
+    isSupported: isVoiceSupported,
+    isRecording,
+    isProcessing,
+    toggleRecording,
+  } = useVoiceInput({
+    onTranscript: appendTranscript,
+  });
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -96,6 +115,13 @@ export function PromptInput({
         ? 'Create implementation plan'
         : 'Start building'
       : "Can't submit an empty request";
+  const voiceButtonLabel = isProcessing
+    ? 'Processing voice input'
+    : isRecording
+      ? 'Pause recording'
+      : isVoiceSupported
+        ? 'Start voice input'
+        : 'Voice input is not supported in this browser';
 
   return (
     <div className="relative z-30 min-w-0 overflow-visible border-t border-border bg-background px-4 py-4">
@@ -112,13 +138,13 @@ export function PromptInput({
           className="min-h-16 max-h-[120px] resize-none bg-transparent px-2 pt-1 text-left text-sm font-medium leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
         <div className="flex items-center justify-between gap-3 pt-1.5">
-          <button
-            type="button"
-            aria-label="Add context"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+            <button
+              type="button"
+              aria-label="Add context"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           <div className="flex items-center gap-2">
             {isGenerating && onCancel ? (
               <button
@@ -131,11 +157,11 @@ export function PromptInput({
               </button>
             ) : (
               <>
-                <div className="relative hidden overflow-visible sm:block">
+                <div ref={modeMenuRef} className="relative hidden overflow-visible sm:block">
                   <button
                     type="button"
                     onClick={() => setModeMenuOpen(prev => !prev)}
-                    disabled={disabled}
+                    disabled={disabled || isRecording || isProcessing}
                     className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
                     aria-haspopup="menu"
                     aria-expanded={modeMenuOpen}
@@ -174,10 +200,32 @@ export function PromptInput({
                 </div>
                 <button
                   type="button"
-                  aria-label="Voice prompt"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => {
+                    if (isProcessing) return;
+                    if (isRecording) {
+                      toggleRecording();
+                      return;
+                    }
+                    toggleRecording();
+                  }}
+                  disabled={(!isVoiceSupported && !isRecording && !isProcessing) || isProcessing || (disabled && !isRecording)}
+                  aria-label={voiceButtonLabel}
+                  title={voiceButtonLabel}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    isRecording
+                      ? 'bg-red-500 text-white hover:bg-red-500/90'
+                      : isProcessing
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
                 >
-                  <Mic className="h-4 w-4" />
+                  {isProcessing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isRecording ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
                 </button>
                 <button
                   type="button"

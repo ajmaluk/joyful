@@ -57,6 +57,13 @@ const providerOptions = [
   badge: string;
 }>;
 
+const fontFamilyOptions = [
+  { value: 'jetbrains-mono' as const, label: 'JetBrains Mono', description: 'Balanced default with strong readability' },
+  { value: 'fira-code' as const, label: 'Fira Code', description: 'Coding ligatures with a softer feel' },
+  { value: 'source-code-pro' as const, label: 'Source Code Pro', description: 'Clean, neutral, familiar editor tone' },
+  { value: 'ibm-plex-mono' as const, label: 'IBM Plex Mono', description: 'Compact, technical, and sharp' },
+];
+
 export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -123,6 +130,13 @@ export function SettingsPage() {
     };
     setSettings(next);
     storage.saveSettings(next);
+  };
+
+  const updateEditorSetting = <K extends keyof Pick<UserSettings, 'editorFontFamily' | 'editorMinimap' | 'editorWordWrap' | 'editorLineNumbers' | 'explorerDensity'>>(
+    key: K,
+    value: UserSettings[K],
+  ) => {
+    updateSetting(key, value);
   };
 
   const resetSkillDraft = () => {
@@ -336,18 +350,20 @@ export function SettingsPage() {
             </div>
 
             {/* Live editor preview */}
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-3">
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-foreground">Editor Preview</span>
               </div>
-              <div className="rounded-lg bg-[#1e1e2e] p-4 font-mono text-sm">
-                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-700">
-                  <span className="text-xs text-gray-500">index.html</span>
-                  <span className="text-xs text-gray-600">·</span>
-                  <span className="text-xs text-gray-500">{settings.editorFontSize}px</span>
-                  <span className="text-xs text-gray-600">·</span>
-                  <span className="text-xs text-gray-500">line-height: {settings.editorLineHeight}</span>
+              <div className="rounded-2xl border border-white/8 bg-[#111316] p-4 font-mono text-sm text-[#d7dae0] shadow-inner shadow-black/20">
+                <div className="mb-3 flex items-center gap-2 border-b border-white/8 pb-3 text-xs text-gray-500">
+                  <span className="rounded-md bg-white/5 px-2 py-1 text-[#d7dae0]">index.html</span>
+                  <span>·</span>
+                  <span>{settings.editorFontSize}px</span>
+                  <span>·</span>
+                  <span>line-height: {settings.editorLineHeight}</span>
+                  <span>·</span>
+                  <span>{fontFamilyOptions.find((option) => option.value === settings.editorFontFamily)?.label}</span>
                 </div>
                 <div style={{ fontSize: `${settings.editorFontSize}px`, lineHeight: settings.editorLineHeight }}>
                   <div><span className="text-purple-400">&lt;!DOCTYPE</span> <span className="text-orange-300">html</span><span className="text-purple-400">&gt;</span></div>
@@ -402,6 +418,76 @@ export function SettingsPage() {
                     <span>Compact</span>
                     <span>Spacious</span>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <div className="mb-4">
+                  <label className="text-sm font-medium text-card-foreground">Font Family</label>
+                  <p className="mt-1 text-xs text-muted-foreground">Choose the code font used in the editor and preview.</p>
+                </div>
+                <div className="space-y-2">
+                  {fontFamilyOptions.map((option) => {
+                    const selected = settings.editorFontFamily === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => updateEditorSetting('editorFontFamily', option.value)}
+                        className={`flex w-full items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                          selected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/40 hover:bg-accent'
+                        }`}
+                      >
+                        <span>
+                          <span className="block text-sm font-semibold text-foreground">{option.label}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                        </span>
+                        {selected && <Check className="h-4 w-4 text-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <div className="mb-4">
+                  <label className="text-sm font-medium text-card-foreground">Editor Behavior</label>
+                  <p className="mt-1 text-xs text-muted-foreground">Control the editor chrome and code wrapping.</p>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { key: 'editorMinimap' as const, label: 'Minimap', description: 'Show a code overview on the right' },
+                    { key: 'editorWordWrap' as const, label: 'Word wrap', description: 'Wrap long lines inside the editor' },
+                    { key: 'editorLineNumbers' as const, label: 'Line numbers', description: 'Display line numbers in the gutter' },
+                    { key: 'explorerDensity' as const, label: 'Compact file sidebar', description: 'Use denser rows in the file explorer' },
+                  ].map((item) => {
+                    const isCompact = item.key === 'explorerDensity';
+                    const isEnabled = isCompact ? settings.explorerDensity === 'compact' : settings[item.key];
+                    return (
+                      <div key={item.label} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-background px-4 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">{item.label}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateEditorSetting(item.key, (isCompact ? (settings.explorerDensity === 'compact' ? 'comfortable' : 'compact') : !isEnabled) as UserSettings[typeof item.key])}
+                          aria-pressed={Boolean(isEnabled)}
+                          className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
+                            isEnabled ? 'bg-primary' : 'bg-muted'
+                          }`}
+                        >
+                          <div className={`h-5 w-5 rounded-full bg-white shadow-md transition-all duration-300 ${
+                            isEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

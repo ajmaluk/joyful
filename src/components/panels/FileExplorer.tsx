@@ -7,6 +7,7 @@ import type { ProjectFile, FileType } from '@/types';
 import { buildFileTree, getFileColor } from '@/services/fileSystem';
 import type { FileTreeNode } from '@/services/fileSystem';
 import { SiteConfirmDialog, SitePromptDialog } from '@/components/ui/site-dialogs';
+import * as storage from '@/services/storage';
 
 interface FileExplorerProps {
   files: ProjectFile[];
@@ -43,6 +44,7 @@ function TreeNode({
   onRenameFile,
   onDuplicateFile,
   readOnly,
+  explorerDensity,
 }: {
   node: FileTreeNode;
   level: number;
@@ -55,6 +57,7 @@ function TreeNode({
   onRenameFile: (oldPath: string, newPath: string) => void;
   onDuplicateFile?: (path: string) => void;
   readOnly: boolean;
+  explorerDensity: 'comfortable' | 'compact';
 }) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -63,6 +66,7 @@ function TreeNode({
   const isExpanded = expandedFolders.has(node.path);
   const isSelected = node.type === 'file' && selectedFile?.path === node.path;
   const paddingLeft = level * 16 + 12;
+  const isCompact = explorerDensity === 'compact';
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -100,7 +104,7 @@ function TreeNode({
       <div>
         <button
           onClick={() => toggleFolder(node.path)}
-          className="mx-1 flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-all duration-150 hover:bg-white/[0.06]"
+          className={`mx-1 flex w-full items-center gap-2 rounded-md px-3 text-left transition-all duration-150 hover:bg-white/[0.06] ${isCompact ? 'py-1' : 'py-1.5'}`}
           style={{ paddingLeft: `${paddingLeft}px` }}
         >
           <ChevronDown
@@ -134,6 +138,7 @@ function TreeNode({
               onRenameFile={onRenameFile}
               onDuplicateFile={onDuplicateFile}
               readOnly={readOnly}
+              explorerDensity={explorerDensity}
             />
           ))}
         </div>
@@ -148,7 +153,7 @@ function TreeNode({
     <div
       className={`group mx-1 flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-all duration-150 ${
         isSelected
-          ? 'bg-indigo-500/15 text-indigo-300 shadow-sm ring-1 ring-indigo-400/15'
+          ? 'bg-primary/15 text-primary shadow-sm ring-1 ring-primary/15'
           : 'hover:bg-white/[0.06]'
       }`}
       style={{ paddingLeft: `${paddingLeft + 20}px` }}
@@ -156,7 +161,7 @@ function TreeNode({
     >
       <button onClick={() => onSelectFile(projectFile)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
         <FileIcon type={node.fileType || 'other'} />
-        <span className={`truncate text-[13px] ${isSelected ? 'font-semibold text-indigo-300' : 'text-gray-300'}`}>
+        <span className={`truncate text-[13px] ${isSelected ? 'font-semibold text-primary' : 'text-gray-300'}`}>
           {node.name}
         </span>
       </button>
@@ -261,7 +266,15 @@ export function FileExplorer({
   readOnly = false,
 }: FileExplorerProps & { onDuplicateFile?: (path: string) => void }) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [explorerDensity, setExplorerDensity] = useState(() => storage.getSettings().explorerDensity);
   const tree = useMemo(() => buildFileTree(files), [files]);
+
+  useEffect(() => {
+    const syncSettings = () => setExplorerDensity(storage.getSettings().explorerDensity);
+    syncSettings();
+    window.addEventListener('joyful_settings_changed', syncSettings);
+    return () => window.removeEventListener('joyful_settings_changed', syncSettings);
+  }, []);
 
   const toggleFolder = useCallback((path: string) => {
     setExpandedFolders(prev => {
@@ -315,13 +328,13 @@ export function FileExplorer({
   }, [files]);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-r border-border bg-[#17181d]">
+    <div className="flex h-full min-h-0 w-full flex-col border-r border-white/[0.08] bg-[#181b20] text-gray-200">
       {/* Header */}
-      <div className="border-b border-white/[0.07] px-4 py-3">
+      <div className="border-b border-white/[0.08] px-4 py-3">
         <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
               <Folder className="h-4 w-4" />
             </div>
             <div>
@@ -361,14 +374,14 @@ export function FileExplorer({
         </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.035] px-2.5 py-2">
-            <Package className="h-3.5 w-3.5 text-indigo-300" />
+          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2">
+            <Package className="h-3.5 w-3.5 text-primary" />
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase text-gray-500">Framework</p>
               <p className="truncate text-xs font-semibold text-gray-200">{framework}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.035] px-2.5 py-2">
+          <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 py-2">
             <GitBranch className="h-3.5 w-3.5 text-emerald-300" />
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold uppercase text-gray-500">Mode</p>
@@ -382,7 +395,7 @@ export function FileExplorer({
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2">
         {files.length === 0 ? (
           <div className="mx-3 mt-4 rounded-xl border border-dashed border-white/[0.1] bg-white/[0.03] p-6 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground mx-auto">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.06] text-muted-foreground">
               <Folder className="h-6 w-6" />
             </div>
             <p className="text-sm font-medium text-foreground mb-1">No project files</p>
@@ -392,7 +405,7 @@ export function FileExplorer({
             {!readOnly && (
               <button
                 onClick={() => onCreateFile('index.html')}
-                    className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-medium text-gray-200 shadow-sm transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-medium text-gray-200 shadow-sm transition-colors hover:border-primary hover:bg-primary/10 hover:text-primary"
               >
                 <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
                 Add index.html
@@ -414,6 +427,7 @@ export function FileExplorer({
               onRenameFile={onRenameFile}
               onDuplicateFile={onDuplicateFile}
               readOnly={readOnly}
+              explorerDensity={explorerDensity}
             />
           ))
         )}

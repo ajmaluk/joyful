@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Copy, Download, FileCode2, FileText, FileJson, Code2, X, Braces, Save, Check, Clock, Zap, FileCode } from 'lucide-react';
+import { Copy, Download, FileCode2, FileText, FileJson, Code2, X, Braces, Save, Check, Clock, Zap, FileCode, FileCog } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { getFileType } from '@/services/fileSystem';
+import * as storage from '@/services/storage';
 
 interface CodeEditorProps {
   files: ProjectFile[];
@@ -13,6 +14,15 @@ interface CodeEditorProps {
   onUpdateFile: (path: string, content: string) => void;
   readOnly?: boolean;
 }
+
+type EditorFontFamily = 'jetbrains-mono' | 'fira-code' | 'source-code-pro' | 'ibm-plex-mono';
+
+const FONT_FAMILY_MAP: Record<EditorFontFamily, string> = {
+  'jetbrains-mono': "'JetBrains Mono', 'Fira Code', 'SFMono-Regular', monospace",
+  'fira-code': "'Fira Code', 'JetBrains Mono', 'SFMono-Regular', monospace",
+  'source-code-pro': "'Source Code Pro', 'JetBrains Mono', 'SFMono-Regular', monospace",
+  'ibm-plex-mono': "'IBM Plex Mono', 'JetBrains Mono', 'SFMono-Regular', monospace",
+};
 
 const FILE_ICONS: Record<string, typeof FileCode2> = {
   html: FileCode2,
@@ -91,7 +101,15 @@ export function CodeEditor({
   const [showSnippets, setShowSnippets] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [lineCount, setLineCount] = useState(0);
+  const [editorSettings, setEditorSettings] = useState(() => storage.getSettings());
   const editorRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    const syncSettings = () => setEditorSettings(storage.getSettings());
+    syncSettings();
+    window.addEventListener('joyful_settings_changed', syncSettings);
+    return () => window.removeEventListener('joyful_settings_changed', syncSettings);
+  }, []);
 
   useEffect(() => {
     if (activeFile) {
@@ -162,12 +180,14 @@ export function CodeEditor({
   }, [content, handleSave]);
 
   const snippets = activeFile ? getSnippetsForFile(activeFile.path) : [];
+  const fontFamily = FONT_FAMILY_MAP[editorSettings.editorFontFamily];
+  const editorLineHeight = Math.round(editorSettings.editorFontSize * editorSettings.editorLineHeight);
 
   if (!activeFile) {
     return (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col items-center justify-center bg-[#0D0D0F] p-6">
-        <div className="w-full max-w-md rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 text-left backdrop-blur-sm">
-          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-col items-center justify-center bg-[#0f1115] p-6">
+        <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15181d] p-5 text-left shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-sm">
+          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <FileCode2 className="h-5 w-5" />
           </div>
           <h3 className="text-sm font-medium text-gray-200">No file selected</h3>
@@ -195,10 +215,10 @@ export function CodeEditor({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0D0D0F]">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-[#0f1115]">
       {/* Tab bar */}
-      <div className="flex h-10 flex-shrink-0 items-center gap-0 border-b border-white/[0.06] bg-white/[0.02]">
-        <div className="flex min-w-0 flex-1 items-center overflow-x-auto scrollbar-none">
+      <div className="flex h-10 flex-shrink-0 items-stretch gap-0 border-b border-white/[0.08] bg-[#12151a]">
+        <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto px-1 scrollbar-none">
           {openFiles.map((file) => {
             const isActive = activeFile?.path === file.path;
             const Icon = getFileIcon(file.path);
@@ -207,16 +227,16 @@ export function CodeEditor({
               <button
                 key={file.path}
                 onClick={() => onSelectFile(file)}
-                className={`group relative flex h-full min-w-0 flex-shrink-0 items-center gap-1.5 px-3 text-xs transition-all duration-150 ${
+                className={`group relative flex h-full min-w-0 flex-shrink-0 items-center gap-1.5 border-b-2 px-3 text-xs transition-all duration-150 ${
                   isActive
-                    ? 'bg-[#0D0D0F] text-gray-200 border-b-2 border-indigo-500'
-                    : 'bg-transparent text-gray-500 hover:text-gray-300 hover:bg-white/[0.03] border-b-2 border-transparent'
+                    ? 'border-primary bg-[#0f1115] text-gray-100'
+                    : 'border-transparent bg-transparent text-gray-500 hover:bg-white/[0.03] hover:text-gray-300'
                 }`}
               >
                 <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${isActive ? iconColor : 'text-gray-600'}`} />
-                <span className="truncate max-w-[120px]">{file.path.split('/').pop()}</span>
+                <span className="max-w-[140px] truncate leading-none">{file.path.split('/').pop()}</span>
                 {file.isModified && !readOnly && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                  <span className="flex-shrink-0 h-1.5 w-1.5 rounded-full bg-primary" />
                 )}
                 {!readOnly && (
                   <span
@@ -224,7 +244,7 @@ export function CodeEditor({
                       e.stopPropagation();
                       onCloseFile(file);
                     }}
-                    className="ml-1 flex-shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/[0.08]"
+                    className="ml-0.5 flex-shrink-0 rounded p-0.5 text-gray-500 transition-colors hover:bg-white/[0.08] hover:text-gray-200"
                   >
                     <X className="w-3 h-3" />
                   </span>
@@ -233,9 +253,9 @@ export function CodeEditor({
             );
           })}
         </div>
-        <div className="flex flex-shrink-0 items-center gap-1 pr-3">
+        <div className="flex flex-shrink-0 items-center gap-0.5 pr-2">
           {/* Auto-save indicator */}
-          <div className="flex items-center gap-1.5 mr-2">
+          <div className="mr-1.5 flex items-center gap-1.5">
             {isSaving ? (
               <span className="flex items-center gap-1 text-[10px] text-indigo-400">
                 <Clock className="h-3 w-3 animate-spin" />
@@ -258,22 +278,23 @@ export function CodeEditor({
             <div className="relative">
               <button
                 onClick={() => setShowSnippets(!showSnippets)}
-                className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+                className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
                 title="Insert snippet"
               >
                 <FileCode className="h-3.5 w-3.5" />
               </button>
               {showSnippets && (
-                <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-white/[0.08] bg-[#1a1a1f] shadow-xl z-50">
-                  <div className="p-2 border-b border-white/[0.06]">
-                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Snippets</span>
+                <div className="absolute right-0 top-full z-50 mt-1 w-60 overflow-hidden rounded-xl border border-white/[0.08] bg-[#171b20] shadow-2xl shadow-black/40">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] p-2.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Snippets</span>
+                    <FileCog className="h-3.5 w-3.5 text-gray-500" />
                   </div>
                   <div className="max-h-48 overflow-y-auto">
                     {snippets.map((snippet, i) => (
                       <button
                         key={i}
                         onClick={() => insertSnippet(snippet.code)}
-                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/[0.06] transition-colors"
+                        className="w-full px-3 py-2 text-left text-xs text-gray-300 transition-colors hover:bg-white/[0.06]"
                       >
                         <div className="font-medium">{snippet.label}</div>
                         <div className="text-[10px] text-gray-500 mt-0.5">{snippet.description}</div>
@@ -291,21 +312,21 @@ export function CodeEditor({
           )}
           <button
             onClick={handleFormat}
-            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Format code (Shift+Alt+F)"
           >
             <Zap className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={handleCopy}
-            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Copy file"
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={handleDownload}
-            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Download file"
           >
             <Download className="h-3.5 w-3.5" />
@@ -322,17 +343,17 @@ export function CodeEditor({
           theme="vs-dark"
           onChange={handleEditorChange}
           options={{
-            fontSize: 13,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+            fontSize: editorSettings.editorFontSize,
+            fontFamily,
             fontLigatures: true,
-            lineNumbers: 'on',
-            minimap: { enabled: false },
+            lineNumbers: editorSettings.editorLineNumbers ? 'on' : 'off',
+            minimap: { enabled: editorSettings.editorMinimap },
             scrollBeyondLastLine: false,
-            wordWrap: 'on',
+            wordWrap: editorSettings.editorWordWrap ? 'on' : 'off',
             automaticLayout: true,
             padding: { top: 16, bottom: 16 },
             renderLineHighlight: 'line',
-            lineHeight: 1.7,
+            lineHeight: editorLineHeight,
             tabSize: 2,
             bracketPairColorization: { enabled: true },
             cursorBlinking: 'smooth',
@@ -343,7 +364,7 @@ export function CodeEditor({
             overviewRulerBorder: false,
             hideCursorInOverviewRuler: true,
             lineDecorationsWidth: 0,
-            lineNumbersMinChars: 3,
+            lineNumbersMinChars: editorSettings.editorLineNumbers ? 3 : 0,
             formatOnPaste: true,
             formatOnType: true,
           }}
@@ -366,9 +387,9 @@ export function CodeEditor({
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-3 py-1">
+      <div className="flex items-center justify-between border-t border-white/[0.06] bg-[#111318] px-3 py-1.5">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] text-gray-600">{getLanguage(activeFile.path).toUpperCase()}</span>
+          <span className="text-[10px] font-medium text-gray-500">{getLanguage(activeFile.path).toUpperCase()}</span>
           <span className="text-[10px] text-gray-700">UTF-8</span>
           <span className="text-[10px] text-gray-700">{lineCount} lines</span>
           <span className="text-[10px] text-gray-700">{wordCount} words</span>

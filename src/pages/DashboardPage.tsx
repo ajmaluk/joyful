@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -9,7 +9,9 @@ import {
   Eye,
   Grid3X3,
   ListChecks,
+  Loader2,
   Mic,
+  Pause,
   Pencil,
   Plus,
   Search,
@@ -21,6 +23,8 @@ import { NewProjectModal } from '@/components/modals/NewProjectModal';
 import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import { exportProjectAsZip, generatePreview } from '@/services/fileSystem';
 import type { ChatMode, Project } from '@/types';
+import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface DashboardPageProps {
   projects: Project[];
@@ -45,6 +49,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   const [showNewProject, setShowNewProject] = useState(false);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('My projects');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
 
   const sortedProjects = useMemo(
     () => [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -67,11 +72,27 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
     navigate(`/builder/${project.id}`);
   };
 
-  const handlePromptInput = () => {
+  const handlePromptInput = useCallback(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = 'auto';
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
-  };
+  }, []);
+
+  const handlePromptVoiceTranscript = useCallback((transcript: string) => {
+    setPrompt(prev => mergeVoiceTranscript(prev, transcript));
+    requestAnimationFrame(() => handlePromptInput());
+  }, [handlePromptInput]);
+
+  const {
+    isSupported: isVoiceSupported,
+    isRecording,
+    isProcessing,
+    toggleRecording,
+  } = useVoiceInput({
+    onTranscript: handlePromptVoiceTranscript,
+  });
+
+  useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
 
   const handlePromptSubmit = () => {
     const trimmed = prompt.trim();
@@ -93,6 +114,13 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
       ? 'Create implementation plan'
       : 'Start building'
     : "Can't submit an empty request";
+  const voiceButtonLabel = isProcessing
+    ? 'Processing voice input'
+    : isRecording
+      ? 'Pause recording'
+      : isVoiceSupported
+        ? 'Start voice input'
+        : 'Voice input is not supported in this browser';
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -157,7 +185,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                 <Plus className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-2">
-                <div className="relative">
+                <div ref={modeMenuRef} className="relative">
                   <button
                     type="button"
                     onClick={() => setModeMenuOpen(prev => !prev)}
@@ -204,10 +232,28 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                 </div>
                 <button
                   type="button"
-                  aria-label="Voice prompt"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
+                  onClick={() => {
+                    if (isProcessing) return;
+                    toggleRecording();
+                  }}
+                  disabled={(!isVoiceSupported && !isRecording && !isProcessing) || isProcessing}
+                  aria-label={voiceButtonLabel}
+                  title={voiceButtonLabel}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    isRecording
+                      ? 'bg-red-500 text-white hover:bg-red-500/90'
+                      : isProcessing
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white'
+                  }`}
                 >
-                  <Mic className="h-4 w-4" />
+                  {isProcessing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : isRecording ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -215,13 +261,13 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                   disabled={!canSubmitPrompt}
                   aria-label={promptButtonLabel}
                   title={promptButtonLabel}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-transform ${
+                  className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
                     canSubmitPrompt
-                      ? 'bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-[#2f5bff]/20 hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none'
-                      : 'bg-secondary text-secondary-foreground shadow-none hover:scale-100 dark:bg-white/10 dark:text-[#f5f2ea]'
-                  } disabled:cursor-not-allowed disabled:opacity-70`}
+                      ? 'bg-[#2f5bff] text-white shadow-[#2f5bff]/25 hover:scale-105'
+                      : 'bg-gray-200 text-gray-500 shadow-none hover:scale-100 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-white/10 dark:text-[#aaa69d]'
+                  }`}
                 >
-                    <ArrowUp className="h-4 w-4" />
+                  <ArrowUp className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -264,6 +310,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                 />
               </div>
               <button
+                type="button"
                 onClick={() => setShowNewProject(true)}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
               >

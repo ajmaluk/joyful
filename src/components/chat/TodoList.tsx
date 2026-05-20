@@ -38,16 +38,16 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/60 bg-card/40 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-white/[0.08] px-3.5 py-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 shadow-md shadow-emerald-500/20">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500 shadow-none">
             <ListTodo className="h-3.5 w-3.5 text-white" />
           </div>
-          <span className="text-sm font-semibold text-foreground">Build Tasks</span>
+          <span className="text-sm font-semibold text-gray-100">Build Tasks</span>
           {totalCount > 0 && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
               {completedCount}/{totalCount}
             </span>
           )}
@@ -56,7 +56,7 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
 
       {/* Progress bar */}
       {totalCount > 0 && (
-        <div className="h-1 bg-muted">
+        <div className="h-1 bg-white/[0.06]">
           <motion.div
             className="h-full bg-gradient-to-r from-emerald-500 to-teal-500"
             initial={{ width: 0 }}
@@ -73,10 +73,10 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center py-6 text-center"
+              className="flex flex-col items-center justify-center py-5 text-center"
             >
-              <ListTodo className="h-8 w-8 text-muted-foreground/40 mb-2" />
-              <p className="text-xs text-muted-foreground">No tasks yet. Add one below!</p>
+              <ListTodo className="mb-2 h-8 w-8 text-gray-500/40" />
+              <p className="text-xs text-gray-500">No tasks yet. Add one below.</p>
             </motion.div>
           ) : (
             todos.map((todo) => (
@@ -86,30 +86,30 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10, height: 0 }}
-                className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent/50"
+                className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
               >
                 <button
                   onClick={() => onToggle(todo.id)}
-                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border border-border/60 transition-all duration-200 hover:border-primary/50"
+                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border border-white/[0.08] transition-all duration-200 hover:border-primary/50 hover:bg-white/[0.04]"
                 >
                   {todo.completed ? (
                     <Check className="h-3 w-3 text-emerald-500" />
                   ) : (
-                    <Circle className="h-3 w-3 text-muted-foreground/50" />
+                    <Circle className="h-3 w-3 text-gray-500/60" />
                   )}
                 </button>
                 <span
                   className={`flex-1 text-xs transition-all duration-200 ${
                     todo.completed
-                      ? 'text-muted-foreground/50 line-through'
-                      : 'text-foreground'
+                      ? 'line-through text-gray-500/50'
+                      : 'text-gray-200'
                   }`}
                 >
                   {todo.text}
                 </span>
                 <button
                   onClick={() => onRemove(todo.id)}
-                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md opacity-0 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md opacity-0 transition-all duration-200 hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -120,15 +120,15 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
       </div>
 
       {/* Add todo input */}
-      <div className="flex items-center gap-2 border-t border-border/60 bg-card/40 px-3 py-2">
-        <Plus className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
+      <div className="flex items-center gap-2 border-t border-white/[0.08] px-3 py-2">
+        <Plus className="h-3.5 w-3.5 flex-shrink-0 text-gray-500/50" />
         <input
           type="text"
           value={newTodo}
           onChange={(e) => setNewTodo(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add a task..."
-          className="flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+          className="flex-1 bg-transparent text-xs text-gray-100 outline-none placeholder:text-gray-500/50"
         />
         {newTodo.trim() && (
           <motion.button

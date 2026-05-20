@@ -29,24 +29,24 @@ export function WorkingProcess({ todos, isComplete }: WorkingProcessProps) {
   const progressPercent = isComplete ? 100 : Math.round((completedCount / todos.length) * 100);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm p-4 shadow-sm">
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5 shadow-none backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isComplete ? (
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10">
               <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
             </div>
           ) : (
-            <div className="relative flex h-6 w-6 items-center justify-center">
+            <div className="relative flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.04]">
               <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin" />
             </div>
           )}
-          <span className="text-sm font-semibold text-foreground">
+          <span className="text-sm font-semibold text-gray-100">
             {isComplete ? 'Build complete' : 'Building your site'}
           </span>
         </div>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
           isComplete
             ? 'bg-emerald-500/10 text-emerald-500'
             : 'bg-primary/10 text-primary'
@@ -56,7 +56,7 @@ export function WorkingProcess({ todos, isComplete }: WorkingProcessProps) {
       </div>
 
       {/* Progress bar */}
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted">
+      <div className="mb-2.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
         <motion.div
           className={`h-full rounded-full ${isComplete ? 'bg-emerald-500' : 'bg-primary'}`}
           initial={{ width: '0%' }}
@@ -74,15 +74,15 @@ export function WorkingProcess({ todos, isComplete }: WorkingProcessProps) {
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.06, duration: 0.2 }}
-              className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-all duration-200 ${
-                todo.status === 'active' ? 'bg-primary/8 text-primary' : ''
+              className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-all duration-200 ${
+                todo.status === 'active' ? 'bg-white/[0.06] text-primary' : ''
               } ${todo.status === 'done' ? 'opacity-60' : ''}`}
             >
               <StepIcon status={todo.status} />
               <span className={`text-xs transition-colors ${
                 todo.status === 'active' ? 'font-semibold text-primary' :
-                todo.status === 'done' ? 'text-muted-foreground' :
-                'text-muted-foreground/50'
+                todo.status === 'done' ? 'text-gray-400' :
+                'text-gray-500'
               }`}>
                 {todo.label}
               </span>

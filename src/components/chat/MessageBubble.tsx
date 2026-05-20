@@ -29,13 +29,13 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
   if (message.role === 'user') {
     return (
       <div className="flex justify-end animate-[fade-in_200ms_ease-out]">
-        <div className="max-w-[82%]">
-          <div className="rounded-2xl rounded-br-md bg-primary px-4 py-3 shadow-sm">
-            <p className="text-sm font-medium leading-relaxed text-white">
+        <div className="max-w-[84%]">
+          <div className="rounded-l-2xl rounded-br-md border border-primary/20 bg-primary/10 px-3.5 py-2.5 shadow-none ring-1 ring-primary/10">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
               {message.content}
             </p>
           </div>
-          <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground">
+          <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground/70">
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
@@ -46,16 +46,16 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
   if (message.role === 'system') {
     const isError = message.content.includes('Error');
     return (
-      <div className="flex items-start gap-2 w-full animate-[fade-in_200ms_ease-out]">
-        <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${isError ? 'bg-red-500/15' : 'bg-emerald-500/15'}`}>
+      <div className="flex w-full items-start gap-2 animate-[fade-in_200ms_ease-out]">
+        <div className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md ${isError ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
           {isError ? (
             <AlertCircle className="h-3.5 w-3.5 text-red-500" />
           ) : (
             <Check className="h-3.5 w-3.5 text-emerald-500" />
           )}
         </div>
-        <div className="min-w-0 flex-1 rounded-xl border border-border/60 bg-card px-3 py-2">
-          <p className={`text-xs leading-relaxed ${isError ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+        <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3">
+          <p className={`text-xs leading-relaxed ${isError ? 'text-red-400' : 'text-emerald-400'}`}>
             {message.content}
           </p>
         </div>
@@ -66,8 +66,8 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
   // Assistant message - clean professional walkthrough
   return (
     <div className="group w-full animate-[fade-in_200ms_ease-out] space-y-2">
-      <div className="rounded-2xl rounded-bl-md border border-border/60 bg-card/70 px-4 py-3 shadow-sm">
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+      <div className="rounded-l-2xl rounded-br-md border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 shadow-none">
+        <p className="whitespace-pre-wrap text-sm leading-6 text-gray-200">
           {isLatest ? (
             <TypingText
               text={message.content}
@@ -88,7 +88,7 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
             type="button"
             onClick={() => onProceedPlan(message.id)}
             disabled={isGenerating}
-            className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-transform hover:bg-primary/15 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           >
             Proceed to build
             <ArrowRight className="h-3.5 w-3.5" />
@@ -100,7 +100,7 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
       <div className="flex items-center gap-2 px-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
         <button
           onClick={() => handleCopy(message.content)}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
         >
           {copiedId === message.id ? (
             <>
@@ -118,13 +118,13 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
           <button
             onClick={() => onRegenerate(message.id)}
             disabled={isGenerating}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Regenerate</span>
           </button>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">
+        <span className="ml-auto text-[10px] text-muted-foreground/70">
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>

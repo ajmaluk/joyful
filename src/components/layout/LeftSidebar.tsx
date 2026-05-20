@@ -195,7 +195,7 @@ export function LeftSidebar({ onNewProject, projects = [] }: LeftSidebarProps) {
         {/* Bottom actions */}
         <div className="flex flex-col gap-0.5 w-full px-2 mt-auto">
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate('/settings', { state: { from: location.pathname } })}
             className="flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-[11px] font-bold text-primary">
@@ -209,7 +209,7 @@ export function LeftSidebar({ onNewProject, projects = [] }: LeftSidebarProps) {
             const Icon = item.icon;
             const button = (
               <button
-                onClick={() => navigate(item.path)}
+                onClick={() => navigate(item.path, { state: { from: location.pathname } })}
                 className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${
                   isActive(item.path)
                     ? 'bg-background text-foreground shadow-xs'

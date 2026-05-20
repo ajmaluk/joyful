@@ -54,15 +54,15 @@ export function TestimonialCard({ testimonial, index }: { testimonial: Testimoni
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, delay: index * 0.12 }}
-      className="group relative rounded-xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-2xl dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.35)]"
+      className="group relative rounded-lg border border-gray-200 bg-white p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.35)]"
     >
-      <Quote className="absolute right-5 top-5 h-8 w-8 text-gray-200 transition-colors group-hover:text-[#2f5bff]/20 dark:text-white/5 dark:group-hover:text-[#2f5bff]/15" />
+      <Quote className="absolute right-4 top-4 h-6 w-6 text-gray-200 transition-colors group-hover:text-[#2f5bff]/20 dark:text-white/5 dark:group-hover:text-[#2f5bff]/15" />
       <StarRating count={testimonial.rating} />
-      <p className="mt-4 text-sm leading-6 text-gray-700 dark:text-[#d6d1c7]">
+      <p className="mt-3 text-xs leading-5 text-gray-700 dark:text-[#d6d1c7]">
         &ldquo;{testimonial.quote}&rdquo;
       </p>
-      <div className="mt-5 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#2f5bff] to-[#f23c78] text-xs font-bold text-white">
+      <div className="mt-4 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#2f5bff] to-[#f23c78] text-[11px] font-bold text-white">
           {testimonial.initials}
         </div>
         <div>
@@ -79,21 +79,21 @@ export function TestimonialsSection() {
   const inView = useInView(ref, { once: true, margin: '-60px' });
 
   return (
-    <section ref={ref} className="px-4 py-24 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <section ref={ref} className="px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5 }}
         >
-          <p className="text-sm font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">
+          <p className="text-xs font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">
             Loved by builders
           </p>
-          <h2 className="mt-3 text-4xl font-bold tracking-normal text-gray-950 dark:text-white">
+          <h2 className="mt-2 text-3xl font-bold tracking-normal text-gray-950 sm:text-4xl dark:text-white">
             What people are saying
           </h2>
         </motion.div>
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {testimonials.map((t, i) => (
             <TestimonialCard key={t.name} testimonial={t} index={i} />
           ))}

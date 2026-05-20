@@ -7,6 +7,7 @@ export function getFileType(path: string): FileType {
     html: 'html', htm: 'html',
     css: 'css',
     js: 'js', mjs: 'js',
+    ts: 'ts',
     json: 'json',
     jsx: 'jsx',
     tsx: 'tsx',
@@ -21,6 +22,7 @@ export function getFileColor(type: FileType): string {
     html: '#F97316', // orange
     css: '#60A5FA', // blue
     js: '#FBBF24', // yellow
+    ts: '#60A5FA', // blue
     json: '#4ADE80', // green
     jsx: '#22D3EE', // cyan
     tsx: '#8183F4', // indigo
@@ -134,8 +136,81 @@ export function buildFileTree(files: ProjectFile[]): FileTreeNode[] {
   return root;
 }
 
+function escapeClosingScript(content: string): string {
+  return content.replace(/<\/script/gi, '<\\/script');
+}
+
+function stripModuleSyntax(content: string): string {
+  return content
+    .replace(/^\s*import\s+[^;]+;?\s*$/gm, '')
+    .replace(/^\s*export\s+\{[^}]+\};?\s*$/gm, '')
+    .replace(/\bexport\s+default\s+function\s+([A-Za-z0-9_$]+)/, 'function $1')
+    .replace(/\bexport\s+default\s+function\s*\(/, 'function App(')
+    .replace(/\bexport\s+default\s+class\s+([A-Za-z0-9_$]+)/, 'class $1')
+    .replace(/\bexport\s+default\s+([A-Za-z0-9_$]+);?/g, 'window.__JoyfulApp = $1;')
+    .replace(/\bexport\s+(const|let|var|function|class)\s+/g, '$1 ');
+}
+
+function generateReactPreview(files: ProjectFile[]): string {
+  const appFile =
+    files.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path)) ||
+    files.find(f => /^app\/page\.(jsx|tsx)$/i.test(f.path)) ||
+    files.find(f => /^pages\/index\.(jsx|tsx)$/i.test(f.path)) ||
+    files.find(f => /\.(jsx|tsx)$/i.test(f.path));
+
+  const css = files
+    .filter(f => f.type === 'css')
+    .map(f => `\n/* ${f.path} */\n${f.content}`)
+    .join('\n');
+
+  if (!appFile) {
+    return '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0A0A0F;color:#8A8AA0;font-family:sans-serif;"><div>No React entry found. Create src/App.jsx or app/page.tsx to preview.</div></body></html>';
+  }
+
+  const componentSource = stripModuleSyntax(appFile.content);
+  const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(componentSource);
+  const appResolver = hasNamedApp
+    ? 'const JoyfulApp = window.__JoyfulApp || (typeof App !== "undefined" ? App : Page);'
+    : 'const JoyfulApp = window.__JoyfulApp;';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Joyful React Preview</title>
+  <style>${css}</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel" data-presets="env,react,typescript">
+const { useState, useMemo, useEffect, useRef, useCallback, useReducer, useId } = React;
+${escapeClosingScript(componentSource)}
+${appResolver}
+if (!JoyfulApp) {
+  throw new Error('Could not find a default App/Page component to render.');
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<JoyfulApp />);
+  </script>
+</body>
+</html>`;
+}
+
 // Generate a preview HTML from project files
 export function generatePreview(files: ProjectFile[]): string {
+  const hasFrameworkEntry = files.some(f =>
+    /^src\/App\.(jsx|tsx)$/i.test(f.path) ||
+    /^app\/page\.(jsx|tsx)$/i.test(f.path) ||
+    /^pages\/index\.(jsx|tsx)$/i.test(f.path)
+  );
+
+  if (hasFrameworkEntry) {
+    return generateReactPreview(files);
+  }
+
   const htmlFile = files.find(f => f.path === 'index.html');
   if (!htmlFile) {
     return '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0A0A0F;color:#8A8AA0;font-family:sans-serif;"><div>No index.html found. Create one to see a preview.</div></body></html>';

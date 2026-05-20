@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2 } from 'lucide-react';
+import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2, Columns, Smartphone as SmartphoneFrame } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { generatePreview } from '@/services/fileSystem';
 import { SANDBOX_BRIDGE_SCRIPT } from '@/utils/sandboxBridge';
@@ -14,16 +14,20 @@ interface PreviewPanelProps {
 
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 type BottomTab = 'console' | 'network' | 'performance';
+type ViewMode = 'single' | 'split';
 
 const BOTTOM_HEIGHT = 200;
 
 export function PreviewPanel({ files }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
+  const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [srcDoc, setSrcDoc] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('console');
+  const [showDeviceFrame, setShowDeviceFrame] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeRefSplit = useRef<HTMLIFrameElement>(null);
 
   const {
     logs,
@@ -57,10 +61,55 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
     return () => clearTimeout(timer);
   }, [files, refreshPreview]);
 
-  const deviceFrames: Record<DeviceMode, { width: string; height: string }> = {
-    desktop: { width: '100%', height: '100%' },
-    tablet: { width: '768px', height: '1024px' },
-    mobile: { width: '390px', height: '844px' },
+  const deviceFrames: Record<DeviceMode, { width: string; height: string; label: string }> = {
+    desktop: { width: '100%', height: '100%', label: 'Desktop' },
+    tablet: { width: '768px', height: '1024px', label: 'Tablet' },
+    mobile: { width: '390px', height: '844px', label: 'Mobile' },
+  };
+
+  const renderPreview = (iframeRef: React.RefObject<HTMLIFrameElement | null>, isSplit = false) => {
+    const frame = deviceFrames[device];
+    const isDesktopDevice = device === 'desktop';
+
+    return (
+      <div
+        className={`relative overflow-hidden rounded-xl border bg-white transition-all duration-300 ${
+          showDeviceFrame && !isDesktopDevice
+            ? 'border-gray-300 shadow-2xl shadow-gray-400/50'
+            : isLoading
+              ? 'border-gray-200 shadow-lg shadow-gray-200/30'
+              : 'border-gray-200 shadow-2xl shadow-gray-300/40'
+        } ${showDeviceFrame && !isDesktopDevice ? 'p-3 bg-gray-100' : ''}`}
+        style={{
+          width: showDeviceFrame && !isDesktopDevice ? 'auto' : frame.width,
+          height: showDeviceFrame && !isDesktopDevice ? 'auto' : frame.height,
+          maxWidth: '100%',
+        }}
+      >
+        {showDeviceFrame && !isDesktopDevice && (
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+            <span className="text-[10px] font-medium text-gray-500">{frame.label} · {frame.width === '100%' ? 'full' : frame.width}</span>
+          </div>
+        )}
+        {isLoading && !isSplit && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-[10px] text-gray-500 font-medium">Loading preview...</span>
+            </div>
+          </div>
+        )}
+        <iframe
+          ref={iframeRef}
+          srcDoc={srcDoc}
+          sandbox="allow-scripts allow-forms"
+          className={`w-full bg-white ${showDeviceFrame && !isDesktopDevice ? 'rounded-lg' : ''}`}
+          style={{ height: showDeviceFrame && !isDesktopDevice ? frame.height : '100%' }}
+          title={isSplit ? 'Preview Split' : 'Preview'}
+        />
+      </div>
+    );
   };
 
   const tabConfig: { tab: BottomTab; icon: typeof Terminal; label: string; badge?: number }[] = [
@@ -142,6 +191,45 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             <Smartphone className="w-3.5 h-3.5" />
           </button>
         </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center rounded-lg border border-border bg-background p-0.5 ml-1">
+          <button
+            onClick={() => setViewMode('single')}
+            className={`rounded-md px-2 py-1.5 transition-all ${
+              viewMode === 'single'
+                ? 'border border-border bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
+            title="Single view"
+          >
+            <Monitor className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setViewMode('split')}
+            className={`rounded-md px-2 py-1.5 transition-all ${
+              viewMode === 'split'
+                ? 'border border-border bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            }`}
+            title="Split view"
+          >
+            <Columns className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Device frame toggle */}
+        <button
+          onClick={() => setShowDeviceFrame(!showDeviceFrame)}
+          className={`ml-1.5 rounded-lg p-1.5 transition-all ${
+            showDeviceFrame
+              ? 'bg-primary/10 text-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          }`}
+          title="Toggle device frame"
+        >
+          <SmartphoneFrame className="w-3.5 h-3.5" />
+        </button>
 
         <button
           className="ml-1.5 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
@@ -245,35 +333,13 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             </div>
           </div>
         ) : (
-          <div
-            className={`relative overflow-hidden rounded-xl border bg-white transition-all duration-300 ${
-              device === 'desktop' ? 'h-full min-h-full' : 'shrink-0'
-            } ${
-              isLoading
-                ? 'border-gray-200 shadow-lg shadow-gray-200/30'
-                : 'border-gray-200 shadow-2xl shadow-gray-300/40'
-            }`}
-            style={{
-              width: deviceFrames[device].width,
-              height: deviceFrames[device].height,
-              maxWidth: '100%',
-            }}
-          >
-            {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[10px] text-gray-500 font-medium">Loading preview...</span>
-                </div>
+          <div className={`flex w-full h-full gap-4 ${viewMode === 'split' ? 'flex-col lg:flex-row' : 'justify-center'}`}>
+            {renderPreview(iframeRef)}
+            {viewMode === 'split' && (
+              <div className="flex-1 min-h-0 overflow-auto">
+                {renderPreview(iframeRefSplit, true)}
               </div>
             )}
-            <iframe
-              ref={iframeRef}
-              srcDoc={srcDoc}
-              sandbox="allow-scripts allow-forms"
-              className="w-full h-full bg-white"
-              title="Preview"
-            />
           </div>
         )}
       </div>

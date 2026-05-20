@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Download, MessageSquare, Edit3, Check, X, ListTodo } from 'lucide-react';
+import { Trash2, Download, Edit3, Check, X, ListTodo, ChevronRight } from 'lucide-react';
 
 interface ChatToolbarProps {
   messageCount: number;
@@ -8,6 +8,7 @@ interface ChatToolbarProps {
   onExportChat: () => void;
   onRenameSession?: (name: string) => void;
   onToggleTodos?: () => void;
+  onCloseSidebar?: () => void;
   todoCount?: number;
 }
 
@@ -18,6 +19,7 @@ export function ChatToolbar({
   onExportChat,
   onRenameSession,
   onToggleTodos,
+  onCloseSidebar,
   todoCount = 0,
 }: ChatToolbarProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -42,10 +44,10 @@ export function ChatToolbar({
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
+    <div className="flex items-center justify-between border-b border-border bg-card/95 px-4 py-3">
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 flex-shrink-0">
-          <MessageSquare className="h-3.5 w-3.5" />
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+          <img src="/brand-logo-64.png" alt="Joyful" className="h-6 w-6 rounded-lg" />
         </div>
         {isEditing ? (
           <div className="flex items-center gap-1 min-w-0">
@@ -116,6 +118,16 @@ export function ChatToolbar({
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
+        {onCloseSidebar && (
+          <button
+            onClick={onCloseSidebar}
+            className="rounded-lg border border-border bg-background p-2 text-muted-foreground transition-all hover:border-primary/50 hover:bg-accent hover:text-foreground"
+            title="Close chat sidebar"
+            aria-label="Close chat sidebar"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

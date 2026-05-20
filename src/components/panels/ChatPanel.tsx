@@ -1,46 +1,48 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { ChatMessage, ProjectFile } from '@/types';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import type { ChatMessage, ProjectFile, ChatMode } from '@/types';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { exportChatAsMarkdown } from '@/components/chat/chatExport';
 import { SmartSuggestions } from '@/components/chat/SmartSuggestions';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { PromptInput } from '@/components/chat/PromptInput';
-import { FileDiffViewer } from '@/components/chat/FileDiffViewer';
-import { buildDiffsFromFiles } from '@/components/chat/fileDiffUtils';
-import { ActionHistory } from '@/components/chat/ActionHistory';
-import { buildActionsFromFiles } from '@/components/chat/actionHistoryUtils';
-import { WorkingProcess } from '@/components/chat/WorkingProcess';
+import { WorkingProcess, type BuildTodo } from '@/components/chat/WorkingProcess';
 import { TodoList, type TodoItem } from '@/components/chat/TodoList';
+import { TemplateSelector, type Template } from '@/components/chat/TemplateSelector';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
-  generationStep?: number;
-  onSendMessage: (content: string) => void;
+  buildTodos: BuildTodo[];
+  onSendMessage: (content: string, mode?: ChatMode) => void;
   onOpenFile: (path: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onClearMessages?: () => void;
+  onAbortGeneration?: () => void;
+  onSelectTemplate?: (template: Template) => void;
+  onCloseSidebar?: () => void;
   files?: ProjectFile[];
+  activeFile?: ProjectFile | null;
 }
 
 export function ChatPanel({
   messages,
   isGenerating,
-  generationStep = -1,
+  buildTodos,
   onSendMessage,
   onOpenFile,
   onRegenerateMessage,
   onClearMessages,
+  onAbortGeneration,
+  onSelectTemplate,
+  onCloseSidebar,
   files = [],
+  activeFile = null,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [showTodos, setShowTodos] = useState(false);
-  const nextSteps = useMemo(
-    () => [...messages].reverse().find(message => message.role === 'assistant' && message.nextSteps?.length)?.nextSteps,
-    [messages]
-  );
+  const [chatMode, setChatMode] = useState<ChatMode>('build');
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,42 +52,9 @@ export function ChatPanel({
     scrollToBottom();
   }, [messages, isGenerating, scrollToBottom]);
 
-  const lastAssistantWithFiles = useMemo(
-    () => [...messages].reverse().find(m => m.role === 'assistant' && m.files && m.files.length > 0),
-    [messages]
-  );
-
-  const lastDiffs = useMemo(() => {
-    if (!lastAssistantWithFiles?.files?.length) return [];
-    return buildDiffsFromFiles(
-      lastAssistantWithFiles.files.map(f => ({
-        path: f.path,
-        content: f.content || '',
-        action: f.action,
-      })),
-      files
-    );
-  }, [files, lastAssistantWithFiles]);
-
-  const actions = useMemo(() => {
-    const seen = new Set<string>();
-    return messages.flatMap(message => {
-      if (message.role !== 'assistant' || !message.files?.length) return [];
-      const fileOps = message.files.map(f => ({ path: f.path, action: f.action }));
-      return buildActionsFromFiles(fileOps, files, {
-        idPrefix: message.id,
-        timestamp: message.timestamp,
-      });
-    }).filter(action => {
-      const key = `${action.path}:${action.type}:${action.timestamp}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).reverse();
-  }, [files, messages]);
-
   const handleClearChat = useCallback(() => {
     onClearMessages?.();
+    setTodos([]);
   }, [onClearMessages]);
 
   const handleExportChat = useCallback(() => {
@@ -100,8 +69,15 @@ export function ChatPanel({
   }, [messages, sessionName]);
 
   const handleSuggestionSelect = useCallback((prompt: string) => {
-    onSendMessage(prompt);
+    onSendMessage(prompt, 'build');
   }, [onSendMessage]);
+
+  const handleProceedPlan = useCallback((messageId: string) => {
+    const planMessage = messages.find(message => message.id === messageId);
+    if (!planMessage?.sourcePrompt) return;
+    setChatMode('build');
+    onSendMessage(planMessage.sourcePrompt, 'build');
+  }, [messages, onSendMessage]);
 
   const handleToggleTodo = useCallback((id: string) => {
     setTodos(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
@@ -115,6 +91,8 @@ export function ChatPanel({
     setTodos(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const isBuildComplete = buildTodos.length > 0 && buildTodos.every(t => t.status === 'done');
+
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden bg-background">
       {/* Toolbar */}
@@ -125,22 +103,35 @@ export function ChatPanel({
         onExportChat={handleExportChat}
         onRenameSession={setSessionName}
         onToggleTodos={() => setShowTodos(prev => !prev)}
+        onCloseSidebar={onCloseSidebar}
         todoCount={todos.length}
       />
 
       {/* Messages */}
-      <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-4">
-        {messages.length === 0 && (
+      <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-5">
+        {/* Empty state with template selector */}
+        {messages.length === 0 && files.length === 0 && onSelectTemplate && (
+          <div className="min-w-0 space-y-6 py-4">
+            <TemplateSelector
+              onSelect={onSelectTemplate}
+              disabled={isGenerating}
+            />
+          </div>
+        )}
+
+        {/* Empty state with suggestions */}
+        {messages.length === 0 && (files.length > 0 || !onSelectTemplate) && (
           <div className="min-w-0 space-y-6 py-8">
             <SmartSuggestions
               files={files}
-              nextSteps={nextSteps}
+              activeFile={activeFile}
               onSelect={handleSuggestionSelect}
               disabled={isGenerating}
             />
           </div>
         )}
 
+        {/* Messages */}
         {messages.map((msg, index) => (
           <div key={msg.id} className="min-w-0 space-y-3">
             <MessageBubble
@@ -148,49 +139,26 @@ export function ChatPanel({
               isLatest={index === messages.length - 1 && msg.role === 'assistant'}
               onOpenFile={onOpenFile}
               onRegenerate={onRegenerateMessage}
+              onProceedPlan={handleProceedPlan}
               isGenerating={isGenerating}
             />
 
-            {/* Show diffs after assistant messages with files */}
-            {msg.role === 'assistant' && msg.files && msg.files.length > 0 && index === messages.length - 1 && (
-              <div className="ml-2 min-w-0 space-y-3 overflow-x-hidden">
-                <FileDiffViewer diffs={lastDiffs} />
-              </div>
-            )}
-
-            {/* Subtle divider between messages */}
-            {index < messages.length - 1 && (
-              <div className="mx-8 border-t border-border" />
-            )}
+            {index < messages.length - 1 && msg.role === 'assistant' && <div className="h-px bg-border/35" />}
           </div>
         ))}
 
-        {/* Action history */}
-        {actions.length > 0 && (
-          <div className="mt-4">
-            <ActionHistory actions={actions} onActionClick={(action) => onOpenFile(action.path)} />
-          </div>
+        {/* Build progress with todos */}
+        {isGenerating && buildTodos.length > 0 && (
+          <WorkingProcess todos={buildTodos} isComplete={false} />
         )}
 
-        {/* Working process indicator */}
-        {isGenerating && (
-          <WorkingProcess generationStep={generationStep} />
+        {/* Build complete indicator */}
+        {!isGenerating && isBuildComplete && (
+          <WorkingProcess todos={buildTodos} isComplete={true} />
         )}
 
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Show smart suggestions after generation */}
-      {messages.length > 0 && !isGenerating && nextSteps && nextSteps.length > 0 && (
-        <div className="min-w-0 overflow-x-hidden border-t border-border bg-card px-4 py-3">
-          <SmartSuggestions
-            files={files}
-            nextSteps={nextSteps}
-            onSelect={handleSuggestionSelect}
-            disabled={isGenerating}
-          />
-        </div>
-      )}
 
       {/* Todo list */}
       {showTodos && (
@@ -204,10 +172,14 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Enhanced input area */}
+      {/* Input area */}
       <PromptInput
         onSend={onSendMessage}
         disabled={isGenerating}
+        onCancel={onAbortGeneration}
+        isGenerating={isGenerating}
+        mode={chatMode}
+        onModeChange={setChatMode}
       />
     </div>
   );

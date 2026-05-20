@@ -16,6 +16,7 @@ import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChro
 import { FeatureShowcase } from '@/components/marketing/FeatureShowcase';
 import { AnimatedDemo } from '@/components/marketing/AnimatedDemo';
 import { TestimonialsSection } from '@/components/marketing/TestimonialCard';
+import type { ChatMode } from '@/types';
 import { CountUpStats } from '@/components/marketing/CountUpStats';
 
 const templates = [
@@ -60,7 +61,7 @@ const stats = [
 ];
 
 interface LandingPageProps {
-  onStartProject: (prompt: string) => void;
+  onStartProject: (prompt: string, mode?: ChatMode) => void;
 }
 
 const joyfulCode = [
@@ -73,7 +74,7 @@ const joyfulCode = [
 function AnimatedJoyfulIcon() {
   return (
     <motion.div
-      className="absolute flex h-40 w-40 items-center justify-center"
+      className="absolute flex h-32 w-32 items-center justify-center"
       initial={{ opacity: 0, scale: 0.72, y: 8 }}
       animate={{
         opacity: [0, 1, 1, 0],
@@ -91,7 +92,7 @@ function AnimatedJoyfulIcon() {
       <motion.img
         src="/brand-logo-180.png"
         alt=""
-        className="relative h-28 w-28 rounded-full object-cover drop-shadow-[0_24px_46px_rgba(99,102,241,0.32)]"
+        className="relative h-24 w-24 rounded-full object-cover drop-shadow-[0_20px_40px_rgba(99,102,241,0.3)]"
         style={{ clipPath: 'circle(48% at 50% 50%)' }}
         animate={{ scale: [1, 1.025, 1], y: [0, -3, 0] }}
         transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
@@ -138,9 +139,9 @@ function JoyfulMorphAnimation() {
   }, [code]);
 
   return (
-    <div className="relative flex h-full min-h-80 items-center justify-center overflow-hidden rounded-md bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_52%,#fff1f8_100%)] dark:bg-[#191a18]">
+    <div className="relative flex h-full min-h-64 items-center justify-center overflow-hidden rounded-md bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_52%,#fff1f8_100%)] dark:bg-[#191a18]">
       <motion.div
-        className="absolute h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(99,135,255,0.22),rgba(242,60,120,0.14)_52%,transparent_72%)] blur-2xl"
+        className="absolute h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(99,135,255,0.22),rgba(242,60,120,0.14)_52%,transparent_72%)] blur-2xl"
         animate={{ scale: [0.9, 1.14, 0.9], opacity: [0.5, 0.95, 0.5] }}
         transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -148,7 +149,7 @@ function JoyfulMorphAnimation() {
       <AnimatedJoyfulIcon />
 
       <motion.div
-        className="relative w-[min(92%,21rem)] overflow-hidden rounded-xl border border-gray-200 bg-[#101116] text-left shadow-2xl shadow-indigo-950/20"
+        className="relative w-[min(92%,18rem)] overflow-hidden rounded-lg border border-gray-200 bg-[#101116] text-left shadow-xl shadow-indigo-950/20"
         initial={{ opacity: 0, scale: 0.82, rotateX: 18, y: 24 }}
         animate={{
           opacity: [0, 0, 1, 1, 0],
@@ -158,7 +159,7 @@ function JoyfulMorphAnimation() {
         }}
         transition={{ duration: 5.8, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <div className="flex h-9 items-center justify-between border-b border-white/10 bg-white/[0.04] px-3">
+        <div className="flex h-8 items-center justify-between border-b border-white/10 bg-white/[0.04] px-3">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
@@ -169,7 +170,7 @@ function JoyfulMorphAnimation() {
             index.html
           </div>
         </div>
-        <pre className="min-h-44 whitespace-pre-wrap px-4 py-4 font-mono text-[12px] leading-6 text-[#dbe4ff]">
+        <pre className="min-h-36 whitespace-pre-wrap px-3.5 py-3.5 font-mono text-[11px] leading-5 text-[#dbe4ff]">
           <code>{typed}<span className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse bg-[#8fa7ff]" /></code>
         </pre>
         <motion.div
@@ -190,32 +191,32 @@ function WorkflowSection() {
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section className="px-4 py-24 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1.05fr] lg:items-center">
+    <section className="px-4 py-16 sm:px-6 lg:px-8">
+      <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1fr_1.05fr] lg:items-center">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, x: -20 }}
           animate={inView ? { opacity: 1, x: 0 } : {}}
           transition={{ duration: 0.5 }}
         >
-          <p className="text-sm font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Meet Joyful</p>
-          <h2 className="mt-3 text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">
+          <p className="text-xs font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Meet Joyful</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-normal text-gray-950 sm:text-4xl dark:text-white">
             Design, preview, and code in the same flow.
           </h2>
-          <div className="mt-8 space-y-6">
+          <div className="mt-6 space-y-5">
             {workflow.map((item, index) => (
               <motion.div
                 key={item.title}
                 initial={{ opacity: 0, y: 16 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.4, delay: 0.2 + index * 0.15 }}
-                className="grid grid-cols-[2.5rem_1fr] gap-4"
+                className="grid grid-cols-[2rem_1fr] gap-3"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-sm font-bold text-indigo-600 dark:border-white/10 dark:bg-[#22231f] dark:text-[#f4d66a]">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xs font-bold text-indigo-600 dark:border-white/10 dark:bg-[#22231f] dark:text-[#f4d66a]">
                   {index + 1}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-950 dark:text-white">{item.title}</h3>
+                  <h3 className="text-base font-bold text-gray-950 dark:text-white">{item.title}</h3>
                   <p className="mt-1 max-w-xl text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">{item.desc}</p>
                 </div>
               </motion.div>
@@ -227,22 +228,22 @@ function WorkflowSection() {
           initial={{ opacity: 0, x: 20 }}
           animate={inView ? { opacity: 1, x: 0 } : {}}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/8 dark:bg-[#22231f]"
+          className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-white/8 dark:bg-[#22231f]"
         >
           <div className="grid gap-4 sm:grid-cols-[0.85fr_1.15fr]">
             <JoyfulMorphAnimation />
-            <div className="rounded-md bg-white p-4 dark:bg-[#181916]">
-              <div className="flex items-center gap-2 border-b border-gray-200 pb-4 dark:border-white/8">
+            <div className="rounded-md bg-white p-3 dark:bg-[#181916]">
+              <div className="flex items-center gap-2 border-b border-gray-200 pb-3 dark:border-white/8">
                 <Wand2 className="h-4 w-4 text-[#8fa7ff]" />
                 <span className="text-sm font-semibold text-gray-950 dark:text-white">Live editing</span>
               </div>
-              <div className="space-y-3 pt-4">
+              <div className="space-y-2.5 pt-3">
                 {[
                   'Add a dark hero with a coral call to action.',
                   'Make the pricing cards easier to compare.',
                   'Export the finished project as a ZIP.',
                 ].map((item) => (
-                  <div key={item} className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-6 text-gray-700 dark:border-white/8 dark:bg-white/[0.03] dark:text-[#d6d1c7]">
+                  <div key={item} className="rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs leading-5 text-gray-700 dark:border-white/8 dark:bg-white/[0.03] dark:text-[#d6d1c7]">
                     {item}
                   </div>
                 ))}
@@ -250,7 +251,7 @@ function WorkflowSection() {
               <button
                 type="button"
                 onClick={() => navigate('/builder')}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-md bg-gray-950 px-4 py-3 text-sm font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-gray-950 px-4 py-2.5 text-xs font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
               >
                 Open builder <ArrowRight className="h-4 w-4" />
               </button>
@@ -268,8 +269,8 @@ function TemplatesSection() {
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section className="px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 16 }}
@@ -278,7 +279,7 @@ function TemplatesSection() {
           className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
         >
           <div>
-            <h2 className="text-4xl font-bold tracking-normal text-gray-950 dark:text-white">Discover templates</h2>
+            <h2 className="text-3xl font-bold tracking-normal text-gray-950 dark:text-white">Discover templates</h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Start from a real layout, then make it yours with prompts.</p>
           </div>
           <button
@@ -290,7 +291,7 @@ function TemplatesSection() {
           </button>
         </motion.div>
 
-        <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((template, index) => (
             <motion.button
               key={template.name}
@@ -299,7 +300,7 @@ function TemplatesSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.4, delay: 0.1 + index * 0.08 }}
-              className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-2xl dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.35)]"
+              className="group relative overflow-hidden rounded-lg border border-gray-200 bg-white text-left transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-xl dark:border-white/8 dark:bg-[#22231f] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.35)]"
             >
               <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-[#1a1a18] dark:to-[#2a2a28]">
                 <img
@@ -312,8 +313,8 @@ function TemplatesSection() {
                   }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#2f5bff]/10 text-[#2f5bff]">
-                    <Layout className="h-8 w-8" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#2f5bff]/10 text-[#2f5bff]">
+                    <Layout className="h-6 w-6" />
                   </div>
                 </div>
                 {index < 3 && (
@@ -340,8 +341,8 @@ function CapabilitiesGrid() {
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
   return (
-    <section className="border-y border-gray-200 bg-white px-4 py-16 sm:px-6 lg:px-8 dark:border-white/8 dark:bg-[#171816]">
-      <div className="mx-auto max-w-7xl">
+    <section className="border-y border-gray-200 bg-white px-4 py-12 sm:px-6 lg:px-8 dark:border-white/8 dark:bg-[#171816]">
+      <div className="mx-auto max-w-6xl">
         <motion.div
           ref={ref}
           initial={{ opacity: 0, y: 16 }}
@@ -349,12 +350,12 @@ function CapabilitiesGrid() {
           transition={{ duration: 0.5 }}
           className="text-center"
         >
-          <p className="text-sm font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Why Joyful</p>
-          <h2 className="mt-3 text-4xl font-bold tracking-normal text-gray-950 dark:text-white">
+          <p className="text-xs font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">Why Joyful</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-normal text-gray-950 dark:text-white">
             Built for builders
           </h2>
         </motion.div>
-        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {capabilities.map((feature, i) => {
             const Icon = feature.icon;
             return (
@@ -363,10 +364,10 @@ function CapabilitiesGrid() {
                 initial={{ opacity: 0, y: 16 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.4, delay: i * 0.06 }}
-                className="group relative rounded-xl border border-gray-200 bg-gray-50 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[#2f5bff]/30 hover:shadow-xl dark:border-white/8 dark:bg-[#21221f] dark:hover:border-white/18 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
+                className="group relative rounded-lg border border-gray-200 bg-gray-50 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-[#2f5bff]/30 hover:shadow-lg dark:border-white/8 dark:bg-[#21221f] dark:hover:border-white/18 dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
               >
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#2f5bff]/10 text-[#2f5bff] transition-all duration-300 group-hover:bg-[#2f5bff] group-hover:text-white">
-                  <Icon className="h-5 w-5" />
+                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-[#2f5bff]/10 text-[#2f5bff] transition-all duration-300 group-hover:bg-[#2f5bff] group-hover:text-white">
+                  <Icon className="h-4 w-4" />
                 </div>
                 <h3 className="text-sm font-semibold text-gray-950 dark:text-white">{feature.title}</h3>
                 <p className="mt-2 text-xs leading-5 text-gray-600 dark:text-[#aaa69d]">{feature.desc}</p>
@@ -381,9 +382,9 @@ function CapabilitiesGrid() {
 
 function StatsSection() {
   return (
-    <section className="px-4 py-20 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <h2 className="text-4xl font-bold tracking-normal text-gray-950 dark:text-white">Joyful in numbers</h2>
+    <section className="px-4 py-14 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
+        <h2 className="text-3xl font-bold tracking-normal text-gray-950 dark:text-white">Joyful in numbers</h2>
         <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Built for fast starts, practical exports, and fewer scattered tools.</p>
         <CountUpStats stats={stats} />
       </div>
@@ -391,7 +392,7 @@ function StatsSection() {
   );
 }
 
-function CTASection({ onStartProject }: { onStartProject: (prompt: string) => void }) {
+function CTASection({ onStartProject }: { onStartProject: (prompt: string, mode?: ChatMode) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-60px' });
 
@@ -404,23 +405,15 @@ function CTASection({ onStartProject }: { onStartProject: (prompt: string) => vo
         initial={{ opacity: 0, y: 20 }}
         animate={inView ? { opacity: 1, y: 0 } : {}}
         transition={{ duration: 0.5 }}
-        className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-center px-4 py-20 text-center sm:px-6 lg:px-8"
+        className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8"
       >
-        <div className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 px-4 py-2 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white">
+        <div className="mb-6 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 px-3 py-1.5 text-xs font-semibold text-gray-900 shadow-lg shadow-indigo-950/10 backdrop-blur dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white">
           AI App Builder
         </div>
-        <h2 className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white">Ready to build?</h2>
+        <h2 className="max-w-4xl text-balance text-4xl font-bold leading-[1.03] tracking-normal text-gray-950 sm:text-5xl lg:text-6xl dark:text-white">Ready to build?</h2>
         <div className="mt-4 flex items-center justify-center gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur dark:border-white/18 dark:bg-[#101116]/58 dark:text-white dark:shadow-black/20">
-            <ShieldCheck className="h-3 w-3 text-green-500 dark:text-[#66d28e]" />
-            No signup required
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm backdrop-blur dark:border-white/18 dark:bg-[#101116]/58 dark:text-white dark:shadow-black/20">
-            <Heart className="h-3 w-3 text-[#f23c78] dark:text-[#ff7aa8]" />
-            Free forever
-          </span>
         </div>
-        <div className="mt-10 w-full">
+        <div className="mt-8 w-full">
           <PromptBox onSubmit={onStartProject} />
         </div>
       </motion.div>
@@ -437,14 +430,14 @@ export function LandingPage({ onStartProject }: LandingPageProps) {
       <section className="relative isolate min-h-screen overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
-        <div className="relative z-10 mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center px-4 py-20 text-center sm:px-6 lg:px-8">
+        <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8">
           <motion.button
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             type="button"
             onClick={() => navigate('/docs')}
-            className="mb-8 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 p-1 pr-4 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur transition-all duration-200 hover:border-gray-300 hover:scale-[1.02] hover:shadow-2xl dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
+            className="mb-6 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200/80 bg-white/85 p-1 pr-3 text-xs font-semibold text-gray-900 shadow-lg shadow-indigo-950/10 backdrop-blur transition-all duration-200 hover:border-gray-300 hover:scale-[1.02] hover:shadow-xl dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
           >
             <span className="rounded-full bg-[#2f5bff] px-3 py-1 text-xs">New</span>
             <span className="truncate">Advanced sandbox with console and inspector</span>
@@ -455,7 +448,7 @@ export function LandingPage({ onStartProject }: LandingPageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="max-w-5xl text-balance text-5xl font-bold leading-[1.02] tracking-normal text-gray-950 sm:text-6xl lg:text-7xl dark:text-white"
+            className="max-w-4xl text-balance text-4xl font-bold leading-[1.03] tracking-normal text-gray-950 sm:text-5xl lg:text-6xl dark:text-white"
           >
             Build something Joyful
           </motion.h1>
@@ -463,7 +456,7 @@ export function LandingPage({ onStartProject }: LandingPageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="mt-5 max-w-2xl text-lg font-medium leading-8 text-gray-850 sm:text-xl dark:text-white"
+            className="mt-4 max-w-2xl text-base font-medium leading-7 text-gray-900 sm:text-lg dark:text-white"
           >
             Create apps and websites by chatting with AI
           </motion.p>
@@ -472,7 +465,7 @@ export function LandingPage({ onStartProject }: LandingPageProps) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="mt-10 w-full"
+            className="mt-8 w-full"
           >
             <PromptBox onSubmit={onStartProject} />
           </motion.div>

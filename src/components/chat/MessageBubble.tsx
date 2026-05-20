@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, RotateCcw, Check, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, CircleDot } from 'lucide-react';
+import { ArrowRight, Copy, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { TypingText } from '@/components/ui/TypingText';
 
@@ -8,33 +8,13 @@ interface MessageBubbleProps {
   isLatest: boolean;
   onOpenFile?: (path: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onProceedPlan?: (messageId: string) => void;
   isGenerating?: boolean;
 }
 
-function getFileIcon(path: string) {
-  if (path.endsWith('.html')) return '🌐';
-  if (path.endsWith('.css')) return '🎨';
-  if (path.endsWith('.js') || path.endsWith('.ts')) return '⚡';
-  if (path.endsWith('.json')) return '📋';
-  if (path.endsWith('.md')) return '📝';
-  return '📄';
-}
-
-function getStatusBadge(message: ChatMessage) {
-  if (!message.files || message.files.length === 0) return null;
-  const hasOnlyCreates = message.files.every(f => f.action === 'create');
-  const hasModifies = message.files.some(f => f.action === 'modify');
-  const hasDeletes = message.files.some(f => f.action === 'delete');
-
-  if (hasDeletes) return <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-400">Deleted</span>;
-  if (hasModifies) return <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-400">Modified</span>;
-  if (hasOnlyCreates) return <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-400">Generated</span>;
-  return null;
-}
-
-export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isGenerating }: MessageBubbleProps) {
+export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, isGenerating }: MessageBubbleProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isContentExpanded, setIsContentExpanded] = useState(true);
+  const isPlanMessage = message.role === 'assistant' && message.actionType === 'plan';
 
   const handleCopy = async (content: string) => {
     try {
@@ -46,19 +26,16 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isG
     }
   };
 
-  const contentLength = message.content.length;
-  const isLongContent = contentLength > 500;
-
   if (message.role === 'user') {
     return (
       <div className="flex justify-end animate-[fade-in_200ms_ease-out]">
-        <div className="max-w-[85%] space-y-2">
-          <div className="rounded-2xl bg-gradient-to-br from-[#A7ADF8] to-[#9397F3] px-5 py-3.5 shadow-lg">
-            <p className="text-sm leading-relaxed text-gray-900 font-medium">
+        <div className="max-w-[82%]">
+          <div className="rounded-2xl rounded-br-md bg-primary px-4 py-3 shadow-sm">
+            <p className="text-sm font-medium leading-relaxed text-white">
               {message.content}
             </p>
           </div>
-          <p className="text-right text-[10px] text-gray-500 px-2">
+          <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground">
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
@@ -70,15 +47,15 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isG
     const isError = message.content.includes('Error');
     return (
       <div className="flex items-start gap-2 w-full animate-[fade-in_200ms_ease-out]">
-        <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${isError ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+        <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full ${isError ? 'bg-red-500/15' : 'bg-emerald-500/15'}`}>
           {isError ? (
-            <AlertCircle className="h-4 w-4 text-red-400" />
+            <AlertCircle className="h-3.5 w-3.5 text-red-500" />
           ) : (
-            <Check className="h-4 w-4 text-green-400" />
+            <Check className="h-3.5 w-3.5 text-emerald-500" />
           )}
         </div>
-        <div className="flex-1">
-          <p className={`text-xs ${isError ? 'text-red-400' : 'text-green-400'}`}>
+        <div className="min-w-0 flex-1 rounded-xl border border-border/60 bg-card px-3 py-2">
+          <p className={`text-xs leading-relaxed ${isError ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {message.content}
           </p>
         </div>
@@ -86,109 +63,53 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isG
     );
   }
 
-  // Assistant message
+  // Assistant message - clean professional walkthrough
   return (
-    <div className="w-full space-y-3 animate-[fade-in_200ms_ease-out] group">
-      {/* Status badge */}
-      {getStatusBadge(message)}
-
-      {/* Content with collapse for long messages */}
-      <div className="space-y-1">
-        {isLongContent && (
-          <button
-            onClick={() => setIsContentExpanded(!isContentExpanded)}
-            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            {isContentExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            {isContentExpanded ? 'Collapse' : 'Expand'} explanation
-          </button>
-        )}
-
-        {isContentExpanded ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
-            {isLatest ? (
-              <TypingText
-                text={message.content}
-                speed={10}
-                delay={100}
-                className="inline"
-                showCursor={true}
-              />
-            ) : (
-              message.content
-            )}
-          </p>
-        ) : (
-          <p className="text-sm text-gray-500 italic">
-            {contentLength} characters — click to expand
-          </p>
-        )}
+    <div className="group w-full animate-[fade-in_200ms_ease-out] space-y-2">
+      <div className="rounded-2xl rounded-bl-md border border-border/60 bg-card/70 px-4 py-3 shadow-sm">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {isLatest ? (
+            <TypingText
+              text={message.content}
+              speed={12}
+              delay={80}
+              className="inline"
+              showCursor={true}
+            />
+          ) : (
+            message.content
+          )}
+        </p>
       </div>
 
-      {message.tasks && message.tasks.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">AI task list</p>
-            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-gray-500">
-              {message.tasks.filter(task => task.status === 'done').length}/{message.tasks.length} done
-            </span>
-          </div>
-          <div className="space-y-1.5">
-            {message.tasks.map((task) => (
-              <div key={task.id} className="flex min-w-0 items-center gap-2 rounded-lg bg-white px-2.5 py-2">
-                {task.status === 'done' ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
-                ) : (
-                  <CircleDot className="h-3.5 w-3.5 flex-shrink-0 text-indigo-500" />
-                )}
-                <span className={`truncate text-xs ${task.status === 'done' ? 'text-gray-700' : 'font-medium text-gray-900'}`}>
-                  {task.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* File chips */}
-      {message.files && message.files.length > 0 && (
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Files Updated</p>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500">
-              {message.files.length} file{message.files.length > 1 ? 's' : ''}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {message.files.map((file) => (
-              <button
-                key={file.path}
-                onClick={() => onOpenFile?.(file.path)}
-                className="group/file flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left transition-all duration-200 hover:border-gray-400 hover:bg-gray-50 hover:shadow-sm"
-              >
-                <span className="text-sm">{getFileIcon(file.path)}</span>
-                <span className="text-xs font-medium text-gray-900 truncate max-w-[140px]">{file.path}</span>
-                <span className="text-[10px] text-gray-500 group-hover/file:text-indigo-600 transition-colors">Open</span>
-              </button>
-            ))}
-          </div>
+      {isPlanMessage && isLatest && onProceedPlan && (
+        <div className="flex justify-end px-1">
+          <button
+            type="button"
+            onClick={() => onProceedPlan(message.id)}
+            disabled={isGenerating}
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          >
+            Proceed to build
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="flex items-center gap-2 px-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 focus-within:opacity-100">
         <button
           onClick={() => handleCopy(message.content)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-gray-700"
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           {copiedId === message.id ? (
             <>
-              <Check className="w-3.5 h-3.5 text-green-400" />
+              <Check className="w-3 h-3 text-green-400" />
               <span>Copied</span>
             </>
           ) : (
             <>
-              <Copy className="w-3.5 h-3.5" />
+              <Copy className="w-3 h-3" />
               <span>Copy</span>
             </>
           )}
@@ -197,13 +118,13 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, isG
           <button
             onClick={() => onRegenerate(message.id)}
             disabled={isGenerating}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] text-gray-500 transition-all duration-200 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3 h-3" />
             <span>Regenerate</span>
           </button>
         )}
-        <span className="text-[10px] text-gray-400">
+        <span className="ml-auto text-[10px] text-muted-foreground">
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>

@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Copy, Download, FileCode2, FileText, FileJson, Code2, X, Braces } from 'lucide-react';
+import { Copy, Download, FileCode2, FileText, FileJson, Code2, X, Braces, Save, Check, Clock, Zap, FileCode } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { getFileType } from '@/services/fileSystem';
 
@@ -18,6 +18,7 @@ const FILE_ICONS: Record<string, typeof FileCode2> = {
   html: FileCode2,
   css: FileCode2,
   js: Braces,
+  ts: Code2,
   jsx: Code2,
   tsx: Code2,
   json: FileJson,
@@ -28,6 +29,7 @@ const FILE_COLORS: Record<string, string> = {
   html: 'text-orange-400',
   css: 'text-blue-400',
   js: 'text-yellow-400',
+  ts: 'text-blue-400',
   jsx: 'text-cyan-400',
   tsx: 'text-blue-400',
   json: 'text-green-400',
@@ -40,6 +42,7 @@ function getLanguage(path: string): string {
     html: 'html',
     css: 'css',
     js: 'javascript',
+    ts: 'typescript',
     json: 'json',
     jsx: 'javascript',
     tsx: 'typescript',
@@ -83,14 +86,28 @@ export function CodeEditor({
   readOnly = false,
 }: CodeEditorProps) {
   const [content, setContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showSnippets, setShowSnippets] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
+  const [lineCount, setLineCount] = useState(0);
+  const editorRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (activeFile) {
       setContent(activeFile.content);
+      setLastSaved(null);
     } else {
       setContent('');
     }
   }, [activeFile]);
+
+  useEffect(() => {
+    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+    const lines = content.split('\n').length;
+    setWordCount(words);
+    setLineCount(lines);
+  }, [content]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (!readOnly && value !== undefined && activeFile) {
@@ -100,9 +117,26 @@ export function CodeEditor({
 
   const handleSave = useCallback(() => {
     if (!readOnly && activeFile && content !== activeFile.content) {
+      setIsSaving(true);
       onUpdateFile(activeFile.path, content);
+      setLastSaved(new Date());
+      setTimeout(() => setIsSaving(false), 600);
     }
   }, [activeFile, content, onUpdateFile, readOnly]);
+
+  const handleFormat = useCallback(() => {
+    if (editorRef.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (editorRef.current as any).getAction('editor.action.formatDocument')?.run();
+    }
+  }, []);
+
+  const insertSnippet = useCallback((snippet: string) => {
+    if (!activeFile || readOnly) return;
+    const newContent = content + '\n' + snippet;
+    setContent(newContent);
+    setShowSnippets(false);
+  }, [activeFile, content, readOnly]);
 
   const handleCopy = useCallback(async () => {
     if (!activeFile) return;
@@ -127,6 +161,8 @@ export function CodeEditor({
     return () => clearTimeout(timer);
   }, [content, handleSave]);
 
+  const snippets = activeFile ? getSnippetsForFile(activeFile.path) : [];
+
   if (!activeFile) {
     return (
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col items-center justify-center bg-[#0D0D0F] p-6">
@@ -142,7 +178,8 @@ export function CodeEditor({
             {[
               { key: 'Ctrl+S', desc: 'Save changes' },
               { key: 'Ctrl+Z', desc: 'Undo' },
-              { key: 'Ctrl+Shift+F', desc: 'Format code' },
+              { key: 'Shift+Alt+F', desc: 'Format code' },
+              { key: 'Ctrl+Space', desc: 'Insert snippet' },
             ].map(({ key, desc }) => (
               <div key={key} className="flex items-center gap-3 text-xs">
                 <kbd className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 font-mono text-[10px] text-gray-400">
@@ -197,11 +234,68 @@ export function CodeEditor({
           })}
         </div>
         <div className="flex flex-shrink-0 items-center gap-1 pr-3">
+          {/* Auto-save indicator */}
+          <div className="flex items-center gap-1.5 mr-2">
+            {isSaving ? (
+              <span className="flex items-center gap-1 text-[10px] text-indigo-400">
+                <Clock className="h-3 w-3 animate-spin" />
+                Saving...
+              </span>
+            ) : lastSaved ? (
+              <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+                <Check className="h-3 w-3" />
+                Saved
+              </span>
+            ) : activeFile?.isModified ? (
+              <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                <Save className="h-3 w-3" />
+                Unsaved
+              </span>
+            ) : null}
+          </div>
+          {/* Snippet button */}
+          {!readOnly && snippets.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSnippets(!showSnippets)}
+                className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+                title="Insert snippet"
+              >
+                <FileCode className="h-3.5 w-3.5" />
+              </button>
+              {showSnippets && (
+                <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-white/[0.08] bg-[#1a1a1f] shadow-xl z-50">
+                  <div className="p-2 border-b border-white/[0.06]">
+                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Snippets</span>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {snippets.map((snippet, i) => (
+                      <button
+                        key={i}
+                        onClick={() => insertSnippet(snippet.code)}
+                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-white/[0.06] transition-colors"
+                      >
+                        <div className="font-medium">{snippet.label}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{snippet.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {readOnly && (
             <span className="rounded-md border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px] text-gray-600">
               Read-only
             </span>
           )}
+          <button
+            onClick={handleFormat}
+            className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
+            title="Format code (Shift+Alt+F)"
+          >
+            <Zap className="h-3.5 w-3.5" />
+          </button>
           <button
             onClick={handleCopy}
             className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-300"
@@ -250,13 +344,23 @@ export function CodeEditor({
             hideCursorInOverviewRuler: true,
             lineDecorationsWidth: 0,
             lineNumbersMinChars: 3,
+            formatOnPaste: true,
+            formatOnType: true,
           }}
           onMount={(editor) => {
-            editor.addCommand(
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (window as any).monaco?.KeyMod?.CtrlCmd | (window as any).monaco?.KeyCode?.KeyS,
-              () => handleSave()
-            );
+            editorRef.current = editor;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const monaco = (window as any).monaco;
+            if (monaco) {
+              editor.addCommand(
+                monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+                () => handleSave()
+              );
+              editor.addCommand(
+                monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF,
+                () => handleFormat()
+              );
+            }
           }}
         />
       </div>
@@ -266,9 +370,45 @@ export function CodeEditor({
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-gray-600">{getLanguage(activeFile.path).toUpperCase()}</span>
           <span className="text-[10px] text-gray-700">UTF-8</span>
+          <span className="text-[10px] text-gray-700">{lineCount} lines</span>
+          <span className="text-[10px] text-gray-700">{wordCount} words</span>
         </div>
         <Breadcrumb path={activeFile.path} />
       </div>
     </div>
   );
+}
+
+interface SnippetDef {
+  label: string;
+  description: string;
+  code: string;
+}
+
+function getSnippetsForFile(path: string): SnippetDef[] {
+  const ext = path.split('.').pop()?.toLowerCase();
+  const snippets: Record<string, SnippetDef[]> = {
+    html: [
+      { label: 'Navbar', description: 'Responsive navigation bar', code: '<nav class="navbar">\n  <div class="logo">Brand</div>\n  <ul class="nav-links">\n    <li><a href="#home">Home</a></li>\n    <li><a href="#about">About</a></li>\n    <li><a href="#contact">Contact</a></li>\n  </ul>\n</nav>' },
+      { label: 'Hero Section', description: 'Full-width hero with CTA', code: '<section class="hero">\n  <h1>Welcome to Our Site</h1>\n  <p>A brief description of what we offer.</p>\n  <a href="#cta" class="btn btn-primary">Get Started</a>\n</section>' },
+      { label: 'Card Grid', description: '3-column responsive card grid', code: '<div class="grid grid-3">\n  <div class="card">\n    <h3>Feature One</h3>\n    <p>Description of the feature.</p>\n  </div>\n  <div class="card">\n    <h3>Feature Two</h3>\n    <p>Description of the feature.</p>\n  </div>\n  <div class="card">\n    <h3>Feature Three</h3>\n    <p>Description of the feature.</p>\n  </div>\n</div>' },
+      { label: 'Contact Form', description: 'Form with name, email, message', code: '<form class="contact-form">\n  <input type="text" placeholder="Your Name" required>\n  <input type="email" placeholder="Your Email" required>\n  <textarea rows="5" placeholder="Your Message" required></textarea>\n  <button type="submit">Send Message</button>\n</form>' },
+      { label: 'Footer', description: 'Simple centered footer', code: '<footer>\n  <p>&copy; 2026 Your Company. All rights reserved.</p>\n</footer>' },
+    ],
+    css: [
+      { label: 'CSS Reset', description: 'Basic reset and box-sizing', code: '* {\n  margin: 0;\n  padding: 0;\n  box-sizing: border-box;\n}\n\nhtml {\n  scroll-behavior: smooth;\n}' },
+      { label: 'Flex Center', description: 'Flexbox centering utility', code: '.center {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}' },
+      { label: 'Grid Layout', description: 'Responsive grid with auto-fit', code: '.grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));\n  gap: 1.5rem;\n}' },
+      { label: 'Card Style', description: 'Card with hover effect', code: '.card {\n  background: #fff;\n  border: 1px solid #e5e7eb;\n  border-radius: 12px;\n  padding: 1.5rem;\n  transition: transform 0.2s, box-shadow 0.2s;\n}\n\n.card:hover {\n  transform: translateY(-2px);\n  box-shadow: 0 8px 24px rgba(0,0,0,0.08);\n}' },
+      { label: 'Button Styles', description: 'Primary and secondary buttons', code: '.btn {\n  display: inline-block;\n  padding: 0.75rem 1.5rem;\n  border-radius: 8px;\n  font-weight: 600;\n  text-decoration: none;\n  transition: background 0.2s;\n}\n\n.btn-primary {\n  background: #6366F1;\n  color: #fff;\n}\n\n.btn-primary:hover {\n  background: #4F46E5;\n}' },
+    ],
+    js: [
+      { label: 'DOM Ready', description: 'Wait for DOM to load', code: 'document.addEventListener(\'DOMContentLoaded\', () => {\n  console.log(\'DOM ready\');\n});' },
+      { label: 'Fetch API', description: 'Async fetch with error handling', code: 'async function fetchData(url) {\n  try {\n    const response = await fetch(url);\n    if (!response.ok) throw new Error(`HTTP ${response.status}`);\n    return await response.json();\n  } catch (error) {\n    console.error(\'Fetch failed:\', error);\n    return null;\n  }\n}' },
+      { label: 'Event Delegation', description: 'Efficient event handling', code: 'document.addEventListener(\'click\', (e) => {\n  const button = e.target.closest(\'.btn\');\n  if (button) {\n    console.log(\'Button clicked:\', button.textContent);\n  }\n});' },
+      { label: 'Scroll Animation', description: 'Intersection Observer for fade-in', code: 'const observer = new IntersectionObserver(\n  (entries) => {\n    entries.forEach(entry => {\n      if (entry.isIntersecting) {\n        entry.target.classList.add(\'visible\');\n        observer.unobserve(entry.target);\n      }\n    });\n  },\n  { threshold: 0.1 }\n);\n\ndocument.querySelectorAll(\'.fade-up\').forEach(el => observer.observe(el));' },
+      { label: 'Form Handler', description: 'Form submit with validation', code: 'document.querySelector(\'form\')?.addEventListener(\'submit\', async (e) => {\n  e.preventDefault();\n  const form = e.target;\n  const data = new FormData(form);\n  console.log(\'Form data:\', Object.fromEntries(data));\n  const notice = document.createElement(\'div\');\n  notice.textContent = \'Form submitted!\';\n  notice.style.cssText = \'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;padding:12px 16px;border-radius:12px;background:#111827;color:white;box-shadow:0 18px 50px rgba(0,0,0,.25);font-weight:700\';\n  document.body.appendChild(notice);\n  setTimeout(() => notice.remove(), 3000);\n  form.reset();\n});' },
+    ],
+  };
+  return snippets[ext || ''] || [];
 }

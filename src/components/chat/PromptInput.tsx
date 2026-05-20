@@ -1,17 +1,38 @@
 import { useState, useRef, useCallback } from 'react';
-import { ArrowRight, Mic, Plus, Send } from 'lucide-react';
+import { ChevronDown, ListChecks, Send, Square, Wand2 } from 'lucide-react';
+import type { ChatMode } from '@/types';
 
 interface PromptInputProps {
-  onSend: (content: string) => void;
+  onSend: (content: string, mode?: ChatMode) => void;
   disabled?: boolean;
   placeholder?: string;
+  onCancel?: () => void;
+  isGenerating?: boolean;
+  mode?: ChatMode;
+  onModeChange?: (mode: ChatMode) => void;
 }
 
-export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to create a prototype...' }: PromptInputProps) {
+const modeOptions: Array<{ value: ChatMode; label: string; hint: string; icon: typeof Wand2 }> = [
+  { value: 'build', label: 'Build', hint: 'Apply file changes', icon: Wand2 },
+  { value: 'plan', label: 'Plan', hint: 'Review approach first', icon: ListChecks },
+];
+
+export function PromptInput({
+  onSend,
+  disabled,
+  placeholder = 'Ask Joyful to create a prototype...',
+  onCancel,
+  isGenerating,
+  mode = 'build',
+  onModeChange,
+}: PromptInputProps) {
   const [input, setInput] = useState('');
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activeMode = modeOptions.find(option => option.value === mode) || modeOptions[0];
+  const ActiveIcon = activeMode.icon;
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
@@ -22,12 +43,13 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to cre
     if (disabled) return;
     setPromptHistory(prev => [trimmed, ...prev.slice(0, 49)]);
     setHistoryIndex(-1);
-    onSend(trimmed);
+    onSend(trimmed, mode);
     setInput('');
+    setModeMenuOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [input, disabled, onSend]);
+  }, [input, disabled, onSend, mode]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -67,8 +89,8 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to cre
   const charCount = input.length;
 
   return (
-    <div className="min-w-0 overflow-x-hidden border-t border-border bg-card px-4 py-4">
-      <div className="flex min-w-0 flex-col rounded-[1.45rem] border border-gray-200 bg-white p-3 text-left shadow-[0_18px_55px_rgba(15,23,42,0.12)] ring-1 ring-black/5 transition-all duration-200 focus-within:border-primary/40 dark:border-black/50 dark:bg-[#20211e] dark:shadow-[0_22px_70px_rgba(0,0,0,0.34)] dark:ring-white/10 dark:focus-within:border-white/20">
+    <div className="relative z-30 min-w-0 overflow-visible border-t border-border bg-background px-4 py-4">
+      <div className="relative flex min-w-0 flex-col overflow-visible rounded-2xl border border-border bg-card p-3 text-left shadow-sm transition-colors duration-200 focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
         <textarea
           ref={textareaRef}
           value={input}
@@ -78,46 +100,82 @@ export function PromptInput({ onSend, disabled, placeholder = 'Ask Joyful to cre
           rows={2}
           disabled={disabled}
           aria-label="Describe what you want Joyful to build"
-          className="min-h-16 max-h-[120px] resize-none bg-transparent px-3 pt-2 text-left text-sm font-medium leading-relaxed text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50 dark:text-[#f5f2ea] dark:placeholder:text-[#d8d3ca]/85"
+          className="min-h-16 max-h-[120px] resize-none bg-transparent px-2 pt-1 text-left text-sm font-medium leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
         <div className="flex items-center justify-between gap-3 pt-2">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => textareaRef.current?.focus()}
-              aria-label="Add context"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            <span className="text-[10px] text-muted-foreground">
+              {isGenerating ? 'Building...' : 'Press Ctrl+Enter to send'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
+            {isGenerating && onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
+              >
+                <Square className="h-3 w-3" />
+                Stop
+              </button>
+            ) : (
+              <div className="relative hidden overflow-visible sm:block">
+                <button
+                  type="button"
+                  onClick={() => setModeMenuOpen(prev => !prev)}
+                  disabled={disabled}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-haspopup="menu"
+                  aria-expanded={modeMenuOpen}
+                >
+                  <ActiveIcon className="h-3.5 w-3.5 text-primary" />
+                  {activeMode.label}
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+                {modeMenuOpen && (
+                  <div className="absolute bottom-full right-0 z-[100] mb-2 w-56 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-2xl shadow-black/30">
+                    {modeOptions.map((option) => {
+                      const Icon = option.icon;
+                      const selected = option.value === mode;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            onModeChange?.(option.value);
+                            setModeMenuOpen(false);
+                          }}
+                          className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                            selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                          }`}
+                        >
+                          <Icon className="mt-0.5 h-3.5 w-3.5 text-primary" />
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold">{option.label}</span>
+                            <span className="block text-[10px] leading-snug text-muted-foreground">{option.hint}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={handleSend}
               disabled={disabled}
-              className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-950 disabled:cursor-not-allowed disabled:opacity-40 sm:flex dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
+              aria-label={mode === 'plan' ? 'Create implementation plan' : 'Start building'}
+              className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
+                isGenerating
+                  ? 'bg-red-500 shadow-red-500/20 hover:scale-105'
+                  : 'bg-primary shadow-primary/20 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100'
+              } text-primary-foreground`}
             >
-              Build <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Voice prompt"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
-            >
-              <Mic className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={disabled}
-              aria-label="Start building"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 dark:bg-white/5 dark:text-white dark:shadow-none"
-            >
-              <Send className="h-4 w-4" />
+              {isGenerating ? <Square className="h-3.5 w-3.5" /> : <Send className="h-4 w-4" />}
             </button>
             {charCount > 0 && (
-              <span className={`hidden text-[10px] sm:inline ${charCount > 500 ? 'text-orange-500 dark:text-orange-300' : 'text-gray-400 dark:text-[#aaa69d]'}`}>
+              <span className={`hidden text-[10px] sm:inline ${charCount > 500 ? 'text-orange-500' : 'text-muted-foreground'}`}>
                 {charCount}
               </span>
             )}

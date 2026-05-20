@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Trash2, ChevronDown, Copy, Check, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import type { ChatMessage } from '@/types';
 
 interface ChatSidebarProps {
@@ -13,6 +14,7 @@ interface ChatSidebarProps {
 export function ChatSidebar({ messages, isGenerating, onClearHistory, onToggleSidebar, isSidebarOpen = true }: ChatSidebarProps) {
   const [expandedMessageId, setExpandedMessageId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleCopy = async (content: string, messageId: string) => {
     try {
@@ -25,9 +27,7 @@ export function ChatSidebar({ messages, isGenerating, onClearHistory, onToggleSi
   };
 
   const handleClearHistory = () => {
-    if (window.confirm('Are you sure you want to clear chat history?')) {
-      onClearHistory?.();
-    }
+    setShowClearConfirm(true);
   };
 
   const conversationStarters = [
@@ -179,6 +179,18 @@ export function ChatSidebar({ messages, isGenerating, onClearHistory, onToggleSi
           {messages.length} message{messages.length !== 1 ? 's' : ''}
         </p>
       </div>
+      <SiteConfirmDialog
+        open={showClearConfirm}
+        title="Clear chat history?"
+        description="This removes the current conversation history from the builder."
+        confirmLabel="Clear"
+        destructive
+        onOpenChange={setShowClearConfirm}
+        onConfirm={() => {
+          onClearHistory?.();
+          setShowClearConfirm(false);
+        }}
+      />
     </div>
   );
 }

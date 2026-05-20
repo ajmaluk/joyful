@@ -1,17 +1,17 @@
 import { motion } from 'framer-motion';
-import { Wand2, Layout, Code2, Palette, Smartphone, Search, Zap, Globe } from 'lucide-react';
+import { Wand2, Layout, Code2, Palette, Smartphone, Search, Zap, Globe, FileCode, Bug, Layers, Sparkles } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 
 interface Suggestion {
   label: string;
   prompt: string;
   icon: React.ReactNode;
-  category: 'start' | 'improve' | 'style' | 'feature';
+  category: 'start' | 'improve' | 'style' | 'feature' | 'fix' | 'optimize';
 }
 
 interface SmartSuggestionsProps {
   files: ProjectFile[];
-  nextSteps?: string[];
+  activeFile?: ProjectFile | null;
   onSelect: (prompt: string) => void;
   disabled?: boolean;
 }
@@ -32,35 +32,127 @@ const fileBasedSuggestions: Suggestion[] = [
   { label: 'Pricing', prompt: 'Add a pricing section with comparison cards', icon: <Layout className="h-4 w-4" />, category: 'feature' },
 ];
 
-export function SmartSuggestions({ files, nextSteps, onSelect, disabled }: SmartSuggestionsProps) {
-  const hasFiles = files.length > 0;
-  const baseSuggestions = hasFiles ? fileBasedSuggestions : emptySuggestions;
+const categoryIcons: Record<string, React.ReactNode> = {
+  fix: <Bug className="h-3 w-3" />,
+  optimize: <Layers className="h-3 w-3" />,
+  style: <Palette className="h-3 w-3" />,
+  feature: <Sparkles className="h-3 w-3" />,
+  improve: <Zap className="h-3 w-3" />,
+};
 
-  const suggestions: Suggestion[] = [];
+function analyzeFileContext(files: ProjectFile[], activeFile?: ProjectFile | null): { hasHTML: boolean; hasCSS: boolean; hasJS: boolean; fileCount: number; activeFileType: string | null; contentHints: string[] } {
+  const hasHTML = files.some(f => f.path.endsWith('.html'));
+  const hasCSS = files.some(f => f.path.endsWith('.css'));
+  const hasJS = files.some(f => f.path.endsWith('.js'));
+  const contentHints: string[] = [];
 
-  if (nextSteps && nextSteps.length > 0) {
-    nextSteps.slice(0, 3).forEach((step) => {
-      suggestions.push({
-        label: step.length > 30 ? step.slice(0, 30) + '...' : step,
-        prompt: step,
-        icon: <Wand2 className="h-4 w-4" />,
-        category: 'improve',
-      });
-    });
+  if (hasHTML) {
+    const htmlContent = files.find(f => f.path.endsWith('.html'))?.content || '';
+    if (!htmlContent.includes('id="pricing"')) contentHints.push('no-pricing');
+    if (!htmlContent.includes('id="contact"')) contentHints.push('no-contact');
+    if (!htmlContent.includes('id="faq"')) contentHints.push('no-faq');
+    if (!htmlContent.includes('id="team"')) contentHints.push('no-team');
+    if (!htmlContent.includes('id="gallery"')) contentHints.push('no-gallery');
+    if (!htmlContent.includes('id="testimonials"')) contentHints.push('no-testimonials');
+    if (!htmlContent.includes('class="fade-up"')) contentHints.push('no-animations');
+    if (!htmlContent.includes('@media')) contentHints.push('no-responsive');
   }
 
-  const usedLabels = new Set(suggestions.map(s => s.label.toLowerCase()));
-  for (const suggestion of baseSuggestions) {
-    if (suggestions.length >= 4) break;
+  if (hasCSS) {
+    const cssContent = files.find(f => f.path.endsWith('.css'))?.content || '';
+    if (!cssContent.includes('dark') && !cssContent.includes('#0F172A')) contentHints.push('no-dark-mode');
+    if (!cssContent.includes('@keyframes')) contentHints.push('no-keyframes');
+  }
+
+  return {
+    hasHTML,
+    hasCSS,
+    hasJS,
+    fileCount: files.length,
+    activeFileType: activeFile ? activeFile.path.split('.').pop() || null : null,
+    contentHints,
+  };
+}
+
+function getContextualSuggestions(context: ReturnType<typeof analyzeFileContext>): Suggestion[] {
+  const suggestions: Suggestion[] = [];
+
+  if (context.contentHints.includes('no-pricing')) {
+    suggestions.push({ label: 'Add Pricing', prompt: 'Add a pricing section with 3-tier comparison cards', icon: <Layout className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-contact')) {
+    suggestions.push({ label: 'Contact Form', prompt: 'Add a contact form section with validation', icon: <Wand2 className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-faq')) {
+    suggestions.push({ label: 'FAQ Section', prompt: 'Add an interactive FAQ accordion section', icon: <Search className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-team')) {
+    suggestions.push({ label: 'Team Section', prompt: 'Add a team section with member cards and avatars', icon: <Layout className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-gallery')) {
+    suggestions.push({ label: 'Gallery', prompt: 'Add an image gallery with hover overlays', icon: <Palette className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-testimonials')) {
+    suggestions.push({ label: 'Testimonials', prompt: 'Add a testimonials section with customer quotes', icon: <Sparkles className="h-4 w-4" />, category: 'feature' });
+  }
+  if (context.contentHints.includes('no-animations')) {
+    suggestions.push({ label: 'Animations', prompt: 'Add scroll-triggered fade-up animations to all sections', icon: <Zap className="h-4 w-4" />, category: 'style' });
+  }
+  if (context.contentHints.includes('no-responsive')) {
+    suggestions.push({ label: 'Responsive', prompt: 'Make the layout fully responsive for mobile and tablet', icon: <Smartphone className="h-4 w-4" />, category: 'improve' });
+  }
+  if (context.contentHints.includes('no-dark-mode')) {
+    suggestions.push({ label: 'Dark Mode', prompt: 'Convert the site to a sleek dark mode theme', icon: <Palette className="h-4 w-4" />, category: 'style' });
+  }
+
+  if (context.activeFileType === 'js') {
+    suggestions.push({ label: 'Add Fetch', prompt: 'Add a fetch API call with error handling', icon: <Code2 className="h-4 w-4" />, category: 'feature' });
+    suggestions.push({ label: 'Form Handler', prompt: 'Add form submission handler with validation', icon: <FileCode className="h-4 w-4" />, category: 'feature' });
+  }
+
+  if (context.activeFileType === 'css') {
+    suggestions.push({ label: 'Better Typography', prompt: 'Improve typography with better font sizes and line heights', icon: <Palette className="h-4 w-4" />, category: 'style' });
+    suggestions.push({ label: 'Hover Effects', prompt: 'Add smooth hover effects to buttons and cards', icon: <Zap className="h-4 w-4" />, category: 'style' });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({ label: 'Premium Polish', prompt: 'Make it look more premium with better spacing and micro-interactions', icon: <Sparkles className="h-4 w-4" />, category: 'style' });
+    suggestions.push({ label: 'SEO Boost', prompt: 'Improve SEO with better meta tags and semantic HTML', icon: <Search className="h-4 w-4" />, category: 'improve' });
+  }
+
+  return suggestions.slice(0, 6);
+}
+
+export function SmartSuggestions({ files, activeFile, onSelect, disabled }: SmartSuggestionsProps) {
+  const hasFiles = files.length > 0;
+  const context = analyzeFileContext(files, activeFile);
+  const contextualSuggestions = hasFiles ? getContextualSuggestions(context) : [];
+
+  const suggestions: Suggestion[] = [];
+  const usedLabels = new Set<string>();
+  for (const suggestion of contextualSuggestions) {
+    if (suggestions.length >= 5) break;
     if (!usedLabels.has(suggestion.label.toLowerCase())) {
       suggestions.push(suggestion);
+      usedLabels.add(suggestion.label.toLowerCase());
+    }
+  }
+
+  if (suggestions.length < 3) {
+    const baseSuggestions = hasFiles ? fileBasedSuggestions : emptySuggestions;
+    for (const suggestion of baseSuggestions) {
+      if (suggestions.length >= 5) break;
+      if (!usedLabels.has(suggestion.label.toLowerCase())) {
+        suggestions.push(suggestion);
+        usedLabels.add(suggestion.label.toLowerCase());
+      }
     }
   }
 
   return (
     <div className="min-w-0 space-y-2 overflow-x-hidden">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {nextSteps && nextSteps.length > 0 ? 'Suggested next steps' : hasFiles ? 'Quick actions' : 'Get started'}
+        {hasFiles ? 'Quick actions' : 'Get started'}
       </p>
       <div className="relative">
         <div className="flex gap-2 overflow-x-auto pb-1 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -78,9 +170,14 @@ export function SmartSuggestions({ files, nextSteps, onSelect, disabled }: Smart
               {item.icon}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-foreground transition-colors group-hover:text-primary">
-                {item.label}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-medium text-foreground transition-colors group-hover:text-primary">
+                  {item.label}
+                </p>
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground capitalize">
+                  {categoryIcons[item.category]}
+                </span>
+              </div>
               <p className="truncate text-[11px] text-muted-foreground">{item.prompt}</p>
             </div>
           </motion.button>

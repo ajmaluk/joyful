@@ -15,7 +15,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/useToast';
 import { useCallback, useEffect, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { UserSettings } from '@/types';
+import type { ChatMode, UserSettings } from '@/types';
 import * as storage from '@/services/storage';
 import { SitePage } from '@/pages/SitePage';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
@@ -87,7 +87,7 @@ function AppLayout() {
     return project;
   };
 
-  const handleStartProject = useCallback((prompt: string) => {
+  const handleStartProject = useCallback((prompt: string, mode: ChatMode = 'build') => {
     const trimmedPrompt = prompt.trim();
 
     if (!isAuthed) {
@@ -99,7 +99,12 @@ function AppLayout() {
 
     if (!trimmedPrompt) {
       const emptyProject = [...projects]
-        .filter((project) => project.status === 'draft' && project.files.length === 0 && storage.getChatHistory(project.id).length === 0)
+        .filter((project) => {
+          const hasNoChat = storage.getChatHistory(project.id).length === 0;
+          const isLegacyEmpty = project.files.length === 0;
+          const isFreshStarter = project.description === 'Fresh blank project';
+          return project.status === 'draft' && hasNoChat && (isLegacyEmpty || isFreshStarter);
+        })
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
 
       if (emptyProject) {
@@ -119,7 +124,7 @@ function AppLayout() {
       .replace(/[.,;:!?-]+$/g, '')
       .trim();
     const project = createProject(cleanName || 'New Joyful project', trimmedPrompt);
-    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmedPrompt } });
+    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmedPrompt, initialMode: mode } });
     addToast('success', `Created project "${project.name}"`);
   }, [addToast, createProject, isAuthed, navigate, projects]);
 

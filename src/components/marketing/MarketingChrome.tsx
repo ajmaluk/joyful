@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
-import { ArrowRight, Github, Mail, Mic, Plus, Send, Twitter, Heart, Zap } from 'lucide-react';
+import { ChevronDown, Github, ListChecks, Mail, Mic, Plus, Send, Twitter, Heart, Wand2, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { marketingFooterLinks, marketingFooterRoutes } from '@/components/marketing/marketingRoutes';
+import type { ChatMode } from '@/types';
 
 const promptExamples = [
   "Landing page for a SaaS startup",
@@ -15,7 +16,7 @@ let currentExample = 0;
 
 interface PromptBoxProps {
   compact?: boolean;
-  onSubmit?: (prompt: string) => void;
+  onSubmit?: (prompt: string, mode?: ChatMode) => void;
 }
 
 export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
@@ -23,6 +24,8 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState('');
   const [placeholder, setPlaceholder] = useState(promptExamples[0]);
+  const [mode, setMode] = useState<ChatMode>('build');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
 
   useEffect(() => {
     if (compact) return;
@@ -36,10 +39,11 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   const handleSubmit = () => {
     const trimmedPrompt = prompt.trim();
     if (onSubmit) {
-      onSubmit(trimmedPrompt);
+      onSubmit(trimmedPrompt, mode);
     } else {
-      navigate('/builder', { state: { prompt: trimmedPrompt } });
+      navigate('/builder', { state: { prompt: trimmedPrompt, initialMode: mode } });
     }
+    setModeMenuOpen(false);
   };
 
   const handleInput = () => {
@@ -83,13 +87,51 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="hidden items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 sm:flex dark:text-[#aaa69d] dark:hover:bg-white/5 dark:hover:text-white"
-            >
-              Build <ArrowRight className="h-3.5 w-3.5" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setModeMenuOpen(prev => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:text-[#f5f2ea] dark:hover:bg-white/10"
+                aria-haspopup="menu"
+                aria-expanded={modeMenuOpen}
+              >
+                {mode === 'plan' ? <ListChecks className="h-3.5 w-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
+                {mode === 'plan' ? 'Plan' : 'Build'}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </button>
+              {modeMenuOpen && (
+                <div className="absolute bottom-full right-0 z-20 mb-2 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-[#20211e]">
+                  {([
+                    { value: 'build' as const, label: 'Build', hint: 'Create files', icon: Wand2 },
+                    { value: 'plan' as const, label: 'Plan', hint: 'Review first', icon: ListChecks },
+                  ]).map((option) => {
+                    const Icon = option.icon;
+                    const selected = mode === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setMode(option.value);
+                          setModeMenuOpen(false);
+                        }}
+                        className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                          selected
+                            ? 'bg-[#2f5bff]/10 text-gray-950 dark:text-white'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white'
+                        }`}
+                      >
+                        <Icon className="mt-0.5 h-3.5 w-3.5 text-[#2f5bff]" />
+                        <span>
+                          <span className="block text-xs font-semibold">{option.label}</span>
+                          <span className="block text-[10px] leading-snug opacity-70">{option.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               aria-label="Voice prompt"

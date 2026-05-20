@@ -7,10 +7,12 @@ import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { Project, ProjectFile } from '@/types';
+import type { Project, ProjectFile, ChatMode } from '@/types';
 import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
+import { generateWithAI } from '@/services/aiService';
+import type { Template } from '@/components/chat/TemplateSelector';
 import {
   ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles
 } from 'lucide-react';
@@ -27,6 +29,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const { toasts, addToast, removeToast } = useToast();
   const { user } = useAuth();
   const initialPromptRef = useRef<string | null>((location.state as { initialPrompt?: string } | null)?.initialPrompt?.trim() || null);
+  const initialModeRef = useRef<ChatMode>((location.state as { initialMode?: ChatMode } | null)?.initialMode || 'build');
   const hasSubmittedInitialPrompt = useRef(false);
 
   // Get or create project
@@ -41,7 +44,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { messages, isGenerating, generationStep, sendMessage, clearMessages } = useChat(projectId || 'default');
+  const { messages, isGenerating, buildTodos, sendMessage, clearMessages, abortGeneration } = useChat(projectId || 'default');
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -86,8 +89,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }, [project, onUpdateProject]);
 
   // Handle AI message
-  const handleSendMessage = useCallback(async (content: string) => {
-    const response = await sendMessage(content, files);
+  const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build') => {
+    const response = await sendMessage(content, files, mode);
     if (response) {
       const newFiles = [...files];
       for (const file of response.files) {
@@ -135,7 +138,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     const prompt = initialPromptRef.current;
     initialPromptRef.current = null;
     navigate(location.pathname, { replace: true, state: null });
-    void handleSendMessage(prompt);
+    const mode = initialModeRef.current;
+    initialModeRef.current = 'build';
+    void handleSendMessage(prompt, mode);
   }, [project, handleSendMessage, navigate, location.pathname]);
 
   // Open file in editor
@@ -246,6 +251,26 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     addToast('success', `Renamed ${oldPath} to ${cleanPath}`);
   }, [files, selectedFile, persistFiles, addToast]);
 
+  // Duplicate file
+  const handleDuplicateFile = useCallback((path: string) => {
+    const ext = path.includes('.') ? '.' + path.split('.').pop() : '';
+    const base = path.replace(ext, '');
+    let newPath = `${base}-copy${ext}`;
+    let counter = 1;
+    while (files.some(f => f.path === newPath)) {
+      newPath = `${base}-copy-${counter}${ext}`;
+      counter++;
+    }
+    const original = files.find(f => f.path === path);
+    if (!original) return;
+    setFiles(prev => {
+      const next = [...prev, { ...original, path: newPath, isModified: false }];
+      persistFiles(next);
+      return next;
+    });
+    addToast('success', `Duplicated ${path} to ${newPath}`);
+  }, [files, persistFiles, addToast]);
+
   // Open file from chat
   const handleOpenFileFromChat = useCallback((path: string) => {
     const file = files.find(f => f.path === path);
@@ -259,7 +284,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       // Find the user message before this assistant message
       for (let i = messageIndex - 1; i >= 0; i--) {
         if (messages[i].role === 'user') {
-          handleSendMessage(messages[i].content);
+          handleSendMessage(messages[i].content, 'build');
           break;
         }
       }
@@ -276,6 +301,40 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       addToast('error', 'Failed to export project');
     }
   }, [project, addToast]);
+
+  // Handle template selection
+  const handleSelectTemplate = useCallback(async (template: Template) => {
+    if (!project || isGenerating) return;
+    
+    addToast('info', `Building ${template.name} template...`);
+    
+    try {
+      const response = await generateWithAI(template.prompt, []);
+      const newFiles: ProjectFile[] = response.files
+        .filter((file) => file.action !== 'delete' && file.content !== undefined)
+        .map((file, index) => ({
+          id: `file_${Date.now()}_${index}_${file.path}`,
+          path: file.path,
+          content: file.content || '',
+          type: getFileType(file.path),
+        }));
+      
+      setFiles(newFiles);
+      persistFiles(newFiles);
+      
+      // Set the first file as selected
+      const firstFile = newFiles.find(f => f.path === 'index.html') || newFiles[0];
+      if (firstFile) {
+        setSelectedFile(firstFile);
+        setOpenFiles([firstFile]);
+      }
+      
+      setViewMode('preview');
+      addToast('success', `${template.name} template loaded! Customize it with AI.`);
+    } catch {
+      addToast('error', 'Failed to load template. Please try again.');
+    }
+  }, [project, isGenerating, addToast, persistFiles]);
 
   if (!project) {
     return (
@@ -330,6 +389,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             onCreateFile={handleCreateFile}
             onDeleteFile={handleDeleteFile}
             onRenameFile={handleRenameFile}
+            onDuplicateFile={handleDuplicateFile}
           />
         </aside>
 
@@ -422,7 +482,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                   <div className="p-1.5">
                     <button
                       type="button"
-                      onClick={() => { setProfileOpen(false); navigate('/settings'); }}
+                      onClick={() => { setProfileOpen(false); navigate('/settings', { state: { from: location.pathname } }); }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-popover-foreground transition-colors hover:bg-accent"
                     >
                       <Settings className="h-4 w-4 text-muted-foreground" /> Settings
@@ -467,32 +527,20 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         </section>
 
         <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-gray-200/70 bg-white/72 backdrop-blur-xl dark:border-border/60 dark:bg-card/80 xl:w-[400px]`}>
-          <div className="flex h-12 flex-shrink-0 items-center justify-between border-b border-gray-200/70 bg-white/62 px-4 backdrop-blur-sm dark:border-border/60 dark:bg-card/50">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 shadow-md shadow-pink-500/20">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
-              <span className="truncate text-sm font-semibold text-foreground">AI Chat</span>
-            </div>
-            <button
-              onClick={() => setShowChatSidebar(false)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent hover:text-foreground"
-              title="Close chat sidebar"
-              aria-label="Close chat sidebar"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
           <div className="min-h-0 flex-1 overflow-hidden">
             <ChatPanel
               messages={messages}
               isGenerating={isGenerating}
+              buildTodos={buildTodos}
               files={files}
+              activeFile={selectedFile}
               onSendMessage={handleSendMessage}
               onOpenFile={handleOpenFileFromChat}
               onRegenerateMessage={handleRegenerateMessage}
               onClearMessages={clearMessages}
-              generationStep={generationStep}
+              onAbortGeneration={abortGeneration}
+              onSelectTemplate={handleSelectTemplate}
+              onCloseSidebar={() => setShowChatSidebar(false)}
             />
           </div>
         </aside>
@@ -542,12 +590,15 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 <ChatPanel
                   messages={messages}
                   isGenerating={isGenerating}
+                  buildTodos={buildTodos}
                   files={files}
+                  activeFile={selectedFile}
                   onSendMessage={handleSendMessage}
                   onOpenFile={handleOpenFileFromChat}
                   onRegenerateMessage={handleRegenerateMessage}
                   onClearMessages={clearMessages}
-                  generationStep={generationStep}
+                  onAbortGeneration={abortGeneration}
+                  onSelectTemplate={handleSelectTemplate}
                 />
               </div>
             </div>

@@ -2,10 +2,12 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
+  ChevronDown,
   Clock,
   Download,
   Eye,
   Grid3X3,
+  ListChecks,
   Mic,
   Pencil,
   Plus,
@@ -16,14 +18,15 @@ import {
   Wand2,
 } from 'lucide-react';
 import { NewProjectModal } from '@/components/modals/NewProjectModal';
+import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import { exportProjectAsZip, generatePreview } from '@/services/fileSystem';
-import type { Project } from '@/types';
+import type { ChatMode, Project } from '@/types';
 
 interface DashboardPageProps {
   projects: Project[];
   onCreateProject: (name: string, description: string) => Project;
   onDeleteProject: (id: string) => void;
-  onStartProject?: (prompt: string) => void;
+  onStartProject?: (prompt: string, mode?: ChatMode) => void;
 }
 
 const tabs = ['My projects', 'Recently viewed', 'Templates'] as const;
@@ -37,8 +40,11 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [search, setSearch] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [promptMode, setPromptMode] = useState<ChatMode>('build');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('My projects');
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const sortedProjects = useMemo(
     () => [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -71,7 +77,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   const handlePromptSubmit = () => {
     const trimmed = prompt.trim();
     if (onStartProject) {
-      onStartProject(trimmed);
+      onStartProject(trimmed, promptMode);
       return;
     }
     if (!trimmed) {
@@ -79,7 +85,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
       return;
     }
     const project = onCreateProject(trimmed.slice(0, 54), trimmed);
-    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmed } });
+    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmed, initialMode: promptMode } });
   };
 
   const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -90,9 +96,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   };
 
   const handleDeleteProject = (project: Project) => {
-    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
-      onDeleteProject(project.id);
-    }
+    setProjectToDelete(project);
   };
 
   const handleExportProject = async (project: Project) => {
@@ -102,31 +106,31 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
   return (
     <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
-      <section className="relative isolate overflow-hidden px-4 py-12 sm:px-6 sm:py-14 lg:px-10">
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#171816_0%,#253f6d_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(15,16,15,0.86)_0%,rgba(15,16,15,0.12)_48%,rgba(15,16,15,0)_100%)]" />
+      <section className="relative isolate overflow-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#edf1ff_26%,#7890ff_50%,#d76cd1_69%,#f34f78_84%,#ff7748_100%)] dark:bg-[linear-gradient(180deg,#111214_0%,#1d2d50_28%,#586fe4_52%,#b656b7_70%,#d83e69_86%,#e9643d_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.88)_24%,rgba(255,255,255,0.26)_48%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.09),transparent_40%),linear-gradient(180deg,rgba(12,13,15,0.88)_0%,rgba(12,13,15,0.2)_45%,rgba(12,13,15,0)_100%)]" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center justify-center py-8 text-center sm:min-h-[48vh]">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center py-4 text-center sm:min-h-[38vh] sm:py-6">
           <button
             type="button"
             onClick={() => navigate('/docs')}
-            className="mb-7 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/85 p-1 pr-4 text-sm font-semibold text-gray-900 shadow-xl shadow-indigo-950/10 backdrop-blur transition-colors hover:border-gray-300 dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:shadow-xl dark:hover:border-white/20"
+            className="mb-5 inline-flex max-w-full items-center gap-2 rounded-full border border-gray-200 bg-white/85 p-1 pr-3 text-sm font-semibold text-gray-900 shadow-lg shadow-indigo-950/10 backdrop-blur transition-colors hover:border-gray-300 dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:hover:border-white/20"
           >
-            <span className="rounded-full bg-[#2f5bff] px-3 py-1 text-xs">New</span>
+            <span className="rounded-full bg-[#2f5bff] px-2.5 py-0.5 text-xs text-white">New</span>
             <span className="truncate">Workspace skills - create your first skill</span>
             <ArrowRight className="h-4 w-4 flex-none" />
           </button>
 
-          <h1 className="text-balance text-4xl font-bold tracking-normal text-gray-950 sm:text-5xl dark:text-white">
+          <h1 className="text-balance text-3xl font-bold tracking-normal text-gray-950 sm:text-4xl lg:text-5xl dark:text-white">
             What do you want to build?
           </h1>
-          <p className="mt-2 text-lg font-medium text-gray-700 dark:text-white/60">Describe your idea and watch it come to life</p>
+          <p className="mt-2 text-base font-medium text-gray-700 sm:text-lg dark:text-white/60">Describe your idea and watch it come to life</p>
 
-          <div className="mt-9 w-full max-w-4xl rounded-[1.45rem] border border-gray-200 bg-white p-3 text-left shadow-[0_28px_90px_rgba(15,23,42,0.16)] ring-1 ring-black/5 dark:border-black/50 dark:bg-[#20211e] dark:shadow-[0_28px_90px_rgba(0,0,0,0.36)] dark:ring-white/10">
+          <div className="mt-7 w-full max-w-3xl rounded-2xl border border-gray-200 bg-white/95 p-2.5 text-left shadow-[0_18px_60px_rgba(15,23,42,0.14)] ring-1 ring-black/5 backdrop-blur dark:border-white/10 dark:bg-[#1d1e22]/95 dark:shadow-[0_18px_60px_rgba(0,0,0,0.34)] dark:ring-white/10">
             <textarea
               ref={textareaRef}
               value={prompt}
-              rows={4}
+              rows={3}
               onChange={(event) => {
                 setPrompt(event.target.value);
                 handlePromptInput();
@@ -134,30 +138,68 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               onInput={handlePromptInput}
               onKeyDown={handlePromptKeyDown}
               placeholder="Ask Joyful to create a prototype..."
-              className="block min-h-24 max-h-[180px] w-full resize-none bg-transparent px-3 pt-3 text-left text-lg font-medium text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#f5f2ea] dark:placeholder:text-[#d8d3ca]/75"
+              className="block min-h-16 max-h-32 w-full resize-none bg-transparent px-3 pt-2.5 text-left text-base font-medium leading-6 text-gray-900 outline-none placeholder:text-gray-400 dark:text-[#f5f2ea] dark:placeholder:text-[#d8d3ca]/70"
               aria-label="Describe what you want Joyful to build"
             />
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex items-center justify-between gap-3 pt-1.5">
               <button
                 type="button"
                 onClick={() => navigate('/templates')}
                 aria-label="Create project"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white"
               >
                 <Plus className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handlePromptSubmit}
-                  className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-950 sm:flex dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  Build <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setModeMenuOpen(prev => !prev)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:text-[#f5f2ea] dark:hover:bg-white/10"
+                    aria-haspopup="menu"
+                    aria-expanded={modeMenuOpen}
+                  >
+                    {promptMode === 'plan' ? <ListChecks className="h-3.5 w-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
+                    {promptMode === 'plan' ? 'Plan' : 'Build'}
+                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                  </button>
+                  {modeMenuOpen && (
+                    <div className="absolute bottom-full right-0 z-20 mb-2 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-[#20211e]">
+                      {([
+                        { value: 'build' as const, label: 'Build', hint: 'Create and edit files', icon: Wand2 },
+                        { value: 'plan' as const, label: 'Plan', hint: 'Get an implementation plan first', icon: ListChecks },
+                      ]).map((option) => {
+                        const Icon = option.icon;
+                        const selected = promptMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setPromptMode(option.value);
+                              setModeMenuOpen(false);
+                            }}
+                            className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                              selected
+                                ? 'bg-[#2f5bff]/10 text-gray-950 dark:text-white'
+                                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white'
+                            }`}
+                          >
+                            <Icon className="mt-0.5 h-3.5 w-3.5 text-[#2f5bff]" />
+                            <span>
+                              <span className="block text-xs font-semibold">{option.label}</span>
+                              <span className="block text-[10px] leading-snug opacity-70">{option.hint}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   aria-label="Voice prompt"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/5 dark:hover:text-white"
                 >
                   <Mic className="h-4 w-4" />
                 </button>
@@ -165,7 +207,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                   type="button"
                   onClick={handlePromptSubmit}
                   aria-label="Start building"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-105 dark:bg-[#f5f2ea] dark:bg-none dark:text-[#171816] dark:shadow-none"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -175,8 +217,8 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         </div>
       </section>
 
-      <section className="relative z-10 bg-transparent px-4 py-8 sm:px-6 lg:px-10">
-        <div className="mx-auto w-full max-w-none rounded-lg border border-gray-200 bg-white p-4 shadow-[0_30px_90px_rgba(15,23,42,0.08)] sm:p-6 dark:border-white/10 dark:bg-[#17120f] dark:shadow-[0_30px_90px_rgba(0,0,0,0.36)]">
+      <section className="relative z-10 bg-transparent px-4 py-5 sm:px-6 lg:px-10">
+        <div className="mx-auto w-full max-w-7xl rounded-lg border border-gray-200 bg-white/96 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.1)] backdrop-blur sm:p-5 dark:border-white/10 dark:bg-[#18191d]/96 dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
               {tabs.map((tab) => (
@@ -219,14 +261,14 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {[
               { label: 'Projects', value: projects.length },
               { label: 'Files', value: totalFiles },
               { label: 'Drafts', value: projects.filter((project) => project.status === 'draft').length },
             ].map((stat) => (
-              <div key={stat.label} className="group rounded-lg border border-gray-200 bg-gray-50 p-4 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
-                <div className="text-2xl font-bold text-gray-950 transition-colors duration-300 group-hover:text-[#2f5bff] dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
+              <div key={stat.label} className="group rounded-lg border border-gray-200 bg-gray-50 p-3.5 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
+                <div className="text-xl font-bold text-gray-950 transition-colors duration-300 group-hover:text-[#2f5bff] dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
                 <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-gray-500 dark:text-[#aaa69d]">{stat.label}</div>
               </div>
             ))}
@@ -266,11 +308,11 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Try a different search term.</p>
             </div>
           ) : (
-            <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleProjects.map((project) => (
                 <article
                   key={project.id}
-                  className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 hover:shadow-[0_16px_50px_rgba(15,23,42,0.14)] dark:border-white/8 dark:bg-[#211f1b] dark:hover:border-white/18 dark:hover:shadow-[0_16px_50px_rgba(0,0,0,0.4)]"
+                  className="group relative overflow-hidden rounded-lg border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_14px_38px_rgba(15,23,42,0.14)] dark:border-white/8 dark:bg-[#1d1e22] dark:hover:border-white/18 dark:hover:shadow-[0_14px_38px_rgba(0,0,0,0.38)]"
                 >
                   <button
                     type="button"
@@ -298,7 +340,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                     </div>
                   </button>
 
-                  <div className="p-4">
+                  <div className="p-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <h3 className="truncate text-base font-bold text-gray-950 dark:text-white">{project.name}</h3>
@@ -375,6 +417,25 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         isOpen={showNewProject}
         onClose={() => setShowNewProject(false)}
         onCreate={handleCreateProject}
+      />
+      <SiteConfirmDialog
+        open={Boolean(projectToDelete)}
+        title="Delete project?"
+        description={
+          projectToDelete
+            ? `Delete "${projectToDelete.name}"? This cannot be undone.`
+            : 'This project will be permanently deleted.'
+        }
+        confirmLabel="Delete"
+        destructive
+        onOpenChange={(open) => {
+          if (!open) setProjectToDelete(null);
+        }}
+        onConfirm={() => {
+          if (!projectToDelete) return;
+          onDeleteProject(projectToDelete.id);
+          setProjectToDelete(null);
+        }}
       />
     </div>
   );

@@ -1,8 +1,10 @@
-import type { Project, UserSettings, ChatMessage } from '@/types';
+import type { Project, UserSettings, ChatMessage, UserSkill } from '@/types';
+import { getDefaultAIProvider, joyfulProviderConfig, normalizeProvider } from '@/services/joyfulProvider';
 
 const STORAGE_KEYS = {
   PROJECTS: 'joyful_projects',
   SETTINGS: 'joyful_settings',
+  USER_SKILLS: 'joyful_user_skills',
   AUTH_SESSION: 'joyful_auth_session',
   CHAT_PREFIX: 'joyful_chat_',
   PROJECT_PREFIX: 'joyful_project_',
@@ -62,16 +64,17 @@ export function saveChatHistory(projectId: string, messages: ChatMessage[]): voi
 
 // Settings
 export function getSettings(): UserSettings {
+  const defaultAI = getDefaultAIProvider();
   const defaults: UserSettings = {
     theme: 'system',
     editorFontSize: 14,
     editorLineHeight: 1.6,
     autoSave: true,
     livePreview: true,
-    aiProvider: 'local',
-    aiModel: 'local-lite',
+    aiProvider: defaultAI.aiProvider,
+    aiModel: defaultAI.aiModel,
     aiTemperature: 0.7,
-    connectedProviders: { local: true },
+    connectedProviders: defaultAI.connectedProviders,
     providerKeys: {},
   };
 
@@ -79,11 +82,13 @@ export function getSettings(): UserSettings {
     const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (data) {
       const parsed = JSON.parse(data) as Partial<UserSettings>;
+      const parsedProvider = parsed.aiProvider ? normalizeProvider(parsed.aiProvider) : defaults.aiProvider;
+      const parsedModel = parsedProvider === 'joyful' ? joyfulProviderConfig.model : parsed.aiModel;
       return {
         ...defaults,
         ...parsed,
-        aiProvider: parsed.aiProvider || defaults.aiProvider,
-        aiModel: parsed.aiModel || defaults.aiModel,
+        aiProvider: parsedProvider,
+        aiModel: parsedModel || defaults.aiModel,
         connectedProviders: { ...defaults.connectedProviders, ...parsed.connectedProviders },
         providerKeys: { ...defaults.providerKeys, ...parsed.providerKeys },
       };
@@ -95,6 +100,21 @@ export function getSettings(): UserSettings {
 export function saveSettings(settings: UserSettings): void {
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   window.dispatchEvent(new CustomEvent('joyful_settings_changed', { detail: settings }));
+}
+
+// User-created skills. Built-in skills are fixed in code and intentionally not stored here.
+export function getUserSkills(): UserSkill[] {
+  try {
+    const data = localStorage.getItem(STORAGE_KEYS.USER_SKILLS);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveUserSkills(skills: UserSkill[]): void {
+  localStorage.setItem(STORAGE_KEYS.USER_SKILLS, JSON.stringify(skills));
+  window.dispatchEvent(new CustomEvent('joyful_user_skills_changed', { detail: skills }));
 }
 
 // Lightweight local session used by the demo app.

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Project } from '@/types';
 import * as storage from '@/services/storage';
+import { createReactViteStarterFiles } from '@/services/projectScaffold';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>(() => storage.getProjects());
@@ -14,7 +15,7 @@ export function useProjects() {
       id: `proj_${Date.now()}`,
       name,
       description,
-      files: [],
+      files: createReactViteStarterFiles(name),
       status: 'draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

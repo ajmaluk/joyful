@@ -1,4 +1,133 @@
 import type { AIGenerationResponse, AIStreamChunk, ProjectFile } from '@/types';
+import { joyfulProviderConfig } from '@/services/joyfulProvider';
+import { getSettings } from '@/services/storage';
+
+interface AIGenerationOptions {
+  skillBrief?: string[];
+  contextFiles?: string[];
+}
+
+const RESPONSE_SCHEMA_HINT = `Return only valid JSON with this shape:
+{
+  "files": [
+    { "path": "package.json", "action": "create|modify|delete", "content": "complete file content" }
+  ],
+  "summary": "brief summary of what changed",
+  "nextSteps": ["short next step"],
+  "metadata": { "template": "react-app", "sections": ["..."], "estimatedComplexity": "simple|medium|complex" }
+}
+For create or modify operations, include the complete new file content. Do not wrap JSON in markdown.`;
+
+function stripMarkdownJson(value: string) {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) return fenced[1].trim();
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) return trimmed.slice(firstBrace, lastBrace + 1);
+  return trimmed;
+}
+
+function normalizeAIResponse(value: unknown): AIGenerationResponse {
+  if (!value || typeof value !== 'object') throw new Error('Joyful AI returned an empty response.');
+
+  const response = value as Partial<AIGenerationResponse>;
+  const files = Array.isArray(response.files) ? response.files : [];
+  if (files.length === 0) throw new Error('Joyful AI did not return any file operations.');
+
+  const normalizedFiles = files
+    .filter(file => file && typeof file.path === 'string')
+    .map(file => ({
+      path: file.path,
+      action: file.action === 'delete' || file.action === 'modify' || file.action === 'create' ? file.action : 'modify',
+      content: file.action === 'delete' ? undefined : String(file.content || ''),
+    }));
+
+  if (normalizedFiles.length === 0) throw new Error('Joyful AI returned file operations without valid paths.');
+
+  return {
+    files: normalizedFiles,
+    summary: typeof response.summary === 'string' ? response.summary : 'Joyful AI updated the project files.',
+    nextSteps: Array.isArray(response.nextSteps) ? response.nextSteps.map(String).slice(0, 6) : [],
+    metadata: response.metadata,
+  };
+}
+
+function buildJoyfulMessages(
+  prompt: string,
+  existingFiles: ProjectFile[],
+  conversationHistory: { role: string; content: string }[],
+  options?: AIGenerationOptions,
+) {
+  const filesForContext = existingFiles
+    .slice(0, 14)
+    .map(file => `--- ${file.path} ---\n${file.content.slice(0, 16000)}`)
+    .join('\n\n');
+  const skillText = options?.skillBrief?.length
+    ? `\n\nActive builder skills:\n${options.skillBrief.map(skill => `- ${skill}`).join('\n')}`
+    : '';
+  const contextText = options?.contextFiles?.length
+    ? `\n\nPrioritize these context files: ${options.contextFiles.join(', ')}.`
+    : '';
+
+  return [
+    {
+      role: 'system',
+      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Plan silently, then produce complete, runnable file edits. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
+    },
+    ...conversationHistory
+      .filter(message => message.role === 'user' || message.role === 'assistant')
+      .slice(-6)
+      .map(message => ({
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content,
+      })),
+    {
+      role: 'user',
+      content: `User request:\n${prompt}\n\nExisting files:\n${filesForContext || 'No existing files. Create a complete React/Vite project.'}`,
+    },
+  ];
+}
+
+async function generateWithJoyfulAI(
+  prompt: string,
+  existingFiles: ProjectFile[],
+  conversationHistory: { role: string; content: string }[],
+  options?: AIGenerationOptions,
+): Promise<AIGenerationResponse> {
+  if (!joyfulProviderConfig.apiKey) {
+    throw new Error('Joyful AI is enabled but VITE_JOYFUL_API_KEY is missing.');
+  }
+
+  const response = await fetch(joyfulProviderConfig.apiUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${joyfulProviderConfig.apiKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: joyfulProviderConfig.model,
+      messages: buildJoyfulMessages(prompt, existingFiles, conversationHistory, options),
+      temperature: joyfulProviderConfig.temperature,
+      top_p: joyfulProviderConfig.topP,
+      max_tokens: joyfulProviderConfig.maxTokens,
+      stream: false,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Joyful AI request failed (${response.status}): ${errorText.slice(0, 240)}`);
+  }
+
+  const payload = await response.json();
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string') throw new Error('Joyful AI returned an unsupported response format.');
+
+  return normalizeAIResponse(JSON.parse(stripMarkdownJson(content)));
+}
 
 // ─── Prompt Analysis ───────────────────────────────────────────────
 
@@ -20,7 +149,12 @@ function analyzePrompt(prompt: string, existingFiles: ProjectFile[]): PromptAnal
   let template = 'portfolio';
   if (/restaurant|food|menu|cafe|dining|pizza|sushi/.test(lower)) template = 'restaurant';
   else if (/shop|store|ecommerce|e-commerce|product|buy|sell|cart/.test(lower)) template = 'ecommerce';
-  else if (/saas|app|software|startup|landing|launch/.test(lower)) template = 'saas';
+  else if (/real estate|realestate|property|properties|realtor|agent profile|mortgage/.test(lower)) template = 'realestate';
+  else if (/fitness|gym|trainer|workout|yoga|membership/.test(lower)) template = 'fitness';
+  else if (/photography|photographer|photo|masonry|lightbox/.test(lower)) template = 'photography';
+  else if (/web app|application|complex app|project management|task manager|kanban|crm|portal|planner|workspace|inventory|booking|internal tool/.test(lower)) template = 'webapp';
+  else if (/startup|waitlist|early access/.test(lower)) template = 'startup';
+  else if (/saas|app|software|landing|launch/.test(lower)) template = 'saas';
   else if (/blog|article|editorial|post|news|magazine/.test(lower)) template = 'blog';
   else if (/dashboard|admin|analytics|metrics|chart/.test(lower)) template = 'dashboard';
   else if (/agency|studio|creative|design/.test(lower)) template = 'agency';
@@ -114,6 +248,10 @@ function pickPalette(analysis: PromptAnalysis): ColorPalette {
   if (analysis.template === 'restaurant') return PALETTES.sunset;
   if (analysis.template === 'ecommerce') return PALETTES.emerald;
   if (analysis.template === 'agency') return PALETTES.rose;
+  if (analysis.template === 'startup') return PALETTES.emerald;
+  if (analysis.template === 'fitness') return PALETTES.sunset;
+  if (analysis.template === 'photography') return PALETTES.midnight;
+  if (analysis.template === 'realestate') return PALETTES.indigo;
   if (analysis.industry === 'health') return PALETTES.emerald;
   if (analysis.industry === 'finance') return PALETTES.indigo;
   return PALETTES.indigo;
@@ -221,6 +359,33 @@ function cssFooter(p: ColorPalette): string {
 footer p{font-size:.85rem}`;
 }
 
+function cssFAQ(p: ColorPalette): string {
+  return `.faq-item{border:1px solid ${p.border};border-radius:12px;margin-bottom:1rem;overflow:hidden;background:${p.bg}}
+.faq-question{padding:1.25rem 1.5rem;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:${p.text};transition:background .2s}
+.faq-question:hover{background:${p.surface}}
+.faq-answer{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;padding:0 1.5rem;color:${p.textMuted};line-height:1.6}
+.faq-item.open .faq-answer{max-height:300px;padding:0 1.5rem 1.25rem}
+.faq-item.open .faq-icon{transform:rotate(45deg)}`;
+}
+
+function cssTeam(p: ColorPalette): string {
+  return `.team-card{text-align:center;padding:2rem;background:${p.bg};border:1px solid ${p.border};border-radius:16px;transition:transform .3s,box-shadow .3s}
+.team-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.08)}
+.team-avatar{width:96px;height:96px;border-radius:50%;margin:0 auto 1.25rem;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:#fff}
+.team-card h3{font-size:1.1rem;font-weight:700;color:${p.text};margin-bottom:.25rem}
+.team-card .role{font-size:.85rem;color:${p.primary};font-weight:500;margin-bottom:.75rem}
+.team-card p{font-size:.9rem;color:${p.textMuted};line-height:1.5}`;
+}
+
+function cssGallery(_p: ColorPalette): string {
+  return `.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
+.gallery-item{aspect-ratio:1;border-radius:12px;overflow:hidden;position:relative;cursor:pointer;transition:transform .3s}
+.gallery-item:hover{transform:scale(1.03)}
+.gallery-item .overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.6),transparent);opacity:0;transition:opacity .3s;display:flex;align-items:flex-end;padding:1rem}
+.gallery-item:hover .overlay{opacity:1}
+.gallery-item .overlay span{color:#fff;font-weight:600;font-size:.9rem}`;
+}
+
 function cssAnimations(): string {
   return `@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 .fade-up{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease}
@@ -228,7 +393,42 @@ function cssAnimations(): string {
 }
 
 function jsBase(): string {
-  return `// Mobile menu toggle
+  return `// Site-styled message dialog
+function joyfulNotify(message){
+  const existing=document.querySelector('.joyful-message');
+  if(existing)existing.remove();
+  const note=document.createElement('div');
+  note.className='joyful-message';
+  note.setAttribute('role','status');
+  note.innerHTML='<div><strong>Success</strong><p></p></div><button type="button" aria-label="Dismiss">OK</button>';
+  note.querySelector('p').textContent=message;
+  note.querySelector('button').addEventListener('click',()=>note.remove());
+  Object.assign(note.style,{
+    position:'fixed',
+    left:'50%',
+    bottom:'24px',
+    zIndex:'9999',
+    display:'flex',
+    alignItems:'center',
+    gap:'18px',
+    maxWidth:'min(420px,calc(100vw - 32px))',
+    transform:'translateX(-50%)',
+    padding:'16px',
+    border:'1px solid rgba(255,255,255,.14)',
+    borderRadius:'14px',
+    background:'rgba(17,24,39,.96)',
+    color:'#fff',
+    boxShadow:'0 22px 70px rgba(0,0,0,.28)',
+    fontFamily:'inherit'
+  });
+  Object.assign(note.querySelector('strong').style,{display:'block',fontSize:'14px',marginBottom:'3px'});
+  Object.assign(note.querySelector('p').style,{margin:'0',fontSize:'14px',lineHeight:'1.4',color:'rgba(255,255,255,.75)'});
+  Object.assign(note.querySelector('button').style,{border:'0',borderRadius:'10px',padding:'9px 14px',background:'#fff',color:'#111827',fontWeight:'700',cursor:'pointer'});
+  document.body.appendChild(note);
+  setTimeout(()=>note.remove(),4200);
+}
+
+// Mobile menu toggle
 document.querySelectorAll('.menu-toggle').forEach(btn=>{
   btn.addEventListener('click',()=>{
     const links=btn.nextElementSibling;
@@ -287,6 +487,447 @@ function starterContentForPath(path: string, prompt: string): string {
   return '';
 }
 
+function reactPackageJson(name = 'joyful-app'): string {
+  return JSON.stringify({
+    name,
+    version: '1.0.0',
+    private: true,
+    type: 'module',
+    scripts: {
+      dev: 'vite --host 0.0.0.0',
+      build: 'vite build',
+      preview: 'vite preview --host 0.0.0.0',
+    },
+    dependencies: {
+      '@vitejs/plugin-react': 'latest',
+      vite: 'latest',
+      react: 'latest',
+      'react-dom': 'latest',
+      'lucide-react': 'latest',
+    },
+    devDependencies: {},
+  }, null, 2);
+}
+
+function reactViteConfig(): string {
+  return `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: '0.0.0.0',
+  },
+});`;
+}
+
+function reactIndexHtml(title = 'Joyful React App'): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${title}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>`;
+}
+
+function reactMainFile(): string {
+  return `import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App.jsx';
+import './styles.css';
+
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);`;
+}
+
+function buildReactTemplate(analysis: PromptAnalysis): AIGenerationResponse {
+  const p = pickPalette(analysis);
+  const configs: Record<string, {
+    title: string;
+    eyebrow: string;
+    description: string;
+    cta: string;
+    nav: string[];
+    stats: [string, string, string][];
+    cards: [string, string, string][];
+    visual: string;
+  }> = {
+    portfolio: {
+      title: 'Alex Chen Studio',
+      eyebrow: 'Independent designer and developer',
+      description: 'A refined portfolio for presenting signature projects, capabilities, and a calm path to contact.',
+      cta: 'View selected work',
+      nav: ['Work', 'Profile', 'Contact'],
+      stats: [['12', 'featured projects', '+34% inquiries'], ['8', 'years shipped', 'product-led'], ['4.9', 'client rating', '32 reviews']],
+      cards: [
+        ['Nova Analytics', 'A data product redesign with executive dashboards and faster workflows.', 'Case study'],
+        ['Morrow Brand System', 'A flexible identity kit with responsive web components.', 'Identity'],
+        ['Orbit Mobile', 'A launch-ready app experience for subscription teams.', 'Product'],
+      ],
+      visual: 'portfolio',
+    },
+    saas: {
+      title: 'LaunchLayer',
+      eyebrow: 'SaaS launch platform',
+      description: 'A conversion-focused product page with feature proof, pricing, and the confidence signals buyers expect.',
+      cta: 'Start free trial',
+      nav: ['Features', 'Pricing', 'Customers'],
+      stats: [['42%', 'faster onboarding', 'median lift'], ['18k', 'teams onboarded', 'active'], ['99.98%', 'uptime', 'last 90 days']],
+      cards: [
+        ['Pipeline Builder', 'Turn launches into repeatable workflows with owners, approvals, and release notes.', 'Core'],
+        ['Revenue Signals', 'Spot expansion accounts and trial risk before they affect the quarter.', 'Growth'],
+        ['Team Rooms', 'Bring sales, product, and success into one launch surface.', 'Collab'],
+      ],
+      visual: 'saas',
+    },
+    ecommerce: {
+      title: 'Luma Market',
+      eyebrow: 'Curated commerce storefront',
+      description: 'A polished store experience with product highlights, trust badges, and a clear buying path.',
+      cta: 'Browse collection',
+      nav: ['Products', 'Stories', 'Reviews'],
+      stats: [['4.8', 'store rating', '2k+ reviews'], ['24h', 'dispatch window', 'most orders'], ['30d', 'easy returns', 'no hassle']],
+      cards: [
+        ['Arc Travel Tote', 'Structured recycled canvas with weather-safe finishing.', '$148'],
+        ['Core Desk Lamp', 'Warm dimmable light with sculptural aluminum details.', '$96'],
+        ['Everyday Runner', 'Lightweight knit upper with a responsive recycled sole.', '$132'],
+      ],
+      visual: 'commerce',
+    },
+    blog: {
+      title: 'The Daily Thought',
+      eyebrow: 'Editorial journal',
+      description: 'A readable content home for essays, categories, featured authors, and newsletter growth.',
+      cta: 'Read latest',
+      nav: ['Essays', 'Topics', 'Newsletter'],
+      stats: [['84', 'published essays', 'curated'], ['36k', 'monthly readers', 'organic'], ['12', 'topic guides', 'evergreen']],
+      cards: [
+        ['The Art of Slow Living', 'A grounded guide to designing calmer routines and better defaults.', '6 min read'],
+        ['Systems for Creative Work', 'How small rituals keep editorial teams moving without chaos.', '8 min read'],
+        ['Notes on Better Tools', 'A field guide to choosing software that disappears into the work.', '5 min read'],
+      ],
+      visual: 'blog',
+    },
+    dashboard: {
+      title: 'Revenue Command',
+      eyebrow: 'Executive analytics dashboard',
+      description: 'A dense admin surface with metrics, trends, reports, and filters built for repeated daily use.',
+      cta: 'Create report',
+      nav: ['Overview', 'Reports', 'Forecast'],
+      stats: [['$482k', 'monthly revenue', '+12.5%'], ['18.4k', 'active users', '+8.3%'], ['3.8%', 'conversion rate', '+0.7%']],
+      cards: [
+        ['North America', 'Pipeline rose after the partner channel campaign.', '+18%'],
+        ['Enterprise Trials', 'High-value accounts moving through onboarding.', '42 open'],
+        ['Retention Watch', 'Three cohorts need success follow-up this week.', 'Action'],
+      ],
+      visual: 'dashboard',
+    },
+    restaurant: {
+      title: 'Maison Rue',
+      eyebrow: 'Seasonal dining room',
+      description: 'A premium restaurant page with menu storytelling, reservation intent, and warm hospitality cues.',
+      cta: 'Reserve a table',
+      nav: ['Menu', 'Story', 'Reservations'],
+      stats: [['4.9', 'guest rating', 'local favorite'], ['12', 'seasonal plates', 'tonight'], ['7pm', 'prime seating', 'limited']],
+      cards: [
+        ['Seared Scallops', 'Brown butter, citrus, and garden herbs over parsnip silk.', '$32'],
+        ['Wild Mushroom Risotto', 'Carnaroli rice, aged parmesan, and black garlic.', '$28'],
+        ['Citrus Pavlova', 'Meringue, lemon curd, blood orange, and mint.', '$14'],
+      ],
+      visual: 'restaurant',
+    },
+    agency: {
+      title: 'Northstar Studio',
+      eyebrow: 'Creative agency',
+      description: 'A sharp agency site for services, selected work, process, and high-intent project inquiries.',
+      cta: 'Start a project',
+      nav: ['Services', 'Work', 'Process'],
+      stats: [['64', 'brands launched', 'global'], ['9', 'award wins', 'recent'], ['3.2x', 'average lift', 'tracked']],
+      cards: [
+        ['Nexus Rebrand', 'A complete brand system for a platform moving upmarket.', 'Identity'],
+        ['FinFlow Mobile', 'A banking app refresh focused on trust and speed.', 'Product'],
+        ['Summit Campaign', 'A launch campaign with motion, social, and landing pages.', 'Growth'],
+      ],
+      visual: 'agency',
+    },
+    event: {
+      title: 'FutureStack Summit',
+      eyebrow: 'Conference experience',
+      description: 'A high-energy event page with schedule, speaker proof, sponsors, and registration urgency.',
+      cta: 'Register now',
+      nav: ['Schedule', 'Speakers', 'Tickets'],
+      stats: [['2', 'conference days', 'June 15-16'], ['36', 'expert speakers', 'confirmed'], ['900+', 'builders attending', 'limited seats']],
+      cards: [
+        ['Opening Keynote', 'Product leaders on what durable AI workflows need next.', '9:30 AM'],
+        ['Design Systems Lab', 'A hands-on session for component quality at scale.', '1:00 PM'],
+        ['Founder Panel', 'Operators share launch lessons from fast-growing teams.', '4:15 PM'],
+      ],
+      visual: 'event',
+    },
+    photography: {
+      title: 'Mira Vale Photo',
+      eyebrow: 'Editorial photography',
+      description: 'A cinematic portfolio for galleries, services, image categories, and booking inquiries.',
+      cta: 'Explore gallery',
+      nav: ['Gallery', 'Services', 'Booking'],
+      stats: [['128', 'published images', 'selected'], ['14', 'editorial shoots', 'this year'], ['6', 'print collections', 'available']],
+      cards: [
+        ['Quiet Coast', 'Muted shoreline portraits captured at blue hour.', 'Editorial'],
+        ['Studio Light', 'A controlled portrait series with soft sculptural contrast.', 'Portrait'],
+        ['City Frames', 'Architectural fragments and street-level movement.', 'Urban'],
+      ],
+      visual: 'photography',
+    },
+    startup: {
+      title: 'SignalPilot',
+      eyebrow: 'Early access startup',
+      description: 'A modern startup landing page with problem framing, product proof, and a focused waitlist path.',
+      cta: 'Join waitlist',
+      nav: ['Problem', 'Solution', 'Proof'],
+      stats: [['2.4k', 'waitlist signups', '+31% week'], ['11', 'pilot teams', 'active'], ['4 min', 'setup time', 'median']],
+      cards: [
+        ['Detect Drift', 'Catch customer risk before it turns into churn.', 'Insight'],
+        ['Prioritize Work', 'Rank opportunities by revenue, effort, and urgency.', 'Focus'],
+        ['Sync Teams', 'Turn scattered notes into one operating view.', 'Action'],
+      ],
+      visual: 'startup',
+    },
+    fitness: {
+      title: 'Forge Fit Club',
+      eyebrow: 'Training and membership',
+      description: 'An energetic fitness site with class schedules, trainers, memberships, and transformation proof.',
+      cta: 'Book a class',
+      nav: ['Classes', 'Trainers', 'Plans'],
+      stats: [['42', 'weekly classes', 'all levels'], ['8', 'expert trainers', 'certified'], ['1.8k', 'member check-ins', 'monthly']],
+      cards: [
+        ['Strength Circuit', 'Progressive lifts, coaching cues, and team energy.', 'Mon 6 AM'],
+        ['Mobility Flow', 'Recovery-focused movement for desk-heavy weeks.', 'Wed 7 PM'],
+        ['HIIT Engine', 'Intervals built around endurance, power, and form.', 'Sat 9 AM'],
+      ],
+      visual: 'fitness',
+    },
+    realestate: {
+      title: 'Atlas Realty',
+      eyebrow: 'Property search experience',
+      description: 'A property listing site with agent trust, search filters, featured homes, and buyer actions.',
+      cta: 'View listings',
+      nav: ['Listings', 'Agents', 'Valuation'],
+      stats: [['248', 'active listings', 'updated today'], ['$1.2M', 'median home', 'west side'], ['18d', 'avg. close time', 'last quarter']],
+      cards: [
+        ['Cedar House', 'Four-bedroom hillside home with glass walls and a garden deck.', '$1.48M'],
+        ['Market Loft', 'Converted warehouse residence near transit and cafes.', '$820k'],
+        ['Harbor Villa', 'Waterfront retreat with private dock and guest suite.', '$2.1M'],
+      ],
+      visual: 'realestate',
+    },
+    webapp: {
+      title: 'Operations Command',
+      eyebrow: 'Application workspace',
+      description: 'A focused internal tool for owners, status, priority, and delivery risk.',
+      cta: 'New item',
+      nav: ['Overview', 'Pipeline', 'Tasks'],
+      stats: [['28', 'open work items', 'active'], ['12', 'ready to ship', 'reviewed'], ['94%', 'portfolio health', 'strong']],
+      cards: [
+        ['Customer Portal', 'Finalize onboarding permissions and billing states.', 'High'],
+        ['Partner Analytics', 'QA dashboard filters and export behavior.', 'Medium'],
+        ['Help Center', 'Migrate evergreen docs into the new IA.', 'Low'],
+      ],
+      visual: 'dashboard',
+    },
+  };
+
+  const config = configs[analysis.template] ?? configs.portfolio;
+  const initialItems = config.cards.map(([name, body, meta], index) => ({
+    id: index + 1,
+    name,
+    body,
+    meta,
+    status: index === 0 ? 'Active' : index === 1 ? 'Review' : 'Ready',
+    priority: index === 0 ? 'High' : index === 1 ? 'Medium' : 'Low',
+  }));
+
+  const app = `import React, { useMemo, useState } from 'react';
+
+const initialItems = ${JSON.stringify(initialItems, null, 2)};
+const stats = ${JSON.stringify(config.stats, null, 2)};
+const navItems = ${JSON.stringify(config.nav)};
+
+export default function App() {
+  const [items, setItems] = useState(initialItems);
+  const [query, setQuery] = useState('');
+  const [activeStatus, setActiveStatus] = useState('All');
+
+  const visibleItems = useMemo(() => {
+    return items.filter((item) => {
+      const matchesStatus = activeStatus === 'All' || item.status === activeStatus;
+      const matchesQuery = [item.name, item.body, item.meta].join(' ').toLowerCase().includes(query.toLowerCase());
+      return matchesStatus && matchesQuery;
+    });
+  }, [activeStatus, items, query]);
+
+  const addItem = () => {
+    const nextId = Math.max(...items.map((item) => item.id)) + 1;
+    setItems((current) => [
+      {
+        id: nextId,
+        name: 'New ${config.visual} item',
+        body: 'Edit this card or ask Joyful to replace it with real content and behavior.',
+        meta: 'Draft',
+        status: 'Active',
+        priority: 'High',
+      },
+      ...current,
+    ]);
+  };
+
+  return (
+    <main className="app">
+      <aside className="sidebar">
+        <div className="brand">${config.title.charAt(0)}</div>
+        {navItems.map((item, index) => (
+          <button key={item} className={index === 0 ? 'nav active' : 'nav'}>{item}</button>
+        ))}
+      </aside>
+
+      <section className="workspace">
+        <header className="hero">
+          <div>
+            <p className="eyebrow">${config.eyebrow}</p>
+            <h1>${config.title}</h1>
+            <p>${config.description}</p>
+          </div>
+          <button onClick={addItem} className="primary">${config.cta}</button>
+          <div className="hero-visual ${config.visual}" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        </header>
+
+        <section className="stats">
+          {stats.map(([value, label, delta]) => (
+            <article key={label}><strong>{value}</strong><span>{label}</span><small>{delta}</small></article>
+          ))}
+        </section>
+
+        <section className="toolbar">
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this template..." />
+          <div className="segments">
+            {['All', 'Active', 'Review', 'Ready'].map((status) => (
+              <button key={status} onClick={() => setActiveStatus(status)} className={activeStatus === status ? 'selected' : ''}>
+                {status}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid">
+          {visibleItems.map((item) => (
+            <article key={item.id} className="card">
+              <div className="card-top">
+                <span className={'priority ' + item.priority}>{item.priority}</span>
+                <span>{item.status}</span>
+              </div>
+              <h2>{item.name}</h2>
+              <p>{item.body}</p>
+              <footer>{item.meta}</footer>
+            </article>
+          ))}
+        </section>
+      </section>
+    </main>
+  );
+}`;
+
+  const css = `:root {
+  color-scheme: light;
+  --primary: ${p.primary};
+  --primary-hover: ${p.primaryHover};
+  --bg: ${p.bg};
+  --surface: ${p.bgAlt};
+  --secondary: ${p.secondary};
+  --text: ${p.text};
+  --muted: ${p.textMuted};
+  --border: ${p.border};
+  --gradient: ${p.gradient};
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: radial-gradient(circle at top left, ${p.primary}22, transparent 34rem), linear-gradient(135deg, var(--surface), var(--bg)); color: var(--text); }
+button, input { font: inherit; }
+.app { min-height: 100vh; display: grid; grid-template-columns: 96px minmax(0, 1fr); }
+.sidebar { border-right: 1px solid var(--border); background: rgba(255,255,255,.76); backdrop-filter: blur(18px); padding: 1rem; display: flex; flex-direction: column; align-items: center; gap: .75rem; }
+.brand { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; margin-bottom: 1rem; background: ${p.gradient}; color: white; font-weight: 900; box-shadow: 0 16px 40px rgba(99,102,241,.25); }
+.nav { width: 100%; border: 0; border-radius: 12px; padding: .75rem .25rem; background: transparent; color: var(--muted); font-size: .76rem; font-weight: 800; cursor: pointer; }
+.nav.active, .nav:hover { background: white; color: var(--primary); box-shadow: 0 8px 24px rgba(15,23,42,.08); }
+.workspace { min-width: 0; padding: clamp(1rem, 3vw, 2rem); display: grid; gap: 1rem; }
+.hero { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(220px, .5fr); gap: 1rem; align-items: center; border: 1px solid var(--border); background: rgba(255,255,255,.88); border-radius: 24px; padding: clamp(1.2rem, 3vw, 2.4rem); box-shadow: 0 24px 80px rgba(15,23,42,.10); }
+.eyebrow { margin: 0 0 .55rem; color: var(--primary); font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+h1 { margin: 0; font-size: clamp(2.15rem, 5vw, 4.5rem); line-height: 1; letter-spacing: -.04em; }
+.hero p:not(.eyebrow) { max-width: 680px; color: var(--muted); line-height: 1.7; }
+.primary { border: 0; border-radius: 14px; background: var(--primary); color: white; padding: .9rem 1.1rem; font-weight: 900; cursor: pointer; white-space: nowrap; }
+.primary:hover { background: var(--primary-hover); }
+.hero-visual { min-height: 190px; border-radius: 22px; border: 1px solid var(--border); background: linear-gradient(135deg, white, var(--surface)); box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 18px 48px rgba(15,23,42,.10); padding: 1rem; display: grid; gap: .65rem; }
+.hero-visual span { display: block; border-radius: 14px; background: var(--gradient); opacity: .9; }
+.hero-visual span:nth-child(1) { height: 38px; width: 72%; }
+.hero-visual span:nth-child(2) { height: 70px; width: 100%; opacity: .22; }
+.hero-visual span:nth-child(3), .hero-visual span:nth-child(4) { height: 42px; width: 48%; display: inline-block; }
+.hero-visual.commerce, .hero-visual.realestate, .hero-visual.photography { grid-template-columns: repeat(2, 1fr); }
+.hero-visual.commerce span, .hero-visual.realestate span, .hero-visual.photography span { width: 100%; height: auto; min-height: 70px; }
+.hero-visual.dashboard span:nth-child(2), .hero-visual.saas span:nth-child(2), .hero-visual.startup span:nth-child(2) { background: linear-gradient(90deg, var(--primary), var(--secondary, ${p.secondary})); opacity: .35; }
+.hero-visual.restaurant { background: radial-gradient(circle at 72% 36%, ${p.accent}44, transparent 7rem), linear-gradient(135deg, white, var(--surface)); }
+.hero-visual.fitness span { transform: skewX(-8deg); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.stats article, .card, .toolbar { border: 1px solid var(--border); background: rgba(255,255,255,.88); border-radius: 18px; box-shadow: 0 18px 50px rgba(15,23,42,.08); }
+.stats article { padding: 1rem; }
+.stats span, .stats small, .card-top, .card footer { color: var(--muted); font-size: .82rem; }
+.stats strong { display: block; font-size: 2rem; color: var(--text); }
+.stats small { display: block; margin-top: .35rem; color: var(--primary); font-weight: 800; }
+.toolbar { display: flex; justify-content: space-between; gap: .75rem; padding: .75rem; }
+.toolbar input { min-width: min(100%, 320px); border: 1px solid var(--border); border-radius: 12px; padding: .8rem 1rem; }
+.segments { display: flex; gap: .35rem; border: 1px solid var(--border); border-radius: 14px; padding: .3rem; background: var(--surface); }
+.segments button { border: 0; background: transparent; border-radius: 10px; padding: .55rem .75rem; color: var(--muted); font-weight: 800; cursor: pointer; }
+.segments button.selected { background: var(--primary); color: white; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.card { padding: 1rem; min-height: 210px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.card::before { content: ""; position: absolute; inset: 0 0 auto; height: 4px; background: var(--gradient); opacity: .85; }
+.card-top { display: flex; justify-content: space-between; gap: 1rem; }
+.priority { border-radius: 999px; padding: .25rem .55rem; font-weight: 900; font-size: .7rem; }
+.High { background: #fee2e2; color: #b91c1c; }
+.Medium { background: #fef3c7; color: #92400e; }
+.Low { background: #dcfce7; color: #166534; }
+.card h2 { margin: 1rem 0 .45rem; }
+.card p { color: var(--muted); line-height: 1.65; }
+.card footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: .9rem; font-weight: 800; }
+@media (max-width: 980px) { .app { grid-template-columns: 1fr; } .sidebar { position: sticky; top: 0; z-index: 10; flex-direction: row; justify-content: space-between; } .sidebar .nav { width: auto; padding: .7rem .8rem; } .hero { grid-template-columns: 1fr; } .primary { width: fit-content; } .stats, .grid { grid-template-columns: 1fr; } .toolbar { flex-direction: column; } }
+@media (max-width: 640px) { .sidebar { overflow-x: auto; justify-content: flex-start; } .hero-visual { min-height: 150px; } .segments { overflow-x: auto; } }`;
+
+  return {
+    files: [
+      { path: 'package.json', content: reactPackageJson(config.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')), action: 'create' },
+      { path: 'index.html', content: reactIndexHtml(config.title), action: 'create' },
+      { path: 'src/main.jsx', content: reactMainFile(), action: 'create' },
+      { path: 'src/App.jsx', content: app, action: 'create' },
+      { path: 'src/styles.css', content: css, action: 'create' },
+      { path: 'vite.config.js', content: reactViteConfig(), action: 'create' },
+      { path: 'README.md', content: `# ${config.title}\n\nReact/Vite project generated by Joyful.\n\n- Edit \`src/App.jsx\` for app logic.\n- Edit \`src/styles.css\` for styling.\n- Preview runs in Joyful's local iframe sandbox.\n`, action: 'create' },
+    ],
+    summary: `Created a polished React/Vite ${analysis.template} template with stateful filtering, tailored content, responsive layout, and a framework-ready file structure.`,
+    nextSteps: ['Split UI into components', 'Add routing', 'Connect API data', 'Add tests'],
+    metadata: { template: analysis.template, sections: ['react-app', 'state', 'responsive-ui'], estimatedComplexity: analysis.template === 'webapp' ? 'complex' : 'medium' },
+  };
+}
+
 // ─── Full Template Builders ────────────────────────────────────────
 
 function buildPortfolio(analysis: PromptAnalysis): AIGenerationResponse {
@@ -329,7 +970,7 @@ ${footerHTML(p)}`
   );
 
   const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  alert('Thanks! I\\'ll get back to you soon.');\n  e.target.reset();\n});`;
+  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Thanks! I\\'ll get back to you soon.');\n  e.target.reset();\n});`;
 
   return {
     files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
@@ -435,7 +1076,7 @@ ${footerHTML(p)}`
   );
 
   const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  alert('Reservation confirmed!');\n  e.target.reset();\n});`;
+  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Reservation confirmed!');\n  e.target.reset();\n});`;
 
   return {
     files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
@@ -566,6 +1207,154 @@ ${footerHTML(p)}`
   };
 }
 
+function buildWebApp(analysis: PromptAnalysis): AIGenerationResponse {
+  const p = pickPalette(analysis);
+  const sections = ['sidebar', 'metrics', 'workspace', 'table', 'modal'];
+
+  const html = htmlDoc('Joyful Workspace App',
+    `<link rel="stylesheet" href="style.css">`,
+    `  <div class="app-shell">
+    <aside class="app-sidebar">
+      <div class="brand-mark">J</div>
+      <nav>
+        <button class="nav-item active" data-view="overview">Overview</button>
+        <button class="nav-item" data-view="pipeline">Pipeline</button>
+        <button class="nav-item" data-view="tasks">Tasks</button>
+        <button class="nav-item" data-view="reports">Reports</button>
+      </nav>
+    </aside>
+    <main class="workspace">
+      <header class="workspace-header">
+        <div>
+          <p class="eyebrow">Application workspace</p>
+          <h1>Operations Command Center</h1>
+          <p class="muted">Manage projects, owners, status, priority, and delivery risk from one responsive app.</p>
+        </div>
+        <button class="primary-action" id="newItemBtn">New item</button>
+      </header>
+      <section class="metrics-grid">
+        <article class="metric-card"><span>Open work</span><strong id="openCount">0</strong><small>Active records</small></article>
+        <article class="metric-card"><span>Completed</span><strong id="doneCount">0</strong><small>Ready to ship</small></article>
+        <article class="metric-card"><span>High priority</span><strong id="priorityCount">0</strong><small>Needs attention</small></article>
+        <article class="metric-card"><span>Health</span><strong id="healthScore">0%</strong><small>Portfolio score</small></article>
+      </section>
+      <section class="control-panel">
+        <div class="segmented" role="tablist" aria-label="Status filter">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="Active">Active</button>
+          <button class="filter-btn" data-filter="Review">Review</button>
+          <button class="filter-btn" data-filter="Done">Done</button>
+        </div>
+        <input id="searchInput" type="search" placeholder="Search projects, owners, or tags">
+      </section>
+      <section class="content-grid">
+        <div class="panel">
+          <div class="panel-header"><h2>Delivery Board</h2><span id="recordCount">0 records</span></div>
+          <div class="kanban" id="kanbanBoard"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2>Work Register</h2><span>Live data</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Project</th><th>Owner</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead>
+              <tbody id="workTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <dialog id="itemDialog">
+    <form method="dialog" id="itemForm" class="dialog-card">
+      <div class="panel-header"><h2>Add work item</h2><button type="button" id="closeDialog">Close</button></div>
+      <label>Project name<input name="name" required placeholder="Customer onboarding redesign"></label>
+      <label>Owner<input name="owner" required placeholder="Maya"></label>
+      <div class="form-grid">
+        <label>Status<select name="status"><option>Active</option><option>Review</option><option>Done</option></select></label>
+        <label>Priority<select name="priority"><option>High</option><option>Medium</option><option>Low</option></select></label>
+      </div>
+      <label>Due date<input name="due" type="date" required></label>
+      <button class="primary-action" type="submit">Save item</button>
+    </form>
+  </dialog>`
+  );
+
+  const css = `${cssReset()}
+:root{--primary:${p.primary};--primary-hover:${p.primaryHover};--surface:${p.bg};--surface-2:${p.bgAlt};--panel:${p.surface};--text:${p.text};--muted:${p.textMuted};--border:${p.border};--shadow:0 24px 80px rgba(15,23,42,.12)}
+body{min-height:100vh;background:linear-gradient(135deg,${p.bgAlt},${p.bg});color:var(--text)}
+.app-shell{display:grid;grid-template-columns:88px minmax(0,1fr);min-height:100vh}
+.app-sidebar{border-right:1px solid var(--border);background:rgba(255,255,255,.78);backdrop-filter:blur(18px);padding:1rem;display:flex;flex-direction:column;align-items:center;gap:2rem}
+.brand-mark{width:48px;height:48px;border-radius:14px;background:${p.gradient};display:grid;place-items:center;color:#fff;font-weight:900;box-shadow:0 14px 30px rgba(99,102,241,.24)}
+.app-sidebar nav{display:grid;gap:.75rem;width:100%}.nav-item{border:1px solid transparent;background:transparent;color:var(--muted);border-radius:12px;padding:.8rem .35rem;font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}.nav-item.active,.nav-item:hover{background:var(--surface);border-color:var(--border);color:var(--primary)}
+.workspace{min-width:0;padding:clamp(1rem,3vw,2rem);display:grid;gap:1.25rem}.workspace-header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.eyebrow{color:var(--primary);font-weight:800;text-transform:uppercase;font-size:.72rem;letter-spacing:.08em}.workspace h1{font-size:clamp(2rem,4vw,3.5rem);line-height:1.05;margin:.2rem 0 .6rem}.muted{color:var(--muted);max-width:680px}
+.primary-action{border:0;border-radius:12px;background:var(--primary);color:#fff;padding:.8rem 1rem;font-weight:800;cursor:pointer;box-shadow:0 12px 30px rgba(99,102,241,.22)}.primary-action:hover{background:var(--primary-hover)}
+.metrics-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.metric-card,.panel{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}.metric-card{padding:1.2rem}.metric-card span,.metric-card small{display:block;color:var(--muted);font-size:.82rem}.metric-card strong{display:block;font-size:2rem;margin:.4rem 0;color:var(--text)}
+.control-panel{display:flex;gap:1rem;align-items:center;justify-content:space-between}.segmented{display:flex;gap:.35rem;border:1px solid var(--border);background:rgba(255,255,255,.76);padding:.35rem;border-radius:14px}.filter-btn{border:0;background:transparent;color:var(--muted);border-radius:10px;padding:.6rem .85rem;font-weight:700;cursor:pointer}.filter-btn.active{background:var(--primary);color:#fff}#searchInput{min-width:min(100%,320px);border:1px solid var(--border);border-radius:12px;background:#fff;padding:.8rem 1rem;color:var(--text)}
+.content-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:1rem}.panel{min-width:0;padding:1rem}.panel-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.panel-header h2{font-size:1rem}.panel-header span,.panel-header button{color:var(--muted);font-size:.78rem;background:transparent;border:0}
+.kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.lane{border:1px dashed var(--border);border-radius:14px;padding:.75rem;background:var(--surface-2);min-height:260px}.lane h3{font-size:.78rem;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem}.work-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:.85rem;margin-bottom:.75rem}.work-card strong{display:block;margin-bottom:.35rem}.card-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:.75rem}.pill{display:inline-flex;border-radius:999px;padding:.2rem .55rem;font-size:.7rem;font-weight:800}.High{background:#fee2e2;color:#b91c1c}.Medium{background:#fef3c7;color:#92400e}.Low{background:#dcfce7;color:#166534}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.86rem}th,td{text-align:left;border-bottom:1px solid var(--border);padding:.8rem .65rem;white-space:nowrap}th{color:var(--muted);font-size:.74rem;text-transform:uppercase}
+dialog{border:0;background:transparent}dialog::backdrop{background:rgba(15,23,42,.5)}.dialog-card{width:min(92vw,460px);background:#fff;border:1px solid var(--border);border-radius:18px;padding:1.2rem;box-shadow:var(--shadow);display:grid;gap:1rem}.dialog-card label{display:grid;gap:.4rem;font-weight:700;font-size:.82rem}.dialog-card input,.dialog-card select{border:1px solid var(--border);border-radius:10px;padding:.75rem;font:inherit}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+@media(max-width:980px){.metrics-grid,.content-grid{grid-template-columns:1fr}.kanban{grid-template-columns:1fr}.workspace-header,.control-panel{flex-direction:column;align-items:stretch}.app-shell{grid-template-columns:1fr}.app-sidebar{position:sticky;top:0;z-index:10;flex-direction:row;justify-content:space-between}.app-sidebar nav{grid-template-columns:repeat(4,1fr)}}`;
+
+  const js = `const defaultItems=[
+  {name:'Customer portal launch',owner:'Maya',status:'Active',priority:'High',due:'2026-06-04'},
+  {name:'Billing workflow QA',owner:'Noah',status:'Review',priority:'Medium',due:'2026-05-28'},
+  {name:'Partner analytics view',owner:'Iris',status:'Active',priority:'High',due:'2026-06-10'},
+  {name:'Help center migration',owner:'Ari',status:'Done',priority:'Low',due:'2026-05-18'},
+  {name:'Admin permission model',owner:'Sam',status:'Review',priority:'High',due:'2026-05-30'}
+];
+let items=JSON.parse(localStorage.getItem('joyful_app_items')||'null')||defaultItems;
+let filter='all';
+const save=()=>localStorage.setItem('joyful_app_items',JSON.stringify(items));
+const matches=(item,query)=>[item.name,item.owner,item.status,item.priority].join(' ').toLowerCase().includes(query.toLowerCase());
+function render(){
+  const query=document.querySelector('#searchInput').value.trim();
+  const visible=items.filter(item=>(filter==='all'||item.status===filter)&&matches(item,query));
+  document.querySelector('#openCount').textContent=items.filter(i=>i.status!=='Done').length;
+  document.querySelector('#doneCount').textContent=items.filter(i=>i.status==='Done').length;
+  document.querySelector('#priorityCount').textContent=items.filter(i=>i.priority==='High').length;
+  document.querySelector('#healthScore').textContent=Math.round((items.filter(i=>i.status==='Done').length/Math.max(items.length,1))*100)+'%';
+  document.querySelector('#recordCount').textContent=visible.length+' records';
+  document.querySelector('#kanbanBoard').innerHTML=['Active','Review','Done'].map(status=>{
+    const cards=visible.filter(item=>item.status===status).map(item=>'<article class="work-card"><strong>'+item.name+'</strong><div class="card-meta"><span>'+item.owner+'</span><span class="pill '+item.priority+'">'+item.priority+'</span></div><div class="card-meta"><span>Due '+item.due+'</span><button data-promote="'+item.name+'">Move</button></div></article>').join('');
+    return '<section class="lane"><h3>'+status+'</h3>'+cards+'</section>';
+  }).join('');
+  document.querySelector('#workTable').innerHTML=visible.map(item=>'<tr><td>'+item.name+'</td><td>'+item.owner+'</td><td>'+item.status+'</td><td><span class="pill '+item.priority+'">'+item.priority+'</span></td><td>'+item.due+'</td></tr>').join('');
+}
+document.querySelectorAll('.filter-btn').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');filter=btn.dataset.filter;render();
+}));
+document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}));
+document.querySelector('#searchInput').addEventListener('input',render);
+document.querySelector('#newItemBtn').addEventListener('click',()=>document.querySelector('#itemDialog').showModal());
+document.querySelector('#closeDialog').addEventListener('click',()=>document.querySelector('#itemDialog').close());
+document.querySelector('#itemForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  const data=Object.fromEntries(new FormData(event.currentTarget));
+  items=[data,...items];save();event.currentTarget.reset();document.querySelector('#itemDialog').close();render();
+});
+document.querySelector('#kanbanBoard').addEventListener('click',event=>{
+  const target=event.target.closest('[data-promote]');
+  if(!target)return;
+  const item=items.find(record=>record.name===target.dataset.promote);
+  if(!item)return;
+  item.status=item.status==='Active'?'Review':item.status==='Review'?'Done':'Active';
+  save();render();
+});
+render();`;
+
+  return {
+    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
+    summary: 'Built a complex application workspace with responsive navigation, metrics, Kanban board, searchable data table, modal creation flow, local storage, and status updates.',
+    nextSteps: ['Add authentication screens', 'Connect to an API', 'Add charts and role permissions', 'Create detail pages'],
+    metadata: { template: 'webapp', sections, estimatedComplexity: 'complex' },
+  };
+}
+
 function buildAgency(analysis: PromptAnalysis): AIGenerationResponse {
   const p = pickPalette(analysis);
   const sections = ['hero', 'services', 'work', 'contact'];
@@ -660,6 +1449,19 @@ ${footerHTML(p)}`
 
 function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analysis: PromptAnalysis): AIGenerationResponse | null {
   const lower = prompt.toLowerCase();
+  const reactAppFile = existingFiles.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path));
+  if (reactAppFile) {
+    const rebuilt = buildReactTemplate(analysis);
+    return {
+      ...rebuilt,
+      files: rebuilt.files.map(file => ({
+        ...file,
+        action: existingFiles.some(existing => existing.path === file.path) ? 'modify' : 'create',
+      })),
+      summary: `Updated the React/Vite app from the existing project scaffold. ${rebuilt.summary}`,
+    };
+  }
+
   const htmlFile = existingFiles.find(f => f.path === 'index.html');
   const cssFile = existingFiles.find(f => f.path === 'style.css');
   const jsFile = existingFiles.find(f => f.path === 'script.js');
@@ -724,7 +1526,7 @@ function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analy
     const contactHTML = `\n  <section id="contact" class="fade-up" style="background:${p.bgAlt}">\n    <h2 class="section-title">Get In Touch</h2>\n    <form class="contact-form">\n      <input type="text" placeholder="Your Name" required>\n      <input type="email" placeholder="Your Email" required>\n      <textarea rows="5" placeholder="Your Message" required></textarea>\n      <button type="submit">Send Message</button>\n    </form>\n  </section>\n`;
     html = html.replace('</body>', `${contactHTML}</body>`);
     css += `\n${cssForm(p)}`;
-    js += `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  alert('Message sent!');\n  e.target.reset();\n});`;
+    js += `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Message sent!');\n  e.target.reset();\n});`;
     summary = 'Added a contact form section.';
     nextSteps.push('Connect to backend', 'Add validation');
   } else if (/testimonial|review/.test(lower) && /add|create|include/.test(lower)) {
@@ -732,6 +1534,29 @@ function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analy
     html = html.replace('</body>', `${testHTML}</body>`);
     summary = 'Added a testimonials section with 3 customer quotes.';
     nextSteps.push('Add real photos', 'Add star ratings');
+  } else if (/faq|question|accordion/.test(lower) && /add|create|include/.test(lower)) {
+    const p = pickPalette(analysis);
+    const faqHTML = `\n  <section id="faq" class="fade-up" style="background:${p.bgAlt}">\n    <h2 class="section-title">Frequently Asked Questions</h2>\n    <div style="max-width:640px;margin:0 auto">\n      <div class="faq-item"><div class="faq-question">How do I get started?<span class="faq-icon" style="transition:transform .3s">+</span></div><div class="faq-answer">Simply sign up for a free account and follow our quick setup guide. You'll be up and running in minutes.</div></div>\n      <div class="faq-item"><div class="faq-question">What payment methods do you accept?<span class="faq-icon" style="transition:transform .3s">+</span></div><div class="faq-answer">We accept all major credit cards, PayPal, and bank transfers. Enterprise plans can also use invoicing.</div></div>\n      <div class="faq-item"><div class="faq-question">Can I cancel anytime?<span class="faq-icon" style="transition:transform .3s">+</span></div><div class="faq-answer">Yes, you can cancel your subscription at any time with no cancellation fees. Your access continues until the end of your billing period.</div></div>\n      <div class="faq-item"><div class="faq-question">Do you offer a free trial?<span class="faq-icon" style="transition:transform .3s">+</span></div><div class="faq-answer">Absolutely! All plans come with a 14-day free trial. No credit card required to start.</div></div>\n    </div>\n  </section>\n`;
+    html = html.replace('</body>', `${faqHTML}</body>`);
+    css += `\n${cssFAQ(p)}`;
+    js += `\n\ndocument.querySelectorAll('.faq-question').forEach(q=>{\n  q.addEventListener('click',()=>{\n    const item=q.parentElement;\n    item.classList.toggle('open');\n  });\n});`;
+    summary = 'Added an interactive FAQ section with accordion functionality.';
+    nextSteps.push('Add more questions', 'Customize answers', 'Add search within FAQ');
+  } else if (/team|member|staff|people/.test(lower) && /add|create|include/.test(lower)) {
+    const p = pickPalette(analysis);
+    const gradients = [p.gradient, 'linear-gradient(135deg,#10B981,#3B82F6)', 'linear-gradient(135deg,#F97316,#EF4444)', 'linear-gradient(135deg,#8B5CF6,#EC4899)'];
+    const teamHTML = `\n  <section id="team" class="fade-up">\n    <h2 class="section-title">Meet Our Team</h2>\n    <p class="section-subtitle">The talented people behind our success.</p>\n    <div class="grid grid-4">\n      <div class="team-card"><div class="team-avatar" style="background:${gradients[0]}">AK</div><h3>Alex Kim</h3><p class="role">CEO & Founder</p><p>Visionary leader with 15+ years in tech.</p></div>\n      <div class="team-card"><div class="team-avatar" style="background:${gradients[1]}">SP</div><h3>Sara Patel</h3><p class="role">CTO</p><p>Engineering excellence at scale.</p></div>\n      <div class="team-card"><div class="team-avatar" style="background:${gradients[2]}">MC</div><h3>Marcus Chen</h3><p class="role">Head of Design</p><p>Creating delightful user experiences.</p></div>\n      <div class="team-card"><div class="team-avatar" style="background:${gradients[3]}">LW</div><h3>Lisa Wang</h3><p class="role">VP of Marketing</p><p>Growth strategist and brand builder.</p></div>\n    </div>\n  </section>\n`;
+    html = html.replace('</body>', `${teamHTML}</body>`);
+    css += `\n${cssTeam(p)}`;
+    summary = 'Added a team section with avatar cards, roles, and bios.';
+    nextSteps.push('Add real photos', 'Add social links', 'Add more team members');
+  } else if (/gallery|image|photo|portfolio/.test(lower) && /add|create|include/.test(lower)) {
+    const p = pickPalette(analysis);
+    const galleryHTML = `\n  <section id="gallery" class="fade-up" style="background:${p.bgAlt}">\n    <h2 class="section-title">Gallery</h2>\n    <p class="section-subtitle">A visual showcase of our work.</p>\n    <div class="gallery-grid">\n      <div class="gallery-item" style="background:${p.gradient}"><div class="overlay"><span>Project Alpha</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#10B981,#3B82F6)"><div class="overlay"><span>Project Beta</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#F97316,#EF4444)"><div class="overlay"><span>Project Gamma</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#8B5CF6,#EC4899)"><div class="overlay"><span>Project Delta</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#06B6D4,#10B981)"><div class="overlay"><span>Project Epsilon</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#F43F5E,#F97316)"><div class="overlay"><span>Project Zeta</span></div></div>\n    </div>\n  </section>\n`;
+    html = html.replace('</body>', `${galleryHTML}</body>`);
+    css += `\n${cssGallery(p)}`;
+    summary = 'Added a responsive image gallery with hover overlays.';
+    nextSteps.push('Add real images', 'Add lightbox', 'Add filtering by category');
   } else if (/animation|animate|motion|scroll/.test(lower)) {
     css += `\n${cssAnimations()}`;
     html = html.replace(/<section(?!.*class="fade-up")/g, '<section class="fade-up"');
@@ -772,28 +1597,60 @@ const TEMPLATE_BUILDERS: Record<string, (analysis: PromptAnalysis) => AIGenerati
   ecommerce: buildEcommerce,
   blog: buildBlog,
   dashboard: buildDashboard,
+  webapp: buildWebApp,
   agency: buildAgency,
   event: buildEvent,
 };
 
 // ─── Main Generation Function ──────────────────────────────────────
 
+function withGenerationGuidance(response: AIGenerationResponse, options?: AIGenerationOptions): AIGenerationResponse {
+  if (!options?.skillBrief?.length && !options?.contextFiles?.length) return response;
+
+  const guidanceNotes: string[] = [];
+  if (options.contextFiles?.length) {
+    guidanceNotes.push(`Context reviewed: ${options.contextFiles.slice(0, 5).join(', ')}.`);
+  }
+  if (options.skillBrief?.length) {
+    guidanceNotes.push(`Applied ${options.skillBrief.length} active builder skill${options.skillBrief.length > 1 ? 's' : ''}.`);
+  }
+
+  return {
+    ...response,
+    summary: [response.summary, ...guidanceNotes].filter(Boolean).join(' '),
+    nextSteps: response.nextSteps.filter(step => !/suggested next steps/i.test(step)),
+  };
+}
+
 export async function generateWithAI(
   prompt: string,
   existingFiles: ProjectFile[],
-  _conversationHistory: { role: string; content: string }[] = []
+  conversationHistory: { role: string; content: string }[] = [],
+  options?: AIGenerationOptions
 ): Promise<AIGenerationResponse> {
+  const settings = getSettings();
+  if (settings.aiProvider === 'joyful' && joyfulProviderConfig.enabled) {
+    return withGenerationGuidance(
+      await generateWithJoyfulAI(prompt, existingFiles, conversationHistory, options),
+      options,
+    );
+  }
+
   await new Promise(resolve => setTimeout(resolve, 400));
 
   const analysis = analyzePrompt(prompt, existingFiles);
 
   if (analysis.intent === 'modify') {
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
-    if (modified) return modified;
+    if (modified) return withGenerationGuidance(modified, options);
+  }
+
+  if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
+    return withGenerationGuidance(buildReactTemplate(analysis), options);
   }
 
   const builder = TEMPLATE_BUILDERS[analysis.template] || buildPortfolio;
-  return builder(analysis);
+  return withGenerationGuidance(builder(analysis), options);
 }
 
 // ─── Streaming Support ─────────────────────────────────────────────
@@ -809,6 +1666,8 @@ export async function* generateWithAIStream(
   if (analysis.intent === 'modify') {
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
     response = modified || (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
+  } else if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
+    response = buildReactTemplate(analysis);
   } else {
     response = (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
   }

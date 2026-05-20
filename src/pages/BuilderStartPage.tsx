@@ -1,18 +1,20 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { FolderOpen, Plus, Send } from 'lucide-react';
+import { ChevronDown, FolderOpen, ListChecks, Plus, Send, Wand2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import type { Project } from '@/types';
+import type { ChatMode, Project } from '@/types';
 
 interface BuilderStartPageProps {
   projects: Project[];
-  onStartProject: (prompt: string) => void;
+  onStartProject: (prompt: string, mode?: ChatMode) => void;
 }
 
 export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageProps) {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [prompt, setPrompt] = useState('');
+  const [promptMode, setPromptMode] = useState<ChatMode>('build');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const recentProjects = [...projects].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
@@ -24,7 +26,8 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
   };
 
   const handleSubmit = () => {
-    onStartProject(prompt.trim());
+    onStartProject(prompt.trim(), promptMode);
+    setModeMenuOpen(false);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -69,13 +72,59 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
                   <Plus className="h-4 w-4" />
                   Browse templates
                 </button>
-                <button
-                  onClick={handleSubmit}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] px-4 py-2 text-sm font-bold text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-[1.02]"
-                >
-                  Build
-                  <Send className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setModeMenuOpen(prev => !prev)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-[#f6f2ea] transition-colors hover:bg-white/10"
+                      aria-haspopup="menu"
+                      aria-expanded={modeMenuOpen}
+                    >
+                      {promptMode === 'plan' ? <ListChecks className="h-3.5 w-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
+                      {promptMode === 'plan' ? 'Plan' : 'Build'}
+                      <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                    </button>
+                    {modeMenuOpen && (
+                      <div className="absolute bottom-full right-0 z-20 mb-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#20211e] p-1 shadow-xl">
+                        {([
+                          { value: 'build' as const, label: 'Build', hint: 'Create files', icon: Wand2 },
+                          { value: 'plan' as const, label: 'Plan', hint: 'Review first', icon: ListChecks },
+                        ]).map((option) => {
+                          const Icon = option.icon;
+                          const selected = promptMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setPromptMode(option.value);
+                                setModeMenuOpen(false);
+                              }}
+                              className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
+                                selected ? 'bg-[#2f5bff]/15 text-white' : 'text-[#d8d3ca] hover:bg-white/10 hover:text-white'
+                              }`}
+                            >
+                              <Icon className="mt-0.5 h-3.5 w-3.5 text-[#8fa7ff]" />
+                              <span>
+                                <span className="block text-xs font-semibold">{option.label}</span>
+                                <span className="block text-[10px] leading-snug opacity-70">{option.hint}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    aria-label={promptMode === 'plan' ? 'Create implementation plan' : 'Start building'}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-[#2f5bff] to-[#f23c78] text-white shadow-lg shadow-[#2f5bff]/20 transition-transform hover:scale-[1.05]"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

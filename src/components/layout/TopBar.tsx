@@ -120,7 +120,7 @@ export function TopBar() {
                     <button onClick={() => { setProfileOpen(false); navigate('/builder'); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
                       <Sparkles className="h-4 w-4" /> Builder
                     </button>
-                    <button onClick={() => { setProfileOpen(false); navigate('/settings'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
+                    <button onClick={() => { setProfileOpen(false); navigate('/settings', { state: { from: location.pathname } }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
                       <Settings className="h-4 w-4" /> Settings
                     </button>
                     <button onClick={() => void handleSignOut()} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/10">
@@ -176,7 +176,7 @@ export function TopBar() {
                     <button onClick={() => { navigate('/builder'); setMobileMenuOpen(false); }} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
                       Builder
                     </button>
-                    <button onClick={() => { navigate('/settings'); setMobileMenuOpen(false); }} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
+                    <button onClick={() => { navigate('/settings', { state: { from: location.pathname } }); setMobileMenuOpen(false); }} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-white/80 dark:hover:bg-white/5">
                       Settings
                     </button>
                     <button onClick={() => void handleSignOut()} className="block w-full rounded-lg px-4 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-500/10">
@@ -241,7 +241,7 @@ export function TopBar() {
         {user && !isWorkspace && (
           <button
             type="button"
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate('/settings', { state: { from: location.pathname } })}
             className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-secondary text-xs font-bold text-secondary-foreground"
             title="Profile settings"
           >

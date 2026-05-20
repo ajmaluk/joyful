@@ -15,12 +15,13 @@ import {
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyDHC_Z4kG3oikomcWvIP_OLDr-_2j9EKPU',
-  authDomain: 'joyful-builder.firebaseapp.com',
-  projectId: 'joyful-builder',
-  storageBucket: 'joyful-builder.firebasestorage.app',
-  messagingSenderId: '1030906503773',
-  appId: '1:1030906503773:web:49a1bdccf1bd558d41e3b4',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 export const firebaseApp = initializeApp(firebaseConfig);

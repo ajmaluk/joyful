@@ -61,7 +61,6 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   });
 
   const visibleProjects = activeTab === 'Recently viewed' ? filteredProjects.slice(0, 4) : filteredProjects;
-  const totalFiles = projects.reduce((sum, project) => sum + project.files.length, 0);
 
   const handleCreateProject = (name: string, description: string) => {
     const project = onCreateProject(name, description);
@@ -230,8 +229,8 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         </div>
       </section>
 
-      <section className="relative z-10 bg-transparent px-4 py-5 sm:px-6 lg:px-10">
-        <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-[#2f5bff]/12 bg-white/96 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.1)] backdrop-blur sm:p-5 dark:border-white/10 dark:bg-[#18191d]/96 dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
+      <section className="relative z-10 bg-[#f6f7fb] px-4 py-5 sm:px-6 lg:px-10 dark:bg-[#18191d]">
+        <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-gray-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-5 dark:border-white/10 dark:bg-[#18191d] dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
               {tabs.map((tab) => (
@@ -274,19 +273,6 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {[
-              { label: 'Projects', value: projects.length },
-              { label: 'Files', value: totalFiles },
-              { label: 'Drafts', value: projects.filter((project) => project.status === 'draft').length },
-            ].map((stat) => (
-              <div key={stat.label} className="group rounded-2xl border border-gray-200 bg-gray-50 p-3.5 transition-all duration-300 hover:border-gray-300 hover:bg-white dark:border-white/8 dark:bg-white/[0.03] dark:hover:border-white/16 dark:hover:bg-white/[0.05]">
-                <div className="text-xl font-bold text-gray-950 transition-colors duration-300 group-hover:text-[#2f5bff] dark:text-white dark:group-hover:text-[#8fa7ff]">{stat.value}</div>
-                <div className="mt-1 text-xs font-semibold uppercase tracking-normal text-gray-500 dark:text-[#aaa69d]">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-[#2f5bff]/18 bg-[#2f5bff]/4 px-6 py-20 text-center dark:border-white/12 dark:bg-white/[0.02]">
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[#2f5bff]/10 ring-1 ring-[#2f5bff]/15">
@@ -325,7 +311,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               {visibleProjects.map((project) => (
                 <article
                   key={project.id}
-                  className="group relative overflow-hidden rounded-lg border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_14px_38px_rgba(15,23,42,0.14)] dark:border-white/8 dark:bg-[#1d1e22] dark:hover:border-white/18 dark:hover:shadow-[0_14px_38px_rgba(0,0,0,0.38)]"
+                  className="group relative overflow-hidden rounded-[1.5rem] border border-gray-200 bg-white transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_14px_38px_rgba(15,23,42,0.14)] dark:border-white/8 dark:bg-[#1d1e22] dark:hover:border-white/18 dark:hover:shadow-[0_14px_38px_rgba(0,0,0,0.38)]"
                 >
                   <button
                     type="button"
@@ -348,8 +334,10 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                         <span className="text-sm font-medium text-gray-500 dark:text-white/60">Ready for your first prompt</span>
                       </div>
                     )}
-                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-[#171816]/0 opacity-0 backdrop-blur-md transition-all group-hover:bg-[#171816]/80 group-hover:opacity-100">
-                      <span className="rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#171816]">Open Builder</span>
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-[#171816]/0 opacity-0 backdrop-blur-md transition-all duration-300 group-hover:bg-[#171816]/72 group-hover:opacity-100">
+                      <span className="rounded-full border border-white/20 bg-white/95 px-4 py-2.5 text-sm font-bold text-[#171816] shadow-lg shadow-black/10 transition-transform duration-300 group-hover:scale-[1.02]">
+                        Open Builder
+                      </span>
                     </div>
                   </button>
 
@@ -387,7 +375,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                       <button
                         type="button"
                         onClick={() => navigate(`/builder/${project.id}`)}
-                        className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-[#6387ff] text-sm font-semibold text-white transition-all hover:bg-[#7a9aff]"
+                        className="flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-[#6387ff] text-sm font-semibold text-white shadow-sm shadow-[#6387ff]/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#7a9aff] hover:shadow-md hover:shadow-[#6387ff]/25 active:translate-y-0"
                       >
                         <Pencil className="h-4 w-4" />
                         Edit
@@ -396,7 +384,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                         type="button"
                         onClick={() => navigate(`/builder/${project.id}`)}
                         aria-label={`Preview ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-950 dark:border-white/10 dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#6387ff]/30 hover:bg-[#6387ff]/8 hover:text-[#6387ff] active:translate-y-0 dark:border-white/10 dark:bg-white/[0.02] dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -405,7 +393,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                         onClick={() => handleExportProject(project)}
                         disabled={project.files.length === 0}
                         aria-label={`Export ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:bg-gray-50 hover:text-gray-950 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#6387ff]/30 hover:bg-[#6387ff]/8 hover:text-[#6387ff] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.02] dark:text-[#aaa69d] dark:hover:bg-white/[0.08] dark:hover:text-white"
                       >
                         <Download className="h-4 w-4" />
                       </button>
@@ -413,7 +401,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                         type="button"
                         onClick={() => handleDeleteProject(project)}
                         aria-label={`Delete ${project.name}`}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-all hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-600 dark:border-white/10 dark:text-[#aaa69d] dark:hover:text-red-200"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition-all duration-200 hover:-translate-y-0.5 hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-600 active:translate-y-0 dark:border-white/10 dark:bg-white/[0.02] dark:text-[#aaa69d] dark:hover:text-red-200"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

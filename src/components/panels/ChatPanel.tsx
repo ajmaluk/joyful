@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { ChatMessage, ProjectFile, ChatMode } from '@/types';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { exportChatAsMarkdown } from '@/components/chat/chatExport';
-import { SmartSuggestions } from '@/components/chat/SmartSuggestions';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { PromptInput } from '@/components/chat/PromptInput';
 import { WorkingProcess, type BuildTodo } from '@/components/chat/WorkingProcess';
@@ -119,15 +118,23 @@ export function ChatPanel({
           </div>
         )}
 
-        {/* Empty state with suggestions */}
+        {/* Empty state */}
         {messages.length === 0 && (files.length > 0 || !onSelectTemplate) && (
-          <div className="min-w-0 space-y-6 py-8">
-            <SmartSuggestions
-              files={files}
-              activeFile={activeFile}
-              onSelect={handleSuggestionSelect}
-              disabled={isGenerating}
-            />
+          <div className="min-w-0 py-10">
+            <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card/70 p-5 text-center shadow-sm">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground">
+                <MessageBubbleIcon />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Start a conversation</h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Describe what you want to change, or ask for a build plan before editing.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border border-border bg-background px-3 py-1">Build a feature</span>
+                <span className="rounded-full border border-border bg-background px-3 py-1">Review the plan</span>
+                <span className="rounded-full border border-border bg-background px-3 py-1">Improve the UI</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -183,4 +190,8 @@ export function ChatPanel({
       />
     </div>
   );
+}
+
+function MessageBubbleIcon() {
+  return <span className="text-lg leading-none">💬</span>;
 }

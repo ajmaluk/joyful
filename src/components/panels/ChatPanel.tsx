@@ -35,7 +35,6 @@ export function ChatPanel({
   onSelectTemplate,
   onCloseSidebar,
   files = [],
-  activeFile = null,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
@@ -66,10 +65,6 @@ export function ChatPanel({
     a.click();
     URL.revokeObjectURL(url);
   }, [messages, sessionName]);
-
-  const handleSuggestionSelect = useCallback((prompt: string) => {
-    onSendMessage(prompt, 'build');
-  }, [onSendMessage]);
 
   const handleProceedPlan = useCallback((messageId: string) => {
     const planMessage = messages.find(message => message.id === messageId);

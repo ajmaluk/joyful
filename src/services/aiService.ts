@@ -1,4 +1,5 @@
 import type { AIGenerationResponse, AIStreamChunk, ProjectFile } from '@/types';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { getSettings } from '@/services/storage';
 
@@ -96,37 +97,72 @@ async function generateWithJoyfulAI(
   options?: AIGenerationOptions,
 ): Promise<AIGenerationResponse> {
   if (!joyfulProviderConfig.apiKey) {
-    throw new Error('Joyful AI is enabled but VITE_JOYFUL_API_KEY is missing.');
+    throw new Error('Joyful AI is enabled but VITE_GEMINI_API_KEY is missing.');
   }
 
-  const response = await fetch(joyfulProviderConfig.apiUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${joyfulProviderConfig.apiKey}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: joyfulProviderConfig.model,
-      messages: buildJoyfulMessages(prompt, existingFiles, conversationHistory, options),
-      temperature: joyfulProviderConfig.temperature,
-      top_p: joyfulProviderConfig.topP,
-      max_tokens: joyfulProviderConfig.maxTokens,
-      stream: false,
-      response_format: { type: 'json_object' },
-    }),
+  const ai = new GoogleGenAI({
+    apiKey: joyfulProviderConfig.apiKey,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Joyful AI request failed (${response.status}): ${errorText.slice(0, 240)}`);
+  const messages = buildJoyfulMessages(prompt, existingFiles, conversationHistory, options);
+  const [systemMessage, ...chatMessages] = messages;
+  const response = await ai.models.generateContentStream({
+    model: joyfulProviderConfig.model,
+    config: {
+      topP: joyfulProviderConfig.topP,
+      thinkingConfig: {
+        thinkingLevel: ThinkingLevel[joyfulProviderConfig.thinkingLevel as keyof typeof ThinkingLevel] || ThinkingLevel.MINIMAL,
+      },
+      tools: [{ googleSearch: {} }],
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          files: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                path: { type: Type.STRING },
+                action: { type: Type.STRING },
+                content: { type: Type.STRING },
+              },
+            },
+          },
+          summary: { type: Type.STRING },
+          nextSteps: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          metadata: {
+            type: Type.OBJECT,
+            properties: {
+              template: { type: Type.STRING },
+              estimatedComplexity: { type: Type.STRING },
+              sections: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+              },
+            },
+          },
+        },
+      },
+      systemInstruction: systemMessage?.content || undefined,
+    },
+    contents: chatMessages.map(message => ({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: message.content }],
+    })),
+  });
+
+  let text = '';
+  for await (const chunk of response) {
+    text += chunk.text || '';
   }
 
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') throw new Error('Joyful AI returned an unsupported response format.');
+  if (!text.trim()) throw new Error('Joyful AI returned an unsupported response format.');
 
-  return normalizeAIResponse(JSON.parse(stripMarkdownJson(content)));
+  return normalizeAIResponse(JSON.parse(stripMarkdownJson(text)));
 }
 
 // ─── Prompt Analysis ───────────────────────────────────────────────

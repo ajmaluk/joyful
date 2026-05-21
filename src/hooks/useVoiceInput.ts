@@ -97,7 +97,7 @@ export function useVoiceInput({ onTranscript, language = 'en-US', minimumProcess
     transcriptRef.current = '';
     recognitionRef.current = null;
     updateStatus('idle');
-  }, [clearFinalizeTimer, onTranscript]);
+  }, [clearFinalizeTimer, onTranscript, updateStatus]);
 
   useEffect(() => {
     setIsSupported(Boolean(getSpeechRecognitionConstructor()));

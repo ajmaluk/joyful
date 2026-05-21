@@ -48,6 +48,20 @@ export interface ChatMessage {
   };
 }
 
+export interface SavedGenerationState {
+  id: string;
+  projectId: string;
+  prompt: string;
+  mode: ChatMode;
+  status: 'in_progress' | 'failed';
+  savedAt: string;
+  updatedAt: string;
+  filesSnapshot: ProjectFile[];
+  messageCount: number;
+  contextFiles?: string[];
+  error?: string;
+}
+
 export interface ChatTask {
   id: string;
   label: string;
@@ -121,7 +135,7 @@ export interface UserSettings {
   explorerDensity: 'comfortable' | 'compact';
   autoSave: boolean;
   livePreview: boolean;
-  aiProvider: 'local' | 'joyful' | 'openai' | 'anthropic' | 'openrouter' | 'google' | 'mistral' | 'groq';
+  aiProvider: 'local' | 'joyful' | 'openai' | 'anthropic' | 'openrouter' | 'mistral' | 'groq';
   aiModel: string;
   aiTemperature: number;
   connectedProviders?: Partial<Record<UserSettings['aiProvider'], boolean>>;

@@ -140,9 +140,30 @@ function escapeClosingScript(content: string): string {
   return content.replace(/<\/script/gi, '<\\/script');
 }
 
+function extractImportedNames(content: string): string[] {
+  const names = new Set<string>();
+  const importRegex = /import\s+([\s\S]*?)\s+from\s+['"][^'"]+['"];?/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = importRegex.exec(content)) !== null) {
+    const specifier = match[1].trim();
+    const named = specifier.match(/\{([\s\S]*?)\}/)?.[1] || '';
+    for (const part of named.split(',')) {
+      const clean = part.trim();
+      if (!clean) continue;
+      const alias = clean.match(/\bas\s+([A-Za-z_$][\w$]*)$/)?.[1];
+      const direct = clean.match(/^([A-Za-z_$][\w$]*)/)?.[1];
+      if (alias || direct) names.add(alias || direct || '');
+    }
+  }
+
+  return Array.from(names).filter(Boolean);
+}
+
 function stripModuleSyntax(content: string): string {
   return content
-    .replace(/^\s*import\s+[^;]+;?\s*$/gm, '')
+    .replace(/^\s*import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?\s*$/gm, '')
+    .replace(/^\s*import\s+['"][^'"]+['"];?\s*$/gm, '')
     .replace(/^\s*export\s+\{[^}]+\};?\s*$/gm, '')
     .replace(/\bexport\s+default\s+function\s+([A-Za-z0-9_$]+)/, 'function $1')
     .replace(/\bexport\s+default\s+function\s*\(/, 'function App(')
@@ -151,7 +172,29 @@ function stripModuleSyntax(content: string): string {
     .replace(/\bexport\s+(const|let|var|function|class)\s+/g, '$1 ');
 }
 
-function generateReactPreview(files: ProjectFile[]): string {
+function routePathToFilePath(routePath: string): string {
+  const normalized = routePath.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  return normalized ? `${normalized}.html` : 'index.html';
+}
+
+function buildPreviewFallbacks(importedNames: string[]): string {
+  const safeNames = importedNames
+    .filter(name => /^[A-Za-z_$][\w$]*$/.test(name))
+    .filter(name => !['React', 'useState', 'useEffect', 'useMemo', 'useRef', 'useCallback', 'useReducer', 'useId'].includes(name));
+
+  if (safeNames.length === 0) return '';
+
+  return `\nconst __JoyfulIcon = ({ size = 20, className = '', ...props }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true" {...props}>
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
+    <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+${safeNames.map(name => `const ${name} = __JoyfulIcon;`).join('\n')}
+`;
+}
+
+function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
   const appFile =
     files.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path)) ||
     files.find(f => /^app\/page\.(jsx|tsx)$/i.test(f.path)) ||
@@ -168,6 +211,7 @@ function generateReactPreview(files: ProjectFile[]): string {
   }
 
   const componentSource = stripModuleSyntax(appFile.content);
+  const importFallbacks = buildPreviewFallbacks(extractImportedNames(appFile.content));
   const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(componentSource);
   const appResolver = hasNamedApp
     ? 'const JoyfulApp = window.__JoyfulApp || (typeof App !== "undefined" ? App : Page);'
@@ -187,7 +231,14 @@ function generateReactPreview(files: ProjectFile[]): string {
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel" data-presets="env,react,typescript">
+window.__JOYFUL_PREVIEW_PATH = ${JSON.stringify(routePath || '/')};
+try {
+  if (window.location.origin !== 'null') {
+    window.history.replaceState({}, '', window.__JOYFUL_PREVIEW_PATH);
+  }
+} catch (error) {}
 const { useState, useMemo, useEffect, useRef, useCallback, useReducer, useId } = React;
+${importFallbacks}
 ${escapeClosingScript(componentSource)}
 ${appResolver}
 if (!JoyfulApp) {
@@ -200,7 +251,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<JoyfulApp />);
 }
 
 // Generate a preview HTML from project files
-export function generatePreview(files: ProjectFile[]): string {
+export function generatePreview(files: ProjectFile[], routePath = '/'): string {
   const hasFrameworkEntry = files.some(f =>
     /^src\/App\.(jsx|tsx)$/i.test(f.path) ||
     /^app\/page\.(jsx|tsx)$/i.test(f.path) ||
@@ -208,10 +259,11 @@ export function generatePreview(files: ProjectFile[]): string {
   );
 
   if (hasFrameworkEntry) {
-    return generateReactPreview(files);
+    return generateReactPreview(files, routePath);
   }
 
-  const htmlFile = files.find(f => f.path === 'index.html');
+  const requestedHtmlPath = routePathToFilePath(routePath);
+  const htmlFile = files.find(f => f.path === requestedHtmlPath) || files.find(f => f.path === 'index.html');
   if (!htmlFile) {
     return '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0A0A0F;color:#8A8AA0;font-family:sans-serif;"><div>No index.html found. Create one to see a preview.</div></body></html>';
   }

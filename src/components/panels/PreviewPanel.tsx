@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2, Columns, Smartphone as SmartphoneFrame } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { generatePreview } from '@/services/fileSystem';
@@ -10,6 +10,8 @@ import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
 
 interface PreviewPanelProps {
   files: ProjectFile[];
+  projectId?: string;
+  runLogIds?: string[];
 }
 
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
@@ -18,7 +20,9 @@ type ViewMode = 'single' | 'split';
 
 const BOTTOM_HEIGHT = 200;
 
-export function PreviewPanel({ files }: PreviewPanelProps) {
+const PREVIEW_ROUTE_PREFIX = 'joyful_preview_route_';
+
+export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [srcDoc, setSrcDoc] = useState('');
@@ -26,6 +30,14 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
   const [bottomOpen, setBottomOpen] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('console');
   const [showDeviceFrame, setShowDeviceFrame] = useState(false);
+  const [currentPath, setCurrentPath] = useState(() => {
+    if (!projectId) return '/';
+    try {
+      return localStorage.getItem(`${PREVIEW_ROUTE_PREFIX}${projectId}`) || '/';
+    } catch {
+      return '/';
+    }
+  });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeRefSplit = useRef<HTMLIFrameElement>(null);
 
@@ -39,11 +51,57 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
     requestMetrics,
     clearLogs,
     clearNetwork,
+    subscribeRunLogs,
   } = useSandboxMessages(iframeRef);
+
+  useEffect(() => {
+    if (!subscribeRunLogs || !runLogIds || runLogIds.length === 0) return;
+    const unsubscribes = runLogIds.map(id => subscribeRunLogs(id));
+    return () => unsubscribes.forEach(fn => { try { fn && fn(); } catch (e) {} });
+  }, [runLogIds, subscribeRunLogs]);
+
+  const pageOptions = useMemo(() => {
+    const routes = new Set<string>(['/']);
+
+    for (const file of files) {
+      if (file.type === 'html' && file.path !== 'index.html') {
+        routes.add(`/${file.path.replace(/\.html$/i, '').replace(/^\/+/, '')}`);
+      }
+
+      const contentRoutes = file.content.match(/(?:path\s*[:=]|to=|href=|data-preview-path=)["']\/[A-Za-z0-9_/-]*["']/g) || [];
+      for (const match of contentRoutes) {
+        const route = match.match(/["'](\/[A-Za-z0-9_/-]*)["']/)?.[1];
+        if (route && !route.includes('//') && route !== '#') routes.add(route.replace(/\/+$/, '') || '/');
+      }
+    }
+
+    return Array.from(routes).sort((a, b) => a.localeCompare(b));
+  }, [files]);
+
+  useEffect(() => {
+    if (!pageOptions.includes(currentPath)) {
+      setCurrentPath('/');
+    }
+  }, [currentPath, pageOptions]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    try {
+      localStorage.setItem(`${PREVIEW_ROUTE_PREFIX}${projectId}`, currentPath);
+    } catch {
+      // ignore persistence failures
+    }
+  }, [currentPath, projectId]);
+
+  useEffect(() => {
+    if (logs.length > 0 || network.length > 0 || inspectorEnabled) {
+      setBottomOpen(true);
+    }
+  }, [inspectorEnabled, logs.length, network.length]);
 
   const refreshPreview = useCallback(() => {
     setIsLoading(true);
-    const html = generatePreview(files);
+    const html = generatePreview(files, currentPath);
     const bridgeHtml = html.includes('</body>')
       ? html.replace('</body>', `${SANDBOX_BRIDGE_SCRIPT}</body>`)
       : html + SANDBOX_BRIDGE_SCRIPT;
@@ -52,7 +110,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
       setIsLoading(false);
       requestMetrics();
     }, 300);
-  }, [files, requestMetrics]);
+  }, [currentPath, files, requestMetrics]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -147,7 +205,18 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
               <span className="text-[10px] font-medium text-muted-foreground">HTTPS</span>
             </div>
             <div className="h-3 w-px bg-border" />
-            <span className="truncate font-mono text-xs text-muted-foreground">localhost:preview</span>
+            <select
+              value={currentPath}
+              onChange={(event) => setCurrentPath(event.target.value)}
+              className="min-w-0 flex-1 appearance-none bg-transparent font-mono text-xs text-muted-foreground outline-none"
+              title="Preview route"
+              aria-label="Preview route"
+            >
+              {pageOptions.map((path) => (
+                <option key={path} value={path}>{path}</option>
+              ))}
+            </select>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="ml-auto hidden items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 sm:flex dark:text-emerald-300">
               <ShieldCheck className="h-3 w-3" />
               Safe preview
@@ -235,7 +304,7 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
           className="ml-1.5 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
           title="Open preview in new tab"
           onClick={() => {
-            const html = generatePreview(files);
+            const html = generatePreview(files, currentPath);
             const blob = new Blob([html], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
@@ -294,6 +363,21 @@ export function PreviewPanel({ files }: PreviewPanelProps) {
             <span className="rounded-md bg-background px-2 py-0.5">{metrics.heapMB} MB</span>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-1.5 text-[10px] text-muted-foreground">
+        <span className="rounded-full border border-border bg-background px-2 py-0.5 font-mono">{currentPath}</span>
+        <span className="rounded-full border border-border bg-background px-2 py-0.5">Console {logs.length}</span>
+        <span className="rounded-full border border-border bg-background px-2 py-0.5">Errors {logs.filter(log => log.level === 'error').length}</span>
+        <span className="rounded-full border border-border bg-background px-2 py-0.5">Network {network.length}</span>
+        <span className="rounded-full border border-border bg-background px-2 py-0.5">Pending {network.filter(request => request.pending).length}</span>
+        <button
+          type="button"
+          onClick={() => setBottomOpen(true)}
+          className="ml-auto rounded-full border border-border bg-background px-2 py-0.5 font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          Open DevTools
+        </button>
       </div>
 
       {/* Preview iframe — polished */}

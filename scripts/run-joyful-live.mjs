@@ -1,18 +1,13 @@
 import dotenv from 'dotenv';
-import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
-const apiKey = process.env.VITE_GEMINI_API_KEY;
-const model = process.env.VITE_GEMINI_API_MODEL || "gemini-2.0-flash-exp";
-const thinking = process.env.VITE_GEMINI_API_THINKING_LEVEL || 'MINIMAL';
+const invokeUrl = process.env.VITE_NV_INVOKE_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
+const apiKey = process.env.VITE_NV_API_KEY || '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';
+const model = process.env.VITE_NV_API_MODEL || 'qwen/qwen3-coder-480b-a35b-instruct';
+const topP = Number(process.env.VITE_NV_API_TOP_P || 0.8);
 
-if (!apiKey) {
-  console.error('VITE_GEMINI_API_KEY is missing in .env');
-  process.exit(2);
-}
-
-async function stripMarkdownJson(value) {
+function stripMarkdownJson(value) {
   const trimmed = String(value).trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   if (fenced) return fenced[1].trim();
@@ -22,37 +17,55 @@ async function stripMarkdownJson(value) {
   return trimmed;
 }
 
+async function callJoyful(messages) {
+  const response = await fetch(invokeUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.7,
+      top_p: topP,
+      frequency_penalty: 0,
+      presence_penalty: 0,
+      max_tokens: 4096,
+      stream: false,
+    }),
+  });
+
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`NVIDIA API error ${response.status}: ${body}`);
+  }
+
+  const json = JSON.parse(body);
+  return String(json?.choices?.[0]?.message?.content || json?.choices?.[0]?.text || '');
+}
+
 (async () => {
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const systemInstruction = `You are Joyful AI. Return only valid JSON with this shape:
+{
+  "files": [ { "path": "index.html", "action": "create", "content": "..." } ],
+  "summary": "brief summary",
+  "nextSteps": ["step"]
+}
+Do not wrap JSON in markdown.`;
 
-    const systemInstruction = `You are Joyful AI. Return only valid JSON with this shape:\n{\n  \"files\": [ { \"path\": \"index.html\", \"action\": \"create\", \"content\": \"...\" } ],\n  \"summary\": \"brief summary\",\n  \"nextSteps\": [\"step\"]\n}\nDo not wrap JSON in markdown.`;
-
-    const userPrompt = `Create a minimal index.html file for a tiny landing page. Respond using only the JSON schema requested by system instruction.`;
-
-    const response = await ai.models.generateContentStream({
-      model,
-      config: {
-        responseMimeType: "text/plain",
-        systemInstruction,
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: userPrompt }],
-        },
-      ],
-    });
-
-    let text = '';
-    for await (const chunk of response) {
-      text += chunk.text || '';
-    }
+    const userPrompt = 'Create a minimal index.html file for a tiny landing page. Respond using only the JSON schema requested by system instruction.';
+    const text = await callJoyful([
+      { role: 'system', content: systemInstruction },
+      { role: 'user', content: userPrompt },
+    ]);
 
     console.log('\n--- Raw model output ---\n');
     console.log(text);
 
-    const jsonText = await stripMarkdownJson(text);
+    const jsonText = stripMarkdownJson(text);
     try {
       const parsed = JSON.parse(jsonText);
       console.log('\n--- Parsed JSON ---\n');

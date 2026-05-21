@@ -1,25 +1,22 @@
-◇ injected env (14) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (14) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
 
 --- Raw model output ---
 
-```json
 {
   "files": [
     {
       "path": "index.html",
       "action": "create",
-      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Tiny Landing Page</title>\n    <style>\n        body {\n            font-family: sans-serif;\n            margin: 0;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            min-height: 100vh;\n            background-color: #f4f4f4;\n            color: #333;\n            text-align: center;\n            padding: 20px;\n            box-sizing: border-box;\n        }\n        .container {\n            background-color: #ffffff;\n            padding: 40px;\n            border-radius: 8px;\n            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);\n            max-width: 600px;\n            width: 100%;\n        }\n        h1 {\n            color: #007bff;\n            margin-bottom: 20px;\n        }\n        p {\n            line-height: 1.6;\n            margin-bottom: 30px;\n        }\n        .button {\n            display: inline-block;\n            background-color: #28a745;\n            color: white;\n            padding: 12px 25px;\n            border-radius: 5px;\n            text-decoration: none;\n            font-weight: bold;\n            transition: background-color 0.3s ease;\n        }\n        .button:hover {\n            background-color: #218838;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Welcome to Our Tiny Page!</h1>\n        <p>This is a super minimal landing page designed to get your project off the ground quickly. It's simple, elegant, and ready for your content.</p>\n        <a href=\"#\" class=\"button\">Learn More</a>\n    </div>\n</body>\n</html>"
+      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Welcome</title>\n    <style>\n        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }\n        .container { max-width: 600px; padding: 20px; }\n        h1 { color: #333; }\n        p { color: #666; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Hello World</h1>\n        <p>Welcome to this tiny landing page. Minimal, fast, and clean.</p>\n    </div>\n</body>\n</html>"
     }
   ],
-  "summary": "Created a minimal `index.html` file for a tiny landing page, including basic HTML structure, a simple title, and inline CSS for a clean look with a call-to-action button.",
+  "summary": "Created a minimal single-file landing page with embedded CSS.",
   "nextSteps": [
-    "Open `index.html` in your web browser to see the page.",
-    "Customize the `<h1>`, `<p>`, and button text to fit your content.",
-    "Replace `#` in the button's `href` with your desired link.",
-    "Add more sections or external CSS if you need more complexity."
+    "Add custom branding and colors",
+    "Include a call-to-action button",
+    "Add a contact form"
   ]
 }
-```
 
 --- Parsed JSON ---
 
@@ -28,14 +25,13 @@
     {
       "path": "index.html",
       "action": "create",
-      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Tiny Landing Page</title>\n    <style>\n        body {\n            font-family: sans-serif;\n            margin: 0;\n            display: flex;\n            justify-content: center;\n            align-items: center;\n            min-height: 100vh;\n            background-color: #f4f4f4;\n            color: #333;\n            text-align: center;\n            padding: 20px;\n            box-sizing: border-box;\n        }\n        .container {\n            background-color: #ffffff;\n            padding: 40px;\n            border-radius: 8px;\n            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);\n            max-width: 600px;\n            width: 100%;\n        }\n        h1 {\n            color: #007bff;\n            margin-bottom: 20px;\n        }\n        p {\n            line-height: 1.6;\n            margin-bottom: 30px;\n        }\n        .button {\n            display: inline-block;\n            background-color: #28a745;\n            color: white;\n            padding: 12px 25px;\n            border-radius: 5px;\n            text-decoration: none;\n            font-weight: bold;\n            transition: background-color 0.3s ease;\n        }\n        .button:hover {\n            background-color: #218838;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Welcome to Our Tiny Page!</h1>\n        <p>This is a super minimal landing page designed to get your project off the ground quickly. It's simple, elegant, and ready for your content.</p>\n        <a href=\"#\" class=\"button\">Learn More</a>\n    </div>\n</body>\n</html>"
+      "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Welcome</title>\n    <style>\n        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; }\n        .container { max-width: 600px; padding: 20px; }\n        h1 { color: #333; }\n        p { color: #666; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Hello World</h1>\n        <p>Welcome to this tiny landing page. Minimal, fast, and clean.</p>\n    </div>\n</body>\n</html>"
     }
   ],
-  "summary": "Created a minimal `index.html` file for a tiny landing page, including basic HTML structure, a simple title, and inline CSS for a clean look with a call-to-action button.",
+  "summary": "Created a minimal single-file landing page with embedded CSS.",
   "nextSteps": [
-    "Open `index.html` in your web browser to see the page.",
-    "Customize the `<h1>`, `<p>`, and button text to fit your content.",
-    "Replace `#` in the button's `href` with your desired link.",
-    "Add more sections or external CSS if you need more complexity."
+    "Add custom branding and colors",
+    "Include a call-to-action button",
+    "Add a contact form"
   ]
 }

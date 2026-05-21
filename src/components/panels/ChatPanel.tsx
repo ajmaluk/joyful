@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { ChatMessage, ProjectFile, ChatMode } from '@/types';
+import type { ChatMessage, ProjectFile, ChatMode, SavedGenerationState } from '@/types';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { exportChatAsMarkdown } from '@/components/chat/chatExport';
 import { MessageBubble } from '@/components/chat/MessageBubble';
@@ -17,6 +17,9 @@ interface ChatPanelProps {
   onRegenerateMessage?: (messageId: string) => void;
   onClearMessages?: () => void;
   onAbortGeneration?: () => void;
+  savedGeneration?: SavedGenerationState | null;
+  onRetrySavedGeneration?: () => void;
+  onDismissSavedGeneration?: () => void;
   onSelectTemplate?: (template: Template) => void;
   onCloseSidebar?: () => void;
   files?: ProjectFile[];
@@ -32,6 +35,9 @@ export function ChatPanel({
   onRegenerateMessage,
   onClearMessages,
   onAbortGeneration,
+  savedGeneration,
+  onRetrySavedGeneration,
+  onDismissSavedGeneration,
   onSelectTemplate,
   onCloseSidebar,
   files = [],
@@ -103,6 +109,40 @@ export function ChatPanel({
 
       {/* Messages */}
       <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-5">
+        {savedGeneration && !isGenerating && (
+          <div className="rounded-xl border border-amber-300/40 bg-amber-500/10 p-3 text-amber-900 shadow-sm dark:text-amber-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold">
+                  {savedGeneration.status === 'failed' ? 'Saved request failed' : 'Saved request found'}
+                </p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 opacity-85">
+                  {savedGeneration.prompt}
+                </p>
+                {savedGeneration.error && (
+                  <p className="mt-1 line-clamp-2 text-[11px] opacity-75">{savedGeneration.error}</p>
+                )}
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onRetrySavedGeneration}
+                  className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700"
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  onClick={onDismissSavedGeneration}
+                  className="rounded-lg px-2 py-1.5 text-xs font-semibold opacity-70 hover:bg-amber-500/10 hover:opacity-100"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Empty state with template selector */}
         {messages.length === 0 && files.length === 0 && onSelectTemplate && (
           <div className="min-w-0 space-y-6 py-4">

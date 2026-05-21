@@ -1,11 +1,31 @@
 import type { AIGenerationResponse, AIStreamChunk, ProjectFile } from '@/types';
-import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { getSettings } from '@/services/storage';
 
 interface AIGenerationOptions {
   skillBrief?: string[];
   contextFiles?: string[];
+}
+
+export async function executeRunCommand(command: string, readOnly = true): Promise<string> {
+  const base = (import.meta.env.VITE_SANDBOX_SERVER_URL as string) || '';
+  const url = base ? `${base.replace(/\/$/, '')}/sandbox/run` : `/sandbox/run`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command, readOnly }),
+  });
+  if (!res.ok) {
+    let body;
+    try {
+      body = await res.json();
+    } catch {
+      body = { error: await res.text() };
+    }
+    throw new Error(body?.error || `Sandbox run failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.runId;
 }
 
 const RESPONSE_SCHEMA_HINT = `Return only valid JSON with this shape:
@@ -29,31 +49,6 @@ function stripMarkdownJson(value: string) {
   return trimmed;
 }
 
-function normalizeAIResponse(value: unknown): AIGenerationResponse {
-  if (!value || typeof value !== 'object') throw new Error('Joyful AI returned an empty response.');
-
-  const response = value as Partial<AIGenerationResponse>;
-  const files = Array.isArray(response.files) ? response.files : [];
-  if (files.length === 0) throw new Error('Joyful AI did not return any file operations.');
-
-  const normalizedFiles = files
-    .filter(file => file && typeof file.path === 'string')
-    .map(file => ({
-      path: file.path,
-      action: file.action === 'delete' || file.action === 'modify' || file.action === 'create' ? file.action : 'modify',
-      content: file.action === 'delete' ? undefined : String(file.content || ''),
-    }));
-
-  if (normalizedFiles.length === 0) throw new Error('Joyful AI returned file operations without valid paths.');
-
-  return {
-    files: normalizedFiles,
-    summary: typeof response.summary === 'string' ? response.summary : 'Joyful AI updated the project files.',
-    nextSteps: Array.isArray(response.nextSteps) ? response.nextSteps.map(String).slice(0, 6) : [],
-    metadata: response.metadata,
-  };
-}
-
 function buildJoyfulMessages(
   prompt: string,
   existingFiles: ProjectFile[],
@@ -61,20 +56,20 @@ function buildJoyfulMessages(
   options?: AIGenerationOptions,
 ) {
   const filesForContext = existingFiles
-    .slice(0, 14)
-    .map(file => `--- ${file.path} ---\n${file.content.slice(0, 16000)}`)
+    .slice(0, 24)
+    .map(file => `--- ${file.path} ---\n${file.content.slice(0, 12000)}`)
     .join('\n\n');
   const skillText = options?.skillBrief?.length
-    ? `\n\nActive builder skills:\n${options.skillBrief.map(skill => `- ${skill}`).join('\n')}`
+    ? `\n\nUser enabled skills:\n${options.skillBrief.map(skill => `- ${skill}`).join('\n')}`
     : '';
   const contextText = options?.contextFiles?.length
-    ? `\n\nPrioritize these context files: ${options.contextFiles.join(', ')}.`
+    ? `\n\nAdditional context:\n${options.contextFiles.join('\n\n')}`
     : '';
 
   return [
     {
       role: 'system',
-      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Plan silently, then produce complete, runnable file edits. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
+      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Plan silently, then produce complete, runnable file edits. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy. Every imported local component, hook, or utility must be included as a file operation in the same response. Do not reference undefined identifiers. If you use icons from lucide-react, import every icon you reference. For complex apps, complete one coherent implementation pass and put any remaining work in nextSteps as concrete follow-up tasks.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
     },
     ...conversationHistory
       .filter(message => message.role === 'user' || message.role === 'assistant')
@@ -90,79 +85,160 @@ function buildJoyfulMessages(
   ];
 }
 
+function normalizeAIResponse(value: unknown): AIGenerationResponse {
+  if (!value || typeof value !== 'object') throw new Error('Joyful AI returned an empty response.');
+
+  const response = value as Partial<AIGenerationResponse>;
+  const files = Array.isArray(response.files) ? response.files : [];
+  if (files.length === 0) throw new Error('Joyful AI did not return any file operations.');
+
+  const normalizedFiles = files
+    .map(file => ({
+      path: typeof file.path === 'string' ? file.path.trim().replace(/^\/+/, '') : '',
+      action: file.action === 'delete' ? 'delete' as const : file.action === 'modify' ? 'modify' as const : 'create' as const,
+      content: typeof file.content === 'string' ? file.content : '',
+    }))
+    .filter(file => file.path);
+
+  if (normalizedFiles.length === 0) throw new Error('Joyful AI returned file operations without valid paths.');
+
+  return {
+    files: normalizedFiles,
+    summary: typeof response.summary === 'string' ? response.summary : 'Joyful AI updated the project files.',
+    nextSteps: Array.isArray(response.nextSteps) ? response.nextSteps.map(String) : [],
+    metadata: response.metadata,
+  };
+}
+
 async function generateWithJoyfulAI(
   prompt: string,
   existingFiles: ProjectFile[],
   conversationHistory: { role: string; content: string }[],
   options?: AIGenerationOptions,
 ): Promise<AIGenerationResponse> {
-  if (!joyfulProviderConfig.apiKey) {
-    throw new Error('Joyful AI is enabled but VITE_GEMINI_API_KEY is missing.');
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey: joyfulProviderConfig.apiKey,
-  });
-
+  // Use NVIDIA chat completions endpoint for Joyful's hosted generation path.
   const messages = buildJoyfulMessages(prompt, existingFiles, conversationHistory, options);
-  const [systemMessage, ...chatMessages] = messages;
-  const response = await ai.models.generateContentStream({
-    model: joyfulProviderConfig.model,
-    config: {
-      topP: joyfulProviderConfig.topP,
-      thinkingConfig: {
-        thinkingLevel: ThinkingLevel[joyfulProviderConfig.thinkingLevel as keyof typeof ThinkingLevel] || ThinkingLevel.MINIMAL,
-      },
-      tools: [{ googleSearch: {} }],
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          files: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                path: { type: Type.STRING },
-                action: { type: Type.STRING },
-                content: { type: Type.STRING },
-              },
-            },
-          },
-          summary: { type: Type.STRING },
-          nextSteps: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          metadata: {
-            type: Type.OBJECT,
-            properties: {
-              template: { type: Type.STRING },
-              estimatedComplexity: { type: Type.STRING },
-              sections: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-            },
-          },
-        },
-      },
-      systemInstruction: systemMessage?.content || undefined,
-    },
-    contents: chatMessages.map(message => ({
-      role: message.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: message.content }],
-    })),
-  });
+  const candidateModels = Array.from(new Set([
+    joyfulProviderConfig.model,
+    ...joyfulProviderConfig.fallbackModels,
+  ].filter(Boolean)));
+  const failures: string[] = [];
 
-  let text = '';
-  for await (const chunk of response) {
-    text += chunk.text || '';
+  for (const model of candidateModels) {
+    try {
+      const payload = {
+        model: model || 'qwen/qwen3-coder-480b-a35b-instruct',
+        messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : m.role, content: m.content })),
+        temperature: 0.7,
+        top_p: joyfulProviderConfig.topP || 0.8,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+        max_tokens: 4096,
+        stream: false,
+      };
+
+      const res = await fetch(joyfulProviderConfig.invokeUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${joyfulProviderConfig.apiKey}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        let bodyText = await res.text().catch(() => '');
+        throw new Error(`NVIDIA API error ${res.status}: ${bodyText}`);
+      }
+
+      const json = await res.json();
+      // Attempt to extract assistant text from common shapes
+      const text = String(json?.choices?.[0]?.message?.content || json?.choices?.[0]?.text || json?.output?.[0]?.content || json?.message?.content || '');
+      if (!text.trim()) throw new Error('NVIDIA chat returned an empty response.');
+
+      const parsed = JSON.parse(stripMarkdownJson(text));
+
+      // Detect function calls in the model response (SDK-specific shapes)
+      const functionCalls: any[] = ([]);
+      try {
+        const maybe = json?.choices?.[0]?.message?.function_call || json?.function_call || json?.choices?.[0]?.function_call || null;
+        if (maybe) {
+          functionCalls.push(maybe);
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      const toolResults: any[] = [];
+      const pendingFileOps: any[] = [];
+
+      if (functionCalls.length > 0) {
+        for (const fc of functionCalls) {
+          const name = fc.name;
+          const argsText = typeof fc.arguments === 'string' ? fc.arguments : JSON.stringify(fc.arguments || {});
+          let args: any = {};
+          try { args = JSON.parse(stripMarkdownJson(argsText)); } catch (e) { args = fc.arguments || {}; }
+
+          if (name === 'run_command') {
+            try {
+              const runId = await executeRunCommand(String(args.command || ''), Boolean(args.readOnly));
+              toolResults.push({ type: 'run_command', runId, command: args.command });
+            } catch (e) {
+              toolResults.push({ type: 'run_command', error: (e as Error).message, command: args.command });
+            }
+          } else if (name === 'create_file' || name === 'modify_file' || name === 'delete_file') {
+            pendingFileOps.push({ name, args });
+          } else {
+            toolResults.push({ type: 'unknown_function', name, args });
+          }
+        }
+      }
+
+      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.files)) {
+        const normalized = normalizeAIResponse(parsed);
+        const baseMeta = normalized.metadata || {} as Record<string, any>;
+        const metadata = {
+          template: typeof baseMeta.template === 'string' ? baseMeta.template : '',
+          sections: Array.isArray(baseMeta.sections) ? baseMeta.sections.map(String) : [],
+          estimatedComplexity: baseMeta.estimatedComplexity === 'simple' || baseMeta.estimatedComplexity === 'medium' || baseMeta.estimatedComplexity === 'complex' ? baseMeta.estimatedComplexity : 'medium',
+          toolResults: toolResults.length ? toolResults : undefined,
+          pendingFileOps: pendingFileOps.length ? pendingFileOps : undefined,
+        };
+        return {
+          ...normalized,
+          summary: model !== joyfulProviderConfig.model
+            ? `${normalized.summary} Used fallback model ${model} because ${joyfulProviderConfig.model} was unavailable.`
+            : normalized.summary,
+          metadata,
+        };
+      }
+
+      // If we handled function calls but model didn't return final JSON, return a tool-only response so UI can react.
+      if ((toolResults.length || pendingFileOps.length) && (!parsed || !Array.isArray((parsed || {}).files))) {
+        const metadata = {
+          template: '',
+          sections: [],
+          estimatedComplexity: 'medium' as const,
+          toolResults: toolResults.length ? toolResults : undefined,
+          pendingFileOps: pendingFileOps.length ? pendingFileOps : undefined,
+        };
+        return {
+          files: [],
+          summary: 'Executed tool calls. Review tool results and approve file operations.',
+          nextSteps: [],
+          metadata,
+        } as AIGenerationResponse;
+      }
+
+      throw new Error('Joyful AI returned JSON without file operations.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${model}: ${message}`);
+    }
   }
 
-  if (!text.trim()) throw new Error('Joyful AI returned an unsupported response format.');
-
-  return normalizeAIResponse(JSON.parse(stripMarkdownJson(text)));
+  throw new Error(`Joyful AI provider failed. ${failures.join(' | ')}`);
 }
 
 // ─── Prompt Analysis ───────────────────────────────────────────────
@@ -585,7 +661,17 @@ createRoot(document.getElementById('root')).render(
 );`;
 }
 
-function buildReactTemplate(analysis: PromptAnalysis): AIGenerationResponse {
+function extractRoutePaths(prompt: string): string[] {
+  const routes = new Set<string>();
+  const matches = prompt.match(/\/[a-z0-9][a-z0-9_/-]*/gi) || [];
+  for (const match of matches) {
+    const clean = match.replace(/[,.;:!?]+$/g, '').replace(/\/+$/g, '') || '/';
+    if (!clean.includes('//') && clean.length <= 80) routes.add(clean);
+  }
+  return Array.from(routes);
+}
+
+function buildReactTemplate(analysis: PromptAnalysis, prompt = ''): AIGenerationResponse {
   const p = pickPalette(analysis);
   const configs: Record<string, {
     title: string;
@@ -782,6 +868,7 @@ function buildReactTemplate(analysis: PromptAnalysis): AIGenerationResponse {
   };
 
   const config = configs[analysis.template] ?? configs.portfolio;
+  const previewRoutes = Array.from(new Set(['/', ...extractRoutePaths(prompt)]));
   const initialItems = config.cards.map(([name, body, meta], index) => ({
     id: index + 1,
     name,
@@ -796,6 +883,7 @@ function buildReactTemplate(analysis: PromptAnalysis): AIGenerationResponse {
 const initialItems = ${JSON.stringify(initialItems, null, 2)};
 const stats = ${JSON.stringify(config.stats, null, 2)};
 const navItems = ${JSON.stringify(config.nav)};
+const previewRoutes = ${JSON.stringify(previewRoutes)};
 
 export default function App() {
   const [items, setItems] = useState(initialItems);
@@ -830,7 +918,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">${config.title.charAt(0)}</div>
         {navItems.map((item, index) => (
-          <button key={item} className={index === 0 ? 'nav active' : 'nav'}>{item}</button>
+          <button key={item} data-preview-path={previewRoutes[index] || '/'} className={index === 0 ? 'nav active' : 'nav'}>{item}</button>
         ))}
       </aside>
 
@@ -1487,7 +1575,7 @@ function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analy
   const lower = prompt.toLowerCase();
   const reactAppFile = existingFiles.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path));
   if (reactAppFile) {
-    const rebuilt = buildReactTemplate(analysis);
+    const rebuilt = buildReactTemplate(analysis, prompt);
     return {
       ...rebuilt,
       files: rebuilt.files.map(file => ({
@@ -1672,17 +1760,23 @@ export async function generateWithAI(
     );
   }
 
+  if (settings.aiProvider !== 'local') {
+    throw new Error(`${settings.aiProvider} provider is selected but this build only has the Joyful AI runtime connected. Switch to Joyful AI in Settings or add a backend adapter for ${settings.aiProvider}.`);
+  }
+
   await new Promise(resolve => setTimeout(resolve, 400));
 
   const analysis = analyzePrompt(prompt, existingFiles);
 
   if (analysis.intent === 'modify') {
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
-    if (modified) return withGenerationGuidance(modified, options);
+    if (modified) {
+      return withGenerationGuidance(modified, options);
+    }
   }
 
   if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
-    return withGenerationGuidance(buildReactTemplate(analysis), options);
+    return withGenerationGuidance(buildReactTemplate(analysis, prompt), options);
   }
 
   const builder = TEMPLATE_BUILDERS[analysis.template] || buildPortfolio;
@@ -1703,7 +1797,7 @@ export async function* generateWithAIStream(
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
     response = modified || (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
   } else if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
-    response = buildReactTemplate(analysis);
+    response = buildReactTemplate(analysis, prompt);
   } else {
     response = (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
   }

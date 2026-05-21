@@ -46,7 +46,6 @@ const providerOptions = [
   { value: 'openai', label: 'OpenAI', model: 'gpt-4o', description: 'Strong general website generation and edits.', badge: 'API key' },
   { value: 'anthropic', label: 'Anthropic', model: 'claude-3-5-sonnet', description: 'Careful planning and long-form copy refinement.', badge: 'API key' },
   { value: 'openrouter', label: 'OpenRouter', model: 'openrouter/auto', description: 'Route to many hosted models from one account.', badge: 'API key' },
-  { value: 'google', label: 'Google Gemini', model: 'gemini-1.5-pro', description: 'Fast multimodal-friendly generation path.', badge: 'API key' },
   { value: 'mistral', label: 'Mistral', model: 'mistral-large-latest', description: 'Efficient code and content generation.', badge: 'API key' },
   { value: 'groq', label: 'Groq', model: 'llama-3.1-70b-versatile', description: 'Low-latency iteration for quick edits.', badge: 'API key' },
 ] satisfies Array<{

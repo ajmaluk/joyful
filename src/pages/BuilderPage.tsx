@@ -44,7 +44,17 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { messages, isGenerating, buildTodos, sendMessage, clearMessages, abortGeneration } = useChat(projectId || 'default');
+  const {
+    messages,
+    isGenerating,
+    buildTodos,
+    savedGeneration,
+    sendMessage,
+    clearMessages,
+    abortGeneration,
+    clearSavedGeneration,
+  } = useChat(projectId || 'default');
+  const [runLogIds, setRunLogIds] = useState<string[]>([]);
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -92,43 +102,82 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build') => {
     const response = await sendMessage(content, files, mode);
     if (response) {
-      const newFiles = [...files];
-      for (const file of response.files) {
-        if (file.action === 'delete') {
-          const existingIdx = newFiles.findIndex(f => f.path === file.path);
-          if (existingIdx >= 0) newFiles.splice(existingIdx, 1);
-          continue;
-        }
-        const existingIdx = newFiles.findIndex(f => f.path === file.path);
-        const projectFile: ProjectFile = {
-          id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${file.path}`,
-          path: file.path,
-          content: file.content || '',
-          type: getFileType(file.path),
-        };
-        if (existingIdx >= 0) {
-          newFiles[existingIdx] = projectFile;
+      // If AI returned tool run results, subscribe PreviewPanel to them
+      const toolResults = (response as any).metadata?.toolResults || [];
+      const runIds = Array.isArray(toolResults) ? toolResults.filter((t: any) => t?.type === 'run_command' && t.runId).map((t: any) => t.runId) : [];
+      if (runIds.length > 0) setRunLogIds(runIds);
+
+      // If AI suggested pending file operations, prompt the user before applying
+      const pending = (response as any).metadata?.pendingFileOps;
+      if (Array.isArray(pending) && pending.length > 0) {
+        const summary = pending.map((op: any) => `${op.name.replace(/_/g, ' ')} ${op.args?.path || op.args?.command || ''}`).join('\n');
+        // Simple confirmation flow — UI modal could replace this
+        const ok = window.confirm(`AI suggests these operations:\n\n${summary}\n\nApprove and apply?`);
+        if (ok) {
+          const newFiles = [...files];
+          for (const op of pending) {
+            const name = op.name;
+            const args = op.args || {};
+            if (name === 'delete_file') {
+              const idx = newFiles.findIndex(f => f.path === args.path);
+              if (idx >= 0) newFiles.splice(idx, 1);
+            } else if (name === 'create_file' || name === 'modify_file') {
+              const existingIdx = newFiles.findIndex(f => f.path === args.path);
+              const projectFile: ProjectFile = {
+                id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${args.path}`,
+                path: args.path,
+                content: args.content || '',
+                type: getFileType(args.path),
+              };
+              if (existingIdx >= 0) newFiles[existingIdx] = projectFile; else newFiles.push(projectFile);
+            }
+          }
+          setFiles(newFiles);
+          persistFiles(newFiles);
+          addToast('success', `Applied ${pending.length} AI-proposed operation${pending.length > 1 ? 's' : ''}`);
         } else {
-          newFiles.push(projectFile);
+          addToast('info', 'Skipped AI-proposed file operations');
         }
+      } else {
+        // Default apply behavior for generated response.files
+        const newFiles = [...files];
+        for (const file of response.files) {
+          if (file.action === 'delete') {
+            const existingIdx = newFiles.findIndex(f => f.path === file.path);
+            if (existingIdx >= 0) newFiles.splice(existingIdx, 1);
+            continue;
+          }
+          const existingIdx = newFiles.findIndex(f => f.path === file.path);
+          const projectFile: ProjectFile = {
+            id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${file.path}`,
+            path: file.path,
+            content: file.content || '',
+            type: getFileType(file.path),
+          };
+          if (existingIdx >= 0) {
+            newFiles[existingIdx] = projectFile;
+          } else {
+            newFiles.push(projectFile);
+          }
+        }
+        setFiles(newFiles);
+        setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
+        if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
+          setSelectedFile(newFiles.find(file => file.path === 'index.html') || newFiles[0] || null);
+        }
+        persistFiles(newFiles);
+        const nextActiveFile = newFiles.find(file => file.path === 'index.html') || newFiles[0] || null;
+        if (nextActiveFile) {
+          setSelectedFile(nextActiveFile);
+          setOpenFiles(prev => {
+            if (prev.find(file => file.path === nextActiveFile.path)) return prev;
+            return [...prev, nextActiveFile];
+          });
+        }
+        const changedCount = response.files.length;
+        addToast('success', `Applied ${changedCount} file operation${changedCount > 1 ? 's' : ''}`);
+        setViewMode('preview');
       }
-      setFiles(newFiles);
-      setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
-      if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
-        setSelectedFile(newFiles.find(file => file.path === 'index.html') || newFiles[0] || null);
-      }
-      persistFiles(newFiles);
-      const nextActiveFile = newFiles.find(file => file.path === 'index.html') || newFiles[0] || null;
-      if (nextActiveFile) {
-        setSelectedFile(nextActiveFile);
-        setOpenFiles(prev => {
-          if (prev.find(file => file.path === nextActiveFile.path)) return prev;
-          return [...prev, nextActiveFile];
-        });
-      }
-      const changedCount = response.files.length;
-      addToast('success', `Applied ${changedCount} file operation${changedCount > 1 ? 's' : ''}`);
-      setViewMode('preview');
     }
   }, [files, selectedFile, sendMessage, persistFiles, addToast]);
 
@@ -290,6 +339,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       }
     }
   }, [messages, handleSendMessage]);
+
+  const handleRetrySavedGeneration = useCallback(() => {
+    if (!savedGeneration || isGenerating) return;
+    void handleSendMessage(savedGeneration.prompt, savedGeneration.mode);
+  }, [handleSendMessage, isGenerating, savedGeneration]);
 
   // Handle export
   const handleExport = useCallback(async () => {
@@ -521,7 +575,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 onUpdateFile={handleUpdateFile}
               />
             ) : (
-              <PreviewPanel files={files} />
+              <PreviewPanel files={files} projectId={project?.id} runLogIds={runLogIds} />
             )}
           </div>
         </section>
@@ -539,6 +593,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
               onRegenerateMessage={handleRegenerateMessage}
               onClearMessages={clearMessages}
               onAbortGeneration={abortGeneration}
+              savedGeneration={savedGeneration}
+              onRetrySavedGeneration={handleRetrySavedGeneration}
+              onDismissSavedGeneration={clearSavedGeneration}
               onSelectTemplate={handleSelectTemplate}
               onCloseSidebar={() => setShowChatSidebar(false)}
             />
@@ -598,6 +655,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                   onRegenerateMessage={handleRegenerateMessage}
                   onClearMessages={clearMessages}
                   onAbortGeneration={abortGeneration}
+                  savedGeneration={savedGeneration}
+                  onRetrySavedGeneration={handleRetrySavedGeneration}
+                  onDismissSavedGeneration={clearSavedGeneration}
                   onSelectTemplate={handleSelectTemplate}
                 />
               </div>

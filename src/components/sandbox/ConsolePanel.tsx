@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react';
-import { Trash2, ChevronDown, ChevronUp, Terminal, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { useRef, useEffect, useMemo, useState } from 'react';
+import { Trash2, ChevronDown, ChevronUp, Terminal, AlertTriangle, AlertCircle, Info, Search } from 'lucide-react';
 import type { SandboxLogEntry } from '@/hooks/useSandboxMessages';
 
 interface ConsolePanelProps {
@@ -18,6 +18,7 @@ export function ConsolePanel({ logs, onClear }: ConsolePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
@@ -25,7 +26,14 @@ export function ConsolePanel({ logs, onClear }: ConsolePanelProps) {
     }
   }, [logs, autoScroll]);
 
-  const filtered = filter ? logs.filter(l => l.level === filter) : logs;
+  const filtered = useMemo(() => {
+    const lowered = query.trim().toLowerCase();
+    return logs.filter((log) => {
+      const matchesLevel = filter ? log.level === filter : true;
+      const matchesQuery = lowered ? log.message.toLowerCase().includes(lowered) : true;
+      return matchesLevel && matchesQuery;
+    });
+  }, [logs, filter, query]);
   const errorCount = logs.filter(l => l.level === 'error').length;
   const warnCount = logs.filter(l => l.level === 'warn').length;
 
@@ -44,6 +52,15 @@ export function ConsolePanel({ logs, onClear }: ConsolePanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          <label className="relative mr-1 hidden items-center sm:flex">
+            <Search className="absolute left-1.5 h-3 w-3 text-gray-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search logs"
+              className="w-32 rounded border border-gray-200 bg-white py-1 pl-5 pr-2 text-[10px] outline-none placeholder:text-gray-300 focus:border-indigo-300"
+            />
+          </label>
           {['log', 'info', 'warn', 'error'].map(level => (
             <button
               key={level}
@@ -72,7 +89,7 @@ export function ConsolePanel({ logs, onClear }: ConsolePanelProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden font-mono text-xs">
         {filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-xs">
-            {filter ? `No ${filter} entries` : 'No console output yet'}
+            {query ? `No entries matching "${query}"` : filter ? `No ${filter} entries` : 'No console output yet'}
           </div>
         ) : (
           filtered.map(entry => {

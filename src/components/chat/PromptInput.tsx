@@ -39,10 +39,17 @@ export function PromptInput({
 
   useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
 
+  const handleTextareaInput = useCallback(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, []);
+
   const appendTranscript = useCallback((transcript: string) => {
     setInput(prev => mergeVoiceTranscript(prev, transcript));
     requestAnimationFrame(() => handleTextareaInput());
-  }, []);
+  }, [handleTextareaInput]);
 
   const {
     isSupported: isVoiceSupported,
@@ -97,13 +104,6 @@ export function PromptInput({
       setInput(newIndex >= 0 ? promptHistory[newIndex] : '');
     }
   }, [handleSend, input, promptHistory, historyIndex]);
-
-  const handleTextareaInput = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  }, []);
 
   const charCount = input.length;
   const trimmedInput = input.trim();

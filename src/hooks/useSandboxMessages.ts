@@ -153,6 +153,38 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     pendingRequests.current.clear();
   }, []);
 
+  const subscribeRunLogs = useCallback((runId: string) => {
+    if (!runId) return () => {};
+    const base = (import.meta.env.VITE_SANDBOX_SERVER_URL as string) || '';
+    const url = base ? `${base.replace(/\/$/, '')}/sandbox/stream/${runId}` : `/sandbox/stream/${runId}`;
+    const es = new EventSource(url);
+    es.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'stdout' || msg.type === 'stderr') {
+          setLogs(prev => {
+            const entry: SandboxLogEntry = {
+              id: `run_${runId}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+              level: msg.type === 'stderr' ? 'error' : 'info',
+              message: String(msg.data).replace(/\n$/, ''),
+              timestamp: Date.now(),
+            };
+            const next = [...prev, entry];
+            return next.length > 1000 ? next.slice(-1000) : next;
+          });
+        }
+        if (msg.type === 'exit') {
+          setLogs(prev => [...prev, { id: `run_${runId}_exit`, level: 'info', message: `process exited (${msg.data.code})`, timestamp: Date.now() }]);
+          es.close();
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+    };
+    es.onerror = () => { try { es.close(); } catch (e) {} };
+    return () => { try { es.close(); } catch (e) {} };
+  }, []);
+
   return {
     logs,
     network,
@@ -163,6 +195,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     requestMetrics,
     clearLogs,
     clearNetwork,
+    subscribeRunLogs,
     sendToIframe,
   };
 }

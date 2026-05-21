@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react';
-import { Trash2, Network, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { useRef, useEffect, useMemo, useState } from 'react';
+import { Trash2, Network, CheckCircle, XCircle, Clock, Loader2, Search } from 'lucide-react';
 import type { SandboxNetworkEntry } from '@/hooks/useSandboxMessages';
 
 interface NetworkPanelProps {
@@ -30,6 +30,7 @@ export function NetworkPanel({ requests, onClear }: NetworkPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
@@ -37,7 +38,14 @@ export function NetworkPanel({ requests, onClear }: NetworkPanelProps) {
     }
   }, [requests, autoScroll]);
 
-  const filtered = filterType ? requests.filter(r => r.type === filterType) : requests;
+  const filtered = useMemo(() => {
+    const lowered = query.trim().toLowerCase();
+    return requests.filter((request) => {
+      const matchesType = filterType ? request.type === filterType : true;
+      const matchesQuery = lowered ? `${request.url} ${request.method} ${request.statusText || ''}`.toLowerCase().includes(lowered) : true;
+      return matchesType && matchesQuery;
+    });
+  }, [requests, filterType, query]);
   const pendingCount = requests.filter(r => r.pending).length;
 
   return (
@@ -55,6 +63,15 @@ export function NetworkPanel({ requests, onClear }: NetworkPanelProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          <label className="relative mr-1 hidden items-center sm:flex">
+            <Search className="absolute left-1.5 h-3 w-3 text-gray-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search requests"
+              className="w-36 rounded border border-gray-200 bg-white py-1 pl-5 pr-2 text-[10px] outline-none placeholder:text-gray-300 focus:border-indigo-300"
+            />
+          </label>
           {['fetch', 'xhr'].map(type => (
             <button
               key={type}
@@ -92,7 +109,7 @@ export function NetworkPanel({ requests, onClear }: NetworkPanelProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden font-mono text-xs">
         {filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-xs">
-            {filterType ? `No ${filterType} requests` : 'No network requests yet'}
+            {query ? `No requests matching "${query}"` : filterType ? `No ${filterType} requests` : 'No network requests yet'}
           </div>
         ) : (
           filtered.map(req => (

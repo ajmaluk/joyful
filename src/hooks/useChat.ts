@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ChatMessage, ProjectFile, AIGenerationResponse, ChatMode } from '@/types';
+import type { ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
 import { generateWithAI } from '@/services/aiService';
 import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
@@ -27,6 +27,75 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
   }
 
   return todos;
+}
+
+function buildInitialWorkflowTodos(planSteps: string[], providerLabel = 'Joyful AI provider'): BuildTodo[] {
+  return [
+    {
+      id: `todo_${Date.now()}_checkpoint`,
+      label: 'Save request checkpoint',
+      status: 'done',
+    },
+    ...planSteps.slice(0, 5).map((step, index) => ({
+      id: `todo_${Date.now()}_plan_${index}`,
+      label: step,
+      status: index === 0 ? 'done' as const : 'pending' as const,
+    })),
+    {
+      id: `todo_${Date.now()}_provider`,
+      label: `Call ${providerLabel}`,
+      status: 'active',
+    },
+    {
+      id: `todo_${Date.now()}_parse`,
+      label: 'Parse AI file operations',
+      status: 'pending',
+    },
+    {
+      id: `todo_${Date.now()}_apply`,
+      label: 'Apply generated changes',
+      status: 'pending',
+    },
+  ];
+}
+
+function getDevelopmentPlanSteps(content: string, existingFiles: ProjectFile[]): string[] {
+  const lower = content.toLowerCase();
+  const hasReactApp = existingFiles.some(file => /^src\/App\.(jsx|tsx)$/i.test(file.path));
+  const hasStyles = existingFiles.some(file => /(^|\/)(styles|style)\.css$/i.test(file.path));
+  const requestsRouting = /route|page|navigation|tab|screen|multi[- ]?page/.test(lower);
+  const requestsDataFlow = /table|form|crud|filter|search|state|save|persist|dashboard|chart|api/.test(lower);
+
+  const steps = [
+    'Read current file structure and rank impacted files',
+    hasReactApp ? 'Plan React component/state edits in src/App.jsx' : 'Create the React app entry and component structure',
+  ];
+
+  if (requestsRouting) steps.push('Add page/navigation flow and preview route coverage');
+  if (requestsDataFlow) steps.push('Add app state, sample data, empty states, and core interactions');
+  steps.push(hasStyles ? 'Update styles for responsive UI without breaking existing layout' : 'Add base styles for responsive UI');
+  steps.push('Verify preview imports, runtime errors, and file operations');
+
+  return steps;
+}
+
+function buildDevelopmentPlanMessage(content: string, existingFiles: ProjectFile[], contextFiles: string[], planSteps: string[]): ChatMessage {
+  const fileStructure = existingFiles.length > 0
+    ? existingFiles.map(file => `- ${file.path}`).join('\n')
+    : '- No files yet';
+
+  return {
+    id: `msg_${Date.now() + 1}`,
+    role: 'assistant',
+    mode: 'plan',
+    timestamp: new Date().toISOString(),
+    content: `Development plan\n\nGoal:\n${content}\n\nCurrent file structure:\n${fileStructure}\n\nTask queue:\n${planSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\nContext files selected:\n${contextFiles.length > 0 ? contextFiles.map(file => `- ${file}`).join('\n') : '- No focused context files yet'}\n\nNext I will ask Joyful AI for the first implementation pass and apply only structured file operations.`,
+    metadata: {
+      contextFiles,
+      planSteps,
+      complexity: existingFiles.length > 8 || content.length > 220 ? 'complex' : 'medium',
+    },
+  };
 }
 
 function buildWalkthrough(response: AIGenerationResponse): string {
@@ -122,19 +191,23 @@ export function useChat(projectId: string) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => getInitialMessages(projectId));
   const [isGenerating, setIsGenerating] = useState(false);
   const [buildTodos, setBuildTodos] = useState<BuildTodo[]>([]);
+  const [savedGeneration, setSavedGeneration] = useState<SavedGenerationState | null>(() => storage.getSavedGenerationState(projectId));
   const abortRef = useRef(false);
 
   useEffect(() => {
     setMessages(getInitialMessages(projectId));
     setBuildTodos([]);
     setIsGenerating(false);
+    setSavedGeneration(storage.getSavedGenerationState(projectId));
     abortRef.current = false;
   }, [projectId]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
     setBuildTodos([]);
+    setSavedGeneration(null);
     storage.saveChatHistory(projectId, []);
+    storage.clearGenerationState(projectId);
   }, [projectId]);
 
   const abortGeneration = useCallback(() => {
@@ -161,7 +234,23 @@ export function useChat(projectId: string) {
     storage.saveChatHistory(projectId, newMessages);
 
     setIsGenerating(true);
-    setBuildTodos([]);
+    const contextGraph = buildFileContextGraph(content, existingFiles);
+    const checkpoint: SavedGenerationState = {
+      id: `generation_${Date.now()}`,
+      projectId,
+      prompt: content,
+      mode,
+      status: 'in_progress',
+      savedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      filesSnapshot: existingFiles,
+      messageCount: newMessages.length,
+      contextFiles: contextGraph.map(node => node.path),
+    };
+    setSavedGeneration(checkpoint);
+    storage.saveGenerationState(projectId, checkpoint);
+    const planSteps = getDevelopmentPlanSteps(content, existingFiles);
+    setBuildTodos(buildInitialWorkflowTodos(planSteps));
 
     try {
       if (mode === 'plan') {
@@ -172,13 +261,18 @@ export function useChat(projectId: string) {
         const finalMessages = [...newMessages, assistantMsg];
         setMessages(finalMessages);
         storage.saveChatHistory(projectId, finalMessages);
+        setSavedGeneration(null);
+        storage.clearGenerationState(projectId);
         return null;
       }
 
       const history = newMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
-      const contextGraph = buildFileContextGraph(content, existingFiles);
+      const planMsg = buildDevelopmentPlanMessage(content, existingFiles, contextGraph.map(node => node.path), planSteps);
+      const plannedMessages = [...newMessages, planMsg];
+      setMessages(plannedMessages);
+      storage.saveChatHistory(projectId, plannedMessages);
 
-      const response = await generateWithAI(content, existingFiles, history, {
+      const response = await generateWithAI(content, existingFiles, [...history, { role: 'assistant', content: planMsg.content }], {
         skillBrief: getSkillBrief(),
         contextFiles: contextGraph.map(node => node.path),
       });
@@ -186,6 +280,16 @@ export function useChat(projectId: string) {
       if (abortRef.current) {
         return null;
       }
+
+      setBuildTodos(prev =>
+        prev.map(todo => (
+          todo.label === 'Call Joyful AI provider' || todo.label === 'Parse AI file operations'
+            ? { ...todo, status: 'done' as const }
+            : todo.label === 'Apply generated changes'
+              ? { ...todo, status: 'active' as const }
+              : todo
+        ))
+      );
 
       // Build todos from response
       const todos = buildTodosFromResponse(response);
@@ -228,9 +332,11 @@ export function useChat(projectId: string) {
         },
       };
 
-      const finalMessages = [...newMessages, assistantMsg];
+      const finalMessages = [...plannedMessages, assistantMsg];
       setMessages(finalMessages);
       storage.saveChatHistory(projectId, finalMessages);
+      setSavedGeneration(null);
+      storage.clearGenerationState(projectId);
 
       // Clear todos after a brief display
       setTimeout(() => setBuildTodos([]), 2000);
@@ -239,6 +345,14 @@ export function useChat(projectId: string) {
     } catch (error) {
       console.error(error);
       const detail = error instanceof Error ? error.message : 'Please try again.';
+      const failedCheckpoint: SavedGenerationState = {
+        ...checkpoint,
+        status: 'failed',
+        updatedAt: new Date().toISOString(),
+        error: detail,
+      };
+      setSavedGeneration(failedCheckpoint);
+      storage.saveGenerationState(projectId, failedCheckpoint);
       const errorMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,
         role: 'system',
@@ -254,5 +368,10 @@ export function useChat(projectId: string) {
     }
   }, [messages, projectId]);
 
-  return { messages, isGenerating, buildTodos, sendMessage, clearMessages, abortGeneration };
+  const clearSavedGeneration = useCallback(() => {
+    setSavedGeneration(null);
+    storage.clearGenerationState(projectId);
+  }, [projectId]);
+
+  return { messages, isGenerating, buildTodos, savedGeneration, sendMessage, clearMessages, abortGeneration, clearSavedGeneration };
 }

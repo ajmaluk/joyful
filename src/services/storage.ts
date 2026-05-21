@@ -1,4 +1,4 @@
-import type { Project, UserSettings, ChatMessage, UserSkill } from '@/types';
+import type { Project, UserSettings, ChatMessage, UserSkill, SavedGenerationState } from '@/types';
 import { getDefaultAIProvider, joyfulProviderConfig, normalizeProvider } from '@/services/joyfulProvider';
 
 const STORAGE_KEYS = {
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   AUTH_SESSION: 'joyful_auth_session',
   CHAT_PREFIX: 'joyful_chat_',
   PROJECT_PREFIX: 'joyful_project_',
+  GENERATION_PREFIX: 'joyful_generation_',
 };
 
 // Projects
@@ -37,6 +38,7 @@ export function deleteProject(projectId: string): void {
   localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   localStorage.removeItem(`${STORAGE_KEYS.PROJECT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`);
+  localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
 }
 
 export function getProject(projectId: string): Project | null {
@@ -60,6 +62,23 @@ export function getChatHistory(projectId: string): ChatMessage[] {
 
 export function saveChatHistory(projectId: string, messages: ChatMessage[]): void {
   localStorage.setItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`, JSON.stringify(messages));
+}
+
+export function getSavedGenerationState(projectId: string): SavedGenerationState | null {
+  try {
+    const data = localStorage.getItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveGenerationState(projectId: string, state: SavedGenerationState): void {
+  localStorage.setItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`, JSON.stringify(state));
+}
+
+export function clearGenerationState(projectId: string): void {
+  localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
 }
 
 // Settings
@@ -87,7 +106,24 @@ export function getSettings(): UserSettings {
     const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (data) {
       const parsed = JSON.parse(data) as Partial<UserSettings>;
-      const parsedProvider = parsed.aiProvider ? normalizeProvider(parsed.aiProvider) : defaults.aiProvider;
+      const shouldUpgradeLegacyLocalProvider = (
+        joyfulProviderConfig.enabled &&
+        joyfulProviderConfig.defaultEnabled &&
+        (!parsed.aiProvider || parsed.aiProvider === 'local') &&
+        (!parsed.aiModel || parsed.aiModel === 'local-lite')
+      );
+      const shouldUpgradeDisconnectedProvider = (
+        joyfulProviderConfig.enabled &&
+        joyfulProviderConfig.defaultEnabled &&
+        parsed.aiProvider !== undefined &&
+        parsed.aiProvider !== 'local' &&
+        parsed.aiProvider !== 'joyful' &&
+        !parsed.providerKeys?.[parsed.aiProvider]?.trim()
+      );
+      const parsedProvider = shouldUpgradeLegacyLocalProvider
+        || shouldUpgradeDisconnectedProvider
+        ? 'joyful'
+        : parsed.aiProvider ? normalizeProvider(parsed.aiProvider) : defaults.aiProvider;
       const parsedModel = parsedProvider === 'joyful' ? joyfulProviderConfig.model : parsed.aiModel;
       return {
         ...defaults,

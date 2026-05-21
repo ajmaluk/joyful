@@ -45,6 +45,10 @@ export interface ChatMessage {
     complexity?: 'simple' | 'medium' | 'complex';
     contextFiles?: string[];
     planSteps?: string[];
+    agentPlan?: AgentPlanStep[];
+    sandboxCommands?: SandboxCommandRequest[];
+    sandboxResults?: SandboxCommandResult[];
+    previewIssues?: PreviewIssue[];
   };
 }
 
@@ -92,13 +96,74 @@ export interface AIGenerationResponse {
     content?: string;
     action?: 'create' | 'modify' | 'delete';
   }[];
+  patches?: FilePatchOperation[];
   summary: string;
   nextSteps: string[];
   metadata?: {
-    template: string;
-    sections: string[];
-    estimatedComplexity: 'simple' | 'medium' | 'complex';
+    template?: string;
+    sections?: string[];
+    estimatedComplexity?: 'simple' | 'medium' | 'complex';
+    agentPlan?: AgentPlanStep[];
+    sandboxCommands?: SandboxCommandRequest[];
+    sandboxResults?: SandboxCommandResult[];
+    pendingFileOps?: PendingFileOperation[];
+    toolResults?: unknown[];
   };
+}
+
+export interface AgentPlanStep {
+  id: string;
+  title: string;
+  status: 'pending' | 'active' | 'done' | 'error';
+  detail?: string;
+}
+
+export interface SandboxCommandRequest {
+  command: string;
+  args?: string[];
+  wait?: boolean;
+  reason?: string;
+}
+
+export interface SandboxCommandResult {
+  command: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  status: 'done' | 'error';
+}
+
+export interface PendingFileOperation {
+  name: 'create_file' | 'modify_file' | 'delete_file';
+  args: {
+    path?: string;
+    content?: string;
+  };
+}
+
+export interface FilePatchOperation {
+  path: string;
+  action: 'patch';
+  oldString?: string;
+  newString?: string;
+  insertBefore?: string;
+  insertAfter?: string;
+  content?: string;
+  lineStart?: number;
+  lineEnd?: number;
+  reason?: string;
+}
+
+export interface PreviewIssue {
+  id: string;
+  severity: 'error' | 'warning';
+  message: string;
+  source?: 'console' | 'network' | 'sandbox';
+  path?: string;
+  line?: number;
+  column?: number;
+  selector?: string;
+  timestamp: number;
 }
 
 // Streaming chunk from AI
@@ -135,11 +200,9 @@ export interface UserSettings {
   explorerDensity: 'comfortable' | 'compact';
   autoSave: boolean;
   livePreview: boolean;
-  aiProvider: 'local' | 'joyful' | 'openai' | 'anthropic' | 'openrouter' | 'mistral' | 'groq';
+  aiProvider: 'joyful';
   aiModel: string;
   aiTemperature: number;
-  connectedProviders?: Partial<Record<UserSettings['aiProvider'], boolean>>;
-  providerKeys?: Partial<Record<UserSettings['aiProvider'], string>>;
 }
 
 export interface UserSkill {

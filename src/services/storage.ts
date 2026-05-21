@@ -1,5 +1,5 @@
 import type { Project, UserSettings, ChatMessage, UserSkill, SavedGenerationState } from '@/types';
-import { getDefaultAIProvider, joyfulProviderConfig, normalizeProvider } from '@/services/joyfulProvider';
+import { joyfulProviderConfig } from '@/services/joyfulProvider';
 
 const STORAGE_KEYS = {
   PROJECTS: 'joyful_projects',
@@ -83,7 +83,6 @@ export function clearGenerationState(projectId: string): void {
 
 // Settings
 export function getSettings(): UserSettings {
-  const defaultAI = getDefaultAIProvider();
   const defaults: UserSettings = {
     theme: 'system',
     editorFontSize: 14,
@@ -95,43 +94,20 @@ export function getSettings(): UserSettings {
     explorerDensity: 'compact',
     autoSave: true,
     livePreview: true,
-    aiProvider: defaultAI.aiProvider,
-    aiModel: defaultAI.aiModel,
+    aiProvider: 'joyful',
+    aiModel: joyfulProviderConfig.model,
     aiTemperature: 0.7,
-    connectedProviders: defaultAI.connectedProviders,
-    providerKeys: {},
   };
 
   try {
     const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (data) {
       const parsed = JSON.parse(data) as Partial<UserSettings>;
-      const shouldUpgradeLegacyLocalProvider = (
-        joyfulProviderConfig.enabled &&
-        joyfulProviderConfig.defaultEnabled &&
-        (!parsed.aiProvider || parsed.aiProvider === 'local') &&
-        (!parsed.aiModel || parsed.aiModel === 'local-lite')
-      );
-      const shouldUpgradeDisconnectedProvider = (
-        joyfulProviderConfig.enabled &&
-        joyfulProviderConfig.defaultEnabled &&
-        parsed.aiProvider !== undefined &&
-        parsed.aiProvider !== 'local' &&
-        parsed.aiProvider !== 'joyful' &&
-        !parsed.providerKeys?.[parsed.aiProvider]?.trim()
-      );
-      const parsedProvider = shouldUpgradeLegacyLocalProvider
-        || shouldUpgradeDisconnectedProvider
-        ? 'joyful'
-        : parsed.aiProvider ? normalizeProvider(parsed.aiProvider) : defaults.aiProvider;
-      const parsedModel = parsedProvider === 'joyful' ? joyfulProviderConfig.model : parsed.aiModel;
       return {
         ...defaults,
         ...parsed,
-        aiProvider: parsedProvider,
-        aiModel: parsedModel || defaults.aiModel,
-        connectedProviders: { ...defaults.connectedProviders, ...parsed.connectedProviders },
-        providerKeys: { ...defaults.providerKeys, ...parsed.providerKeys },
+        aiProvider: 'joyful' as const,
+        aiModel: parsed.aiModel || defaults.aiModel,
       };
     }
   } catch { /* ignore */ }

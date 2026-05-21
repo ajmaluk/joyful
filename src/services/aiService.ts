@@ -1,43 +1,36 @@
-import type { AIGenerationResponse, AIStreamChunk, ProjectFile } from '@/types';
+import type { AIGenerationResponse, AgentPlanStep, AIStreamChunk, FilePatchOperation, ProjectFile, SandboxCommandRequest, SandboxCommandResult } from '@/types';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
-import { getSettings } from '@/services/storage';
+import { executeInSandbox, loadVirtualFS } from '@/services/clientSandbox';
 
 interface AIGenerationOptions {
   skillBrief?: string[];
   contextFiles?: string[];
 }
 
-export async function executeRunCommand(command: string, readOnly = true): Promise<string> {
-  const base = (import.meta.env.VITE_SANDBOX_SERVER_URL as string) || '';
-  const url = base ? `${base.replace(/\/$/, '')}/sandbox/run` : `/sandbox/run`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command, readOnly }),
-  });
-  if (!res.ok) {
-    let body;
-    try {
-      body = await res.json();
-    } catch {
-      body = { error: await res.text() };
-    }
-    throw new Error(body?.error || `Sandbox run failed: ${res.status}`);
-  }
-  const data = await res.json();
-  return data.runId;
+interface JoyfulFunctionCall {
+  name?: string;
+  arguments?: unknown;
 }
 
 const RESPONSE_SCHEMA_HINT = `Return only valid JSON with this shape:
 {
+  "agentPlan": [
+    { "id": "understand", "title": "Understand request", "status": "done", "detail": "short note" }
+  ],
   "files": [
     { "path": "package.json", "action": "create|modify|delete", "content": "complete file content" }
+  ],
+  "patches": [
+    { "path": "src/App.jsx", "action": "patch", "oldString": "exact existing code", "newString": "replacement code", "reason": "why this small edit is enough" }
+  ],
+  "sandboxCommands": [
+    { "command": "npm", "args": ["run", "build"], "wait": true, "reason": "validate generated app" }
   ],
   "summary": "brief summary of what changed",
   "nextSteps": ["short next step"],
   "metadata": { "template": "react-app", "sections": ["..."], "estimatedComplexity": "simple|medium|complex" }
 }
-For create or modify operations, include the complete new file content. Do not wrap JSON in markdown.`;
+Use patches for maintenance, fixes, and small edits when an exact oldString can be found. Use files for new files, deletes, or large rewrites. For create or modify file operations, include the complete new file content. Use sandboxCommands only for browser-safe commands: ls, cat, pwd, node -v, npm install, npm run build, npm run lint. Do not wrap JSON in markdown. Do not use JavaScript string concatenation, comments, trailing commas, or unescaped line breaks inside JSON strings.`;
 
 function stripMarkdownJson(value: string) {
   const trimmed = value.trim();
@@ -47,6 +40,145 @@ function stripMarkdownJson(value: string) {
   const lastBrace = trimmed.lastIndexOf('}');
   if (firstBrace >= 0 && lastBrace > firstBrace) return trimmed.slice(firstBrace, lastBrace + 1);
   return trimmed;
+}
+
+function isSafeProjectPath(path: string): boolean {
+  const normalized = path.trim().replace(/^\/+/, '');
+  return Boolean(
+    normalized &&
+    normalized.length <= 200 &&
+    !normalized.includes('..') &&
+    /^[/\w\-. ]+$/.test(normalized)
+  );
+}
+
+function normalizeAgentPlan(value: unknown, fallbackTitles: string[]): AgentPlanStep[] {
+  const source = Array.isArray(value) && value.length > 0
+    ? value
+    : fallbackTitles.map((title, index) => ({ id: `step_${index + 1}`, title, status: index === 0 ? 'done' : 'pending' }));
+
+  return source.slice(0, 8).map((step, index) => {
+    const item = typeof step === 'object' && step ? step as Partial<AgentPlanStep> : { title: String(step) };
+    const status = item.status === 'active' || item.status === 'done' || item.status === 'error' ? item.status : 'pending';
+    return {
+      id: typeof item.id === 'string' && item.id ? item.id : `step_${index + 1}`,
+      title: typeof item.title === 'string' && item.title ? item.title : `Step ${index + 1}`,
+      status,
+      detail: typeof item.detail === 'string' ? item.detail : undefined,
+    };
+  });
+}
+
+function normalizeSandboxCommands(value: unknown, files: AIGenerationResponse['files']): SandboxCommandRequest[] {
+  const commands = Array.isArray(value) ? value : [];
+  const normalized = commands
+    .map(command => {
+      if (!command || typeof command !== 'object') return null;
+      const item = command as Partial<SandboxCommandRequest>;
+      if (typeof item.command !== 'string') return null;
+      return {
+        command: item.command,
+        args: Array.isArray(item.args) ? item.args.map(String) : [],
+        wait: item.wait !== false,
+        reason: typeof item.reason === 'string' ? item.reason : undefined,
+      };
+    })
+    .filter(Boolean) as SandboxCommandRequest[];
+
+  if (normalized.length > 0) return normalized.slice(0, 4);
+
+  const hasPackage = files.some(file => file.path === 'package.json' && file.action !== 'delete');
+  return hasPackage
+    ? [{ command: 'npm', args: ['run', 'build'], wait: true, reason: 'Validate generated project structure in Joyful browser sandbox.' }]
+    : [{ command: 'ls', args: ['.'], wait: true, reason: 'Confirm generated files are available in Joyful browser sandbox.' }];
+}
+
+function normalizePatches(value: unknown): FilePatchOperation[] {
+  const patches = Array.isArray(value) ? value : [];
+  return patches
+    .map((patch): FilePatchOperation | null => {
+      if (!patch || typeof patch !== 'object') return null;
+      const item = patch as Partial<FilePatchOperation>;
+      if (typeof item.path !== 'string' || !isSafeProjectPath(item.path)) return null;
+      return {
+        path: item.path.trim().replace(/^\/+/, ''),
+        action: 'patch',
+        oldString: typeof item.oldString === 'string' ? item.oldString : undefined,
+        newString: typeof item.newString === 'string' ? item.newString : undefined,
+        insertBefore: typeof item.insertBefore === 'string' ? item.insertBefore : undefined,
+        insertAfter: typeof item.insertAfter === 'string' ? item.insertAfter : undefined,
+        content: typeof item.content === 'string' ? item.content : undefined,
+        lineStart: typeof item.lineStart === 'number' ? item.lineStart : undefined,
+        lineEnd: typeof item.lineEnd === 'number' ? item.lineEnd : undefined,
+        reason: typeof item.reason === 'string' ? item.reason : undefined,
+      };
+    })
+    .filter(Boolean) as FilePatchOperation[];
+}
+
+function commandToString(command: SandboxCommandRequest): string {
+  return [command.command, ...(command.args || [])].join(' ').trim();
+}
+
+function eventsToCommandResult(command: SandboxCommandRequest, events: Awaited<ReturnType<typeof executeInSandbox>>): SandboxCommandResult {
+  const stdout = events
+    .filter(event => event.type === 'stdout')
+    .map(event => String(event.data))
+    .join('');
+  const stderr = events
+    .filter(event => event.type === 'stderr' || event.type === 'error')
+    .map(event => String(event.data))
+    .join('');
+  const exitEvent = [...events].reverse().find(event => event.type === 'exit' && typeof event.data === 'object') as { data?: { code?: number } } | undefined;
+  const exitCode = exitEvent?.data?.code ?? (stderr ? 1 : 0);
+
+  return {
+    command: commandToString(command),
+    stdout,
+    stderr,
+    exitCode,
+    status: exitCode === 0 ? 'done' : 'error',
+  };
+}
+
+async function runBrowserSandboxChecks(
+  response: AIGenerationResponse,
+  existingFiles: ProjectFile[],
+): Promise<{ commands: SandboxCommandRequest[]; results: SandboxCommandResult[] }> {
+  const generatedFiles = new Map(existingFiles.map(file => [file.path, file.content]));
+  for (const file of response.files) {
+    if (file.action === 'delete') generatedFiles.delete(file.path);
+    else if (typeof file.content === 'string') generatedFiles.set(file.path, file.content);
+  }
+  for (const patch of response.patches || []) {
+    const current = generatedFiles.get(patch.path);
+    if (typeof current !== 'string') continue;
+    if (typeof patch.oldString === 'string' && typeof patch.newString === 'string' && current.includes(patch.oldString)) {
+      generatedFiles.set(patch.path, current.replace(patch.oldString, patch.newString));
+    } else if (typeof patch.insertBefore === 'string' && typeof patch.content === 'string' && current.includes(patch.insertBefore)) {
+      generatedFiles.set(patch.path, current.replace(patch.insertBefore, `${patch.content}${patch.insertBefore}`));
+    } else if (typeof patch.insertAfter === 'string' && typeof patch.content === 'string' && current.includes(patch.insertAfter)) {
+      generatedFiles.set(patch.path, current.replace(patch.insertAfter, `${patch.insertAfter}${patch.content}`));
+    } else if (typeof patch.lineStart === 'number' && typeof patch.lineEnd === 'number' && typeof patch.content === 'string') {
+      const lines = current.split('\n');
+      const start = Math.max(1, Math.floor(patch.lineStart));
+      const end = Math.max(0, Math.floor(patch.lineEnd));
+      if (start <= lines.length + 1) {
+        lines.splice(start - 1, Math.max(0, end - start + 1), ...patch.content.split('\n'));
+        generatedFiles.set(patch.path, lines.join('\n'));
+      }
+    }
+  }
+
+  loadVirtualFS(Array.from(generatedFiles.entries()).map(([path, content]) => ({ path, content })));
+
+  const commands = normalizeSandboxCommands(response.metadata?.sandboxCommands, response.files);
+  const results: SandboxCommandResult[] = [];
+  for (const command of commands) {
+    const events = await executeInSandbox(commandToString(command));
+    results.push(eventsToCommandResult(command, events));
+  }
+  return { commands, results };
 }
 
 function buildJoyfulMessages(
@@ -69,7 +201,7 @@ function buildJoyfulMessages(
   return [
     {
       role: 'system',
-      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Plan silently, then produce complete, runnable file edits. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy. Every imported local component, hook, or utility must be included as a file operation in the same response. Do not reference undefined identifiers. If you use icons from lucide-react, import every icon you reference. For complex apps, complete one coherent implementation pass and put any remaining work in nextSteps as concrete follow-up tasks.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
+      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Follow a Vercel-style development loop, adapted for Joyful's browser sandbox: understand the request, inspect the provided files, plan concrete tasks, generate complete file operations, choose browser-safe validation commands, and summarize what changed. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy. For existing-file maintenance, bug fixes, and feature additions, prefer targeted patches over full-file modifications when the exact target code is present. Every imported local component, hook, or utility must be included as a file operation in the same response. Do not reference undefined identifiers. If you use icons from lucide-react, import every icon you reference. For complex apps, complete one coherent implementation pass and put any remaining work in nextSteps as concrete follow-up tasks.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
     },
     ...conversationHistory
       .filter(message => message.role === 'user' || message.role === 'assistant')
@@ -90,7 +222,8 @@ function normalizeAIResponse(value: unknown): AIGenerationResponse {
 
   const response = value as Partial<AIGenerationResponse>;
   const files = Array.isArray(response.files) ? response.files : [];
-  if (files.length === 0) throw new Error('Joyful AI did not return any file operations.');
+  const normalizedPatches = normalizePatches((response as { patches?: unknown }).patches);
+  if (files.length === 0 && normalizedPatches.length === 0) throw new Error('Joyful AI did not return any file or patch operations.');
 
   const normalizedFiles = files
     .map(file => ({
@@ -98,15 +231,100 @@ function normalizeAIResponse(value: unknown): AIGenerationResponse {
       action: file.action === 'delete' ? 'delete' as const : file.action === 'modify' ? 'modify' as const : 'create' as const,
       content: typeof file.content === 'string' ? file.content : '',
     }))
-    .filter(file => file.path);
+    .filter(file => file.path && isSafeProjectPath(file.path))
+    .filter(file => file.action === 'delete' || file.content.length > 0);
 
-  if (normalizedFiles.length === 0) throw new Error('Joyful AI returned file operations without valid paths.');
+  if (normalizedFiles.length === 0 && normalizedPatches.length === 0) throw new Error('Joyful AI returned file operations without valid paths.');
+
+  const metadata = response.metadata && typeof response.metadata === 'object' ? response.metadata : {};
 
   return {
     files: normalizedFiles,
+    patches: normalizedPatches,
     summary: typeof response.summary === 'string' ? response.summary : 'Joyful AI updated the project files.',
     nextSteps: Array.isArray(response.nextSteps) ? response.nextSteps.map(String) : [],
-    metadata: response.metadata,
+    metadata: {
+      template: typeof metadata.template === 'string' ? metadata.template : undefined,
+      sections: Array.isArray(metadata.sections) ? metadata.sections.map(String) : [],
+      estimatedComplexity: metadata.estimatedComplexity === 'simple' || metadata.estimatedComplexity === 'medium' || metadata.estimatedComplexity === 'complex'
+        ? metadata.estimatedComplexity
+        : 'medium',
+      agentPlan: normalizeAgentPlan((response as { agentPlan?: unknown }).agentPlan || metadata.agentPlan, [
+        'Read current project context',
+        'Generate complete file operations',
+        'Validate in Joyful browser sandbox',
+      ]),
+      sandboxCommands: normalizeSandboxCommands((response as { sandboxCommands?: unknown }).sandboxCommands || metadata.sandboxCommands, normalizedFiles),
+    },
+  };
+}
+
+function buildLinePatchFromFullEdit(file: AIGenerationResponse['files'][number], existingFiles: ProjectFile[]): FilePatchOperation | null {
+  if (file.action !== 'modify' || typeof file.content !== 'string') return null;
+  const existing = existingFiles.find(existingFile => existingFile.path === file.path);
+  if (!existing || existing.content === file.content) return null;
+
+  const oldLines = existing.content.split('\n');
+  const newLines = file.content.split('\n');
+  let prefix = 0;
+  while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) {
+    prefix += 1;
+  }
+
+  let suffix = 0;
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  const oldChanged = oldLines.slice(prefix, oldLines.length - suffix);
+  const newChanged = newLines.slice(prefix, newLines.length - suffix);
+  const changedLineCount = Math.max(oldChanged.length, newChanged.length);
+  const originalLineCount = Math.max(oldLines.length, 1);
+
+  if (changedLineCount > 80 || changedLineCount / originalLineCount > 0.45) {
+    return null;
+  }
+
+  return {
+    path: file.path,
+    action: 'patch',
+    lineStart: prefix + 1,
+    lineEnd: prefix + oldChanged.length,
+    content: newChanged.join('\n'),
+    reason: 'Compressed model full-file modify response into a targeted line patch.',
+  };
+}
+
+function compactFullFileModifications(response: AIGenerationResponse, existingFiles: ProjectFile[]): AIGenerationResponse {
+  const patches = [...(response.patches || [])];
+  const files: AIGenerationResponse['files'] = [];
+  let compactedCount = 0;
+
+  for (const file of response.files) {
+    const patch = buildLinePatchFromFullEdit(file, existingFiles);
+    if (patch) {
+      patches.push(patch);
+      compactedCount += 1;
+    } else {
+      files.push(file);
+    }
+  }
+
+  if (compactedCount === 0) return response;
+
+  return {
+    ...response,
+    files,
+    patches,
+    summary: `${response.summary} Converted ${compactedCount} full-file modification${compactedCount > 1 ? 's' : ''} into targeted patch operation${compactedCount > 1 ? 's' : ''}.`,
+    metadata: {
+      ...response.metadata,
+      sections: [...new Set([...(response.metadata?.sections || []), 'targeted-patches'])],
+    },
   };
 }
 
@@ -117,6 +335,10 @@ async function generateWithJoyfulAI(
   options?: AIGenerationOptions,
 ): Promise<AIGenerationResponse> {
   // Use NVIDIA chat completions endpoint for Joyful's hosted generation path.
+  if (!joyfulProviderConfig.apiKey) {
+    throw new Error('VITE_NV_API_KEY is required when VITE_JOYFUL_PROVIDER_ENABLED=true.');
+  }
+
   const messages = buildJoyfulMessages(prompt, existingFiles, conversationHistory, options);
   const candidateModels = Array.from(new Set([
     joyfulProviderConfig.model,
@@ -126,9 +348,14 @@ async function generateWithJoyfulAI(
 
   for (const model of candidateModels) {
     try {
+      let activeMessages = messages;
+      let repairedOnce = false;
+      let lastError: string | null = null;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
       const payload = {
         model: model || 'qwen/qwen3-coder-480b-a35b-instruct',
-        messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : m.role, content: m.content })),
+        messages: activeMessages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : m.role, content: m.content })),
         temperature: 0.7,
         top_p: joyfulProviderConfig.topP || 0.8,
         frequency_penalty: 0,
@@ -148,7 +375,7 @@ async function generateWithJoyfulAI(
       });
 
       if (!res.ok) {
-        let bodyText = await res.text().catch(() => '');
+        const bodyText = await res.text().catch(() => '');
         throw new Error(`NVIDIA API error ${res.status}: ${bodyText}`);
       }
 
@@ -157,51 +384,92 @@ async function generateWithJoyfulAI(
       const text = String(json?.choices?.[0]?.message?.content || json?.choices?.[0]?.text || json?.output?.[0]?.content || json?.message?.content || '');
       if (!text.trim()) throw new Error('NVIDIA chat returned an empty response.');
 
-      const parsed = JSON.parse(stripMarkdownJson(text));
-
-      // Detect function calls in the model response (SDK-specific shapes)
-      const functionCalls: any[] = ([]);
+      let parsed: unknown;
       try {
-        const maybe = json?.choices?.[0]?.message?.function_call || json?.function_call || json?.choices?.[0]?.function_call || null;
-        if (maybe) {
-          functionCalls.push(maybe);
+        parsed = JSON.parse(stripMarkdownJson(text));
+      } catch (parseError) {
+        if (!repairedOnce) {
+          repairedOnce = true;
+          lastError = parseError instanceof Error ? parseError.message : String(parseError);
+          activeMessages = [
+            ...activeMessages,
+            { role: 'assistant', content: text },
+            {
+              role: 'user',
+              content: `Your previous response was not valid JSON and could not be parsed.
+
+Parse error:
+${lastError}
+
+Return the same intended result again as strict JSON only. Do not use markdown fences, JavaScript string concatenation, comments, trailing commas, or unescaped line breaks in JSON strings.`,
+            },
+          ];
+          continue;
         }
-      } catch (e) {
-        // ignore
+        throw parseError;
       }
 
-      const toolResults: any[] = [];
-      const pendingFileOps: any[] = [];
+      // Detect function calls in the model response (SDK-specific shapes)
+      const functionCalls: JoyfulFunctionCall[] = [];
+      const maybe = json?.choices?.[0]?.message?.function_call || json?.function_call || json?.choices?.[0]?.function_call || null;
+      if (maybe && typeof maybe === 'object') {
+        functionCalls.push(maybe as JoyfulFunctionCall);
+      }
+
+      const toolResults: { type: string; name?: string; args: unknown }[] = [];
+      const pendingFileOps: { name: 'create_file' | 'modify_file' | 'delete_file'; args: { path?: string; content?: string } }[] = [];
 
       if (functionCalls.length > 0) {
         for (const fc of functionCalls) {
           const name = fc.name;
           const argsText = typeof fc.arguments === 'string' ? fc.arguments : JSON.stringify(fc.arguments || {});
-          let args: any = {};
-          try { args = JSON.parse(stripMarkdownJson(argsText)); } catch (e) { args = fc.arguments || {}; }
+          let args: unknown = {};
+          try {
+            args = JSON.parse(stripMarkdownJson(argsText));
+          } catch {
+            args = fc.arguments || {};
+          }
 
-          if (name === 'run_command') {
-            try {
-              const runId = await executeRunCommand(String(args.command || ''), Boolean(args.readOnly));
-              toolResults.push({ type: 'run_command', runId, command: args.command });
-            } catch (e) {
-              toolResults.push({ type: 'run_command', error: (e as Error).message, command: args.command });
-            }
-          } else if (name === 'create_file' || name === 'modify_file' || name === 'delete_file') {
-            pendingFileOps.push({ name, args });
+          if (name === 'create_file' || name === 'modify_file' || name === 'delete_file') {
+            pendingFileOps.push({ name, args: typeof args === 'object' && args ? args as { path?: string; content?: string } : {} });
           } else {
             toolResults.push({ type: 'unknown_function', name, args });
           }
         }
       }
 
-      if (parsed && typeof parsed === 'object' && Array.isArray(parsed.files)) {
-        const normalized = normalizeAIResponse(parsed);
-        const baseMeta = normalized.metadata || {} as Record<string, any>;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (Array.isArray((parsed as { files?: unknown }).files) || Array.isArray((parsed as { patches?: unknown }).patches))
+      ) {
+        const normalized = compactFullFileModifications(normalizeAIResponse(parsed), existingFiles);
+        const sandbox = await runBrowserSandboxChecks(normalized, existingFiles);
+        const failedChecks = sandbox.results.filter(result => result.status === 'error');
+        if (failedChecks.length > 0 && !repairedOnce) {
+          repairedOnce = true;
+          lastError = failedChecks.map(result => `${result.command}\n${result.stderr || result.stdout}`).join('\n\n');
+          activeMessages = [
+            ...activeMessages,
+            { role: 'assistant', content: text },
+            {
+              role: 'user',
+              content: `Joyful browser sandbox validation failed. Repair the generated output now.
+
+Validation errors:
+${lastError}
+
+Return the corrected JSON only. Prefer targeted patches when fixing existing files, and include sandboxCommands for the next validation pass.`,
+            },
+          ];
+          continue;
+        }
+
         const metadata = {
-          template: typeof baseMeta.template === 'string' ? baseMeta.template : '',
-          sections: Array.isArray(baseMeta.sections) ? baseMeta.sections.map(String) : [],
-          estimatedComplexity: baseMeta.estimatedComplexity === 'simple' || baseMeta.estimatedComplexity === 'medium' || baseMeta.estimatedComplexity === 'complex' ? baseMeta.estimatedComplexity : 'medium',
+          ...normalized.metadata,
+          sandboxCommands: sandbox.commands,
+          sandboxResults: sandbox.results,
+          repaired: repairedOnce,
           toolResults: toolResults.length ? toolResults : undefined,
           pendingFileOps: pendingFileOps.length ? pendingFileOps : undefined,
         };
@@ -215,7 +483,7 @@ async function generateWithJoyfulAI(
       }
 
       // If we handled function calls but model didn't return final JSON, return a tool-only response so UI can react.
-      if ((toolResults.length || pendingFileOps.length) && (!parsed || !Array.isArray((parsed || {}).files))) {
+      if ((toolResults.length || pendingFileOps.length) && (!parsed || !Array.isArray((parsed as { files?: unknown }).files))) {
         const metadata = {
           template: '',
           sections: [],
@@ -232,6 +500,9 @@ async function generateWithJoyfulAI(
       }
 
       throw new Error('Joyful AI returned JSON without file operations.');
+      }
+
+      if (lastError) throw new Error(`Joyful AI could not repair validation errors: ${lastError}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push(`${model}: ${message}`);
@@ -1571,10 +1842,87 @@ ${footerHTML(p)}`
 
 // ─── Modification Engine ───────────────────────────────────────────
 
+function buildReactMaintenancePatches(prompt: string, existingFiles: ProjectFile[], analysis: PromptAnalysis): AIGenerationResponse | null {
+  const lower = prompt.toLowerCase();
+  const appFile = existingFiles.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path));
+  const cssFile = existingFiles.find(f => /^src\/styles\.css$/i.test(f.path));
+  if (!appFile || !cssFile) return null;
+
+  const patches: FilePatchOperation[] = [];
+
+  if (/\bfaq|question|accordion\b/.test(lower) && !/faq-panel|faqItems/.test(appFile.content)) {
+    const jsxAnchor = `        <section className="grid">
+          {visibleItems.map((item) => (`;
+    if (!appFile.content.includes(jsxAnchor)) return null;
+
+    patches.push({
+      path: appFile.path,
+      action: 'patch',
+      insertBefore: jsxAnchor,
+      content: `        <section className="faq-panel">
+          <div>
+            <p className="eyebrow">FAQ</p>
+            <h2>Answers before the call</h2>
+          </div>
+          <div className="faq-list">
+            {[
+              ['How fast can we launch?', 'Most teams can turn a validated prototype into a reviewable website in one focused session.'],
+              ['Can we keep editing after generation?', 'Yes. Use chat for broad changes, then patch small sections or edit files directly.'],
+              ['Does the preview catch issues?', 'The local sandbox reports console, network, and validation problems so fixes can be sent back into chat.'],
+            ].map(([question, answer]) => (
+              <article key={question} className="faq-item">
+                <h3>{question}</h3>
+                <p>{answer}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+`,
+      reason: 'Add a focused FAQ section without rebuilding the React app.',
+    });
+
+    const cssAnchor = '@media (max-width: 980px)';
+    patches.push({
+      path: cssFile.path,
+      action: 'patch',
+      insertBefore: cssFile.content.includes(cssAnchor) ? cssAnchor : undefined,
+      insertAfter: cssFile.content.includes(cssAnchor) ? undefined : cssFile.content,
+      content: `.faq-panel { border: 1px solid var(--border); background: rgba(255,255,255,.88); border-radius: 18px; box-shadow: 0 18px 50px rgba(15,23,42,.08); padding: clamp(1rem, 3vw, 1.5rem); display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); gap: 1rem; align-items: start; }
+.faq-panel h2 { margin: 0; font-size: clamp(1.4rem, 3vw, 2rem); letter-spacing: 0; }
+.faq-list { display: grid; gap: .75rem; }
+.faq-item { border: 1px solid var(--border); border-radius: 14px; background: white; padding: 1rem; }
+.faq-item h3 { margin: 0 0 .35rem; font-size: .98rem; }
+.faq-item p { margin: 0; color: var(--muted); line-height: 1.6; }
+@media (max-width: 760px) { .faq-panel { grid-template-columns: 1fr; } }
+`,
+      reason: 'Style the FAQ section with responsive constraints.',
+    });
+
+    return {
+      files: [],
+      patches,
+      summary: 'Added a compact FAQ section using targeted patch operations instead of rewriting the full React project.',
+      nextSteps: ['Review FAQ copy', 'Connect questions to real customer objections', 'Run another preview pass'],
+      metadata: {
+        template: analysis.template,
+        sections: ['faq', 'targeted-patches'],
+        estimatedComplexity: 'simple',
+        sandboxCommands: [{ command: 'npm', args: ['run', 'build'], wait: true, reason: 'Validate patched React app.' }],
+      },
+    };
+  }
+
+  return null;
+}
+
 function modifyExistingFiles(prompt: string, existingFiles: ProjectFile[], analysis: PromptAnalysis): AIGenerationResponse | null {
   const lower = prompt.toLowerCase();
   const reactAppFile = existingFiles.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path));
   if (reactAppFile) {
+    const targeted = buildReactMaintenancePatches(prompt, existingFiles, analysis);
+    if (targeted) return targeted;
+
     const rebuilt = buildReactTemplate(analysis, prompt);
     return {
       ...rebuilt,
@@ -1746,22 +2094,47 @@ function withGenerationGuidance(response: AIGenerationResponse, options?: AIGene
   };
 }
 
+async function finalizeGenerationResponse(
+  response: AIGenerationResponse,
+  existingFiles: ProjectFile[],
+  options?: AIGenerationOptions,
+): Promise<AIGenerationResponse> {
+  const guided = withGenerationGuidance(response, options);
+  const compacted = compactFullFileModifications(guided, existingFiles);
+  const fallbackPlan = [
+    'Read current project context',
+    'Apply structured file operations',
+    'Validate in Joyful browser sandbox',
+  ];
+  const sandbox = await runBrowserSandboxChecks(compacted, existingFiles);
+
+  return {
+    ...compacted,
+    metadata: {
+      template: compacted.metadata?.template,
+      sections: compacted.metadata?.sections || [],
+      estimatedComplexity: compacted.metadata?.estimatedComplexity || 'medium',
+      ...compacted.metadata,
+      agentPlan: normalizeAgentPlan(compacted.metadata?.agentPlan, fallbackPlan),
+      sandboxCommands: sandbox.commands,
+      sandboxResults: sandbox.results,
+    },
+  };
+}
+
 export async function generateWithAI(
   prompt: string,
   existingFiles: ProjectFile[],
   conversationHistory: { role: string; content: string }[] = [],
   options?: AIGenerationOptions
 ): Promise<AIGenerationResponse> {
-  const settings = getSettings();
-  if (settings.aiProvider === 'joyful' && joyfulProviderConfig.enabled) {
-    return withGenerationGuidance(
-      await generateWithJoyfulAI(prompt, existingFiles, conversationHistory, options),
-      options,
-    );
-  }
-
-  if (settings.aiProvider !== 'local') {
-    throw new Error(`${settings.aiProvider} provider is selected but this build only has the Joyful AI runtime connected. Switch to Joyful AI in Settings or add a backend adapter for ${settings.aiProvider}.`);
+  if (joyfulProviderConfig.enabled) {
+    try {
+      const response = await generateWithJoyfulAI(prompt, existingFiles, conversationHistory, options);
+      return withGenerationGuidance(response, options);
+    } catch (error) {
+      console.warn('Joyful AI API failed, falling back to local template builders:', error);
+    }
   }
 
   await new Promise(resolve => setTimeout(resolve, 400));
@@ -1771,16 +2144,16 @@ export async function generateWithAI(
   if (analysis.intent === 'modify') {
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
     if (modified) {
-      return withGenerationGuidance(modified, options);
+      return finalizeGenerationResponse(modified, existingFiles, options);
     }
   }
 
   if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
-    return withGenerationGuidance(buildReactTemplate(analysis, prompt), options);
+    return finalizeGenerationResponse(buildReactTemplate(analysis, prompt), existingFiles, options);
   }
 
   const builder = TEMPLATE_BUILDERS[analysis.template] || buildPortfolio;
-  return withGenerationGuidance(builder(analysis), options);
+  return finalizeGenerationResponse(builder(analysis), existingFiles, options);
 }
 
 // ─── Streaming Support ─────────────────────────────────────────────

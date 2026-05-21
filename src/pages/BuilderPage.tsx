@@ -7,8 +7,8 @@ import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { Project, ProjectFile, ChatMode } from '@/types';
-import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
+import type { FileOperation, Project, ProjectFile, ChatMode } from '@/types';
+import { applyFileOperations, applyPatchOperations, exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import { generateWithAI } from '@/services/aiService';
@@ -54,7 +54,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     abortGeneration,
     clearSavedGeneration,
   } = useChat(projectId || 'default');
-  const [runLogIds, setRunLogIds] = useState<string[]>([]);
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -102,64 +101,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build') => {
     const response = await sendMessage(content, files, mode);
     if (response) {
-      // If AI returned tool run results, subscribe PreviewPanel to them
-      const toolResults = (response as any).metadata?.toolResults || [];
-      const runIds = Array.isArray(toolResults) ? toolResults.filter((t: any) => t?.type === 'run_command' && t.runId).map((t: any) => t.runId) : [];
-      if (runIds.length > 0) setRunLogIds(runIds);
-
-      // If AI suggested pending file operations, prompt the user before applying
-      const pending = (response as any).metadata?.pendingFileOps;
-      if (Array.isArray(pending) && pending.length > 0) {
-        const summary = pending.map((op: any) => `${op.name.replace(/_/g, ' ')} ${op.args?.path || op.args?.command || ''}`).join('\n');
-        // Simple confirmation flow — UI modal could replace this
-        const ok = window.confirm(`AI suggests these operations:\n\n${summary}\n\nApprove and apply?`);
-        if (ok) {
-          const newFiles = [...files];
-          for (const op of pending) {
-            const name = op.name;
-            const args = op.args || {};
-            if (name === 'delete_file') {
-              const idx = newFiles.findIndex(f => f.path === args.path);
-              if (idx >= 0) newFiles.splice(idx, 1);
-            } else if (name === 'create_file' || name === 'modify_file') {
-              const existingIdx = newFiles.findIndex(f => f.path === args.path);
-              const projectFile: ProjectFile = {
-                id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${args.path}`,
-                path: args.path,
-                content: args.content || '',
-                type: getFileType(args.path),
-              };
-              if (existingIdx >= 0) newFiles[existingIdx] = projectFile; else newFiles.push(projectFile);
-            }
-          }
-          setFiles(newFiles);
-          persistFiles(newFiles);
-          addToast('success', `Applied ${pending.length} AI-proposed operation${pending.length > 1 ? 's' : ''}`);
-        } else {
-          addToast('info', 'Skipped AI-proposed file operations');
-        }
-      } else {
-        // Default apply behavior for generated response.files
-        const newFiles = [...files];
-        for (const file of response.files) {
-          if (file.action === 'delete') {
-            const existingIdx = newFiles.findIndex(f => f.path === file.path);
-            if (existingIdx >= 0) newFiles.splice(existingIdx, 1);
-            continue;
-          }
-          const existingIdx = newFiles.findIndex(f => f.path === file.path);
-          const projectFile: ProjectFile = {
-            id: existingIdx >= 0 ? newFiles[existingIdx].id : `file_${Date.now()}_${file.path}`,
-            path: file.path,
-            content: file.content || '',
-            type: getFileType(file.path),
-          };
-          if (existingIdx >= 0) {
-            newFiles[existingIdx] = projectFile;
-          } else {
-            newFiles.push(projectFile);
-          }
-        }
+      const commitAppliedFiles = (newFiles: ProjectFile[], appliedCount: number, skippedCount: number) => {
         setFiles(newFiles);
         setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
         if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
@@ -174,12 +116,70 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
             return [...prev, nextActiveFile];
           });
         }
-        const changedCount = response.files.length;
-        addToast('success', `Applied ${changedCount} file operation${changedCount > 1 ? 's' : ''}`);
+        const skippedText = skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
+        addToast('success', `Applied ${appliedCount} operation${appliedCount > 1 ? 's' : ''}${skippedText}`);
         setViewMode('preview');
+      };
+
+      let workingFiles = files;
+      let appliedCount = 0;
+      let skippedCount = 0;
+      let firstSkipReason = '';
+
+      if (response.patches?.length) {
+        const patchResult = applyPatchOperations(workingFiles, response.patches);
+        workingFiles = patchResult.files;
+        appliedCount += patchResult.applied.length;
+        skippedCount += patchResult.skipped.length;
+        firstSkipReason ||= patchResult.skipped[0]?.reason || '';
+      }
+
+      const applyOperations = (operations: FileOperation[]) => {
+        const result = applyFileOperations(workingFiles, operations);
+        workingFiles = result.files;
+        appliedCount += result.applied.length;
+        skippedCount += result.skipped.length;
+        firstSkipReason ||= result.skipped[0]?.reason || '';
+      };
+
+      // If AI suggested pending file operations, prompt the user before applying
+      const pending = response.metadata?.pendingFileOps;
+      if (Array.isArray(pending) && pending.length > 0) {
+        const summary = pending.map((op) => `${op.name.replace(/_/g, ' ')} ${op.args?.path || ''}`).join('\n');
+        // Simple confirmation flow — UI modal could replace this
+        const ok = window.confirm(`AI suggests these operations:\n\n${summary}\n\nApprove and apply?`);
+        if (ok) {
+          applyOperations(pending
+            .filter(op => op.args?.path)
+            .map(op => ({
+              path: op.args.path || '',
+              action: op.name === 'delete_file' ? 'delete' : op.name === 'modify_file' ? 'modify' : 'create',
+              content: op.args.content,
+            })));
+        } else {
+          addToast('info', 'Skipped AI-proposed file operations');
+        }
+      } else {
+        applyOperations(response.files.map(file => ({
+          path: file.path,
+          action: file.action || (files.some(existing => existing.path === file.path) ? 'modify' : 'create'),
+          content: file.content,
+        })));
+      }
+
+      if (appliedCount > 0) {
+        commitAppliedFiles(workingFiles, appliedCount, skippedCount);
+      } else {
+        addToast('info', firstSkipReason || 'No file operations to apply');
       }
     }
   }, [files, selectedFile, sendMessage, persistFiles, addToast]);
+
+  const handleRequestFix = useCallback((prompt: string) => {
+    setShowChatSidebar(true);
+    setMobileChatOpen(true);
+    void handleSendMessage(prompt, 'build');
+  }, [handleSendMessage]);
 
   useEffect(() => {
     if (!project || hasSubmittedInitialPrompt.current || !initialPromptRef.current) return;
@@ -575,7 +575,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 onUpdateFile={handleUpdateFile}
               />
             ) : (
-              <PreviewPanel files={files} projectId={project?.id} runLogIds={runLogIds} />
+              <PreviewPanel files={files} projectId={project?.id} onRequestFix={handleRequestFix} />
             )}
           </div>
         </section>

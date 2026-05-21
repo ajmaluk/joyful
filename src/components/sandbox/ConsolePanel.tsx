@@ -102,6 +102,11 @@ export function ConsolePanel({ logs, onClear }: ConsolePanelProps) {
                   {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
                 <span className="text-gray-800 whitespace-pre-wrap break-all min-w-0 flex-1">{entry.message}</span>
+                {entry.path && (
+                  <span className="ml-2 flex-shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-600">
+                    {entry.path}{entry.line ? `:${entry.line}` : ''}
+                  </span>
+                )}
               </div>
             );
           })

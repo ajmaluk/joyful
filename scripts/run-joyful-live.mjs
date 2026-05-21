@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: new URL('../.env', import.meta.url).pathname });
 
 const invokeUrl = process.env.VITE_NV_INVOKE_URL || 'https://integrate.api.nvidia.com/v1/chat/completions';
-const apiKey = process.env.VITE_NV_API_KEY || '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';
+const apiKey = process.env.VITE_NV_API_KEY || '';
 const model = process.env.VITE_NV_API_MODEL || 'qwen/qwen3-coder-480b-a35b-instruct';
 const topP = Number(process.env.VITE_NV_API_TOP_P || 0.8);
 
@@ -18,6 +18,10 @@ function stripMarkdownJson(value) {
 }
 
 async function callJoyful(messages) {
+  if (!apiKey) {
+    throw new Error('VITE_NV_API_KEY is required to run this live Joyful AI check.');
+  }
+
   const response = await fetch(invokeUrl, {
     method: 'POST',
     headers: {
@@ -54,7 +58,8 @@ async function callJoyful(messages) {
   "summary": "brief summary",
   "nextSteps": ["step"]
 }
-Do not wrap JSON in markdown.`;
+Do not wrap JSON in markdown.
+Do not use JavaScript string concatenation, comments, trailing commas, or unescaped line breaks inside JSON strings.`;
 
     const userPrompt = 'Create a minimal index.html file for a tiny landing page. Respond using only the JSON schema requested by system instruction.';
     const text = await callJoyful([

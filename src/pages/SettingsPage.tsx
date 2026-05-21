@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Settings, Palette, Code2, Brain, User, Gift,
-  Moon, Sun, Monitor, Check, SlidersHorizontal, KeyRound, PlugZap, Eye,
+  Moon, Sun, Monitor, Check, SlidersHorizontal, Eye,
   BookOpen, Plus, Pencil, Trash2, Save, X
 } from 'lucide-react';
 import type { UserSettings, UserSkill } from '@/types';
@@ -32,28 +32,6 @@ const themeOptions = [
   label: string;
   description: string;
   icon: typeof Monitor;
-}>;
-
-const providerOptions = [
-  { value: 'local', label: 'Local Lite', model: 'local-lite', description: 'Built-in free generator. No key needed.', badge: 'Included' },
-  ...(joyfulProviderConfig.enabled ? [{
-    value: 'joyful' as const,
-    label: 'Joyful AI',
-    model: joyfulProviderConfig.model,
-    description: 'Limit Free Ai Provider',
-    badge: 'Free',
-  }] : []),
-  { value: 'openai', label: 'OpenAI', model: 'gpt-4o', description: 'Strong general website generation and edits.', badge: 'API key' },
-  { value: 'anthropic', label: 'Anthropic', model: 'claude-3-5-sonnet', description: 'Careful planning and long-form copy refinement.', badge: 'API key' },
-  { value: 'openrouter', label: 'OpenRouter', model: 'openrouter/auto', description: 'Route to many hosted models from one account.', badge: 'API key' },
-  { value: 'mistral', label: 'Mistral', model: 'mistral-large-latest', description: 'Efficient code and content generation.', badge: 'API key' },
-  { value: 'groq', label: 'Groq', model: 'llama-3.1-70b-versatile', description: 'Low-latency iteration for quick edits.', badge: 'API key' },
-] satisfies Array<{
-  value: UserSettings['aiProvider'];
-  label: string;
-  model: string;
-  description: string;
-  badge: string;
 }>;
 
 const fontFamilyOptions = [
@@ -96,37 +74,6 @@ export function SettingsPage() {
 
   const updateSetting = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => {
     const next = { ...settings, [key]: value };
-    setSettings(next);
-    storage.saveSettings(next);
-  };
-
-  const activateProvider = (provider: UserSettings['aiProvider'], model: string) => {
-    const hasKey = provider === 'joyful' || Boolean(settings.providerKeys?.[provider]?.trim());
-    const next: UserSettings = {
-      ...settings,
-      aiProvider: provider,
-      aiModel: model,
-      connectedProviders: {
-        ...settings.connectedProviders,
-        [provider]: provider === 'local' || provider === 'joyful' || hasKey,
-      },
-    };
-    setSettings(next);
-    storage.saveSettings(next);
-  };
-
-  const updateProviderKey = (provider: UserSettings['aiProvider'], value: string) => {
-    const next: UserSettings = {
-      ...settings,
-      providerKeys: {
-        ...settings.providerKeys,
-        [provider]: value,
-      },
-      connectedProviders: {
-        ...settings.connectedProviders,
-        [provider]: provider === 'local' || provider === 'joyful' || value.trim().length > 0,
-      },
-    };
     setSettings(next);
     storage.saveSettings(next);
   };
@@ -520,102 +467,49 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground">AI Runtime</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Choose the active builder brain and connect optional providers for richer generation.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Joyful AI is your exclusive builder brain, powered by NVIDIA.</p>
             </div>
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-5">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <PlugZap className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-card-foreground">Active provider</p>
-                      <p className="text-xs text-muted-foreground">{providerOptions.find(option => option.value === settings.aiProvider)?.label} · {settings.aiModel}</p>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-500">
-                    {settings.connectedProviders?.[settings.aiProvider] ? 'Connected' : 'Needs key'}
-                  </span>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Brain className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-card-foreground">Joyful AI</p>
+                  <p className="text-xs text-muted-foreground">{joyfulProviderConfig.model}</p>
                 </div>
-                <div className="grid gap-3">
-                  {providerOptions.map((provider) => {
-                    const isActive = settings.aiProvider === provider.value;
-                    const isConnected = provider.value === 'local' || provider.value === 'joyful' || Boolean(settings.connectedProviders?.[provider.value]);
-                    return (
-                      <div
-                        key={provider.value}
-                        className={`rounded-lg border p-4 transition-colors ${
-                          isActive ? 'border-primary bg-primary/10' : 'border-border bg-background'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-foreground">{provider.label}</p>
-                              <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{provider.badge}</span>
-                              {isConnected && <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">Connected</span>}
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{provider.description}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => activateProvider(provider.value, provider.model)}
-                            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                              isActive
-                                ? 'bg-primary text-primary-foreground'
-                                : 'border border-border text-foreground hover:border-primary/50 hover:bg-accent'
-                            }`}
-                          >
-                            {isActive ? 'Active' : 'Use'}
-                          </button>
-                        </div>
-                        {provider.value !== 'local' && provider.value !== 'joyful' && (
-                          <div className="mt-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2">
-                            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                            <input
-                              type="password"
-                              value={settings.providerKeys?.[provider.value] || ''}
-                              onChange={(event) => updateProviderKey(provider.value, event.target.value)}
-                              placeholder={`${provider.label} API key`}
-                              className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                <span className="ml-auto rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-500">
+                  {joyfulProviderConfig.enabled ? 'Connected' : 'Disabled'}
+                </span>
+              </div>
+
+              <div className="rounded-lg border border-border bg-background p-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-card-foreground">Temperature</label>
+                  <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{settings.aiTemperature}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(settings.aiTemperature * 100)}
+                  onChange={(e) => updateSetting('aiTemperature', parseInt(e.target.value) / 100)}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-[#6387ff]"
+                />
+                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                  <span>Precise</span>
+                  <span>Creative</span>
                 </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                {['Local mode stays available', 'Provider keys stay in browser storage', 'Manual files always editable', 'ZIP export remains free'].map((item) => (
+                {['All generation via Joyful AI', 'Template builders as offline fallback', 'Manual files always editable', 'ZIP export remains free'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
                     <Check className="h-3.5 w-3.5 text-emerald-500" />
                     {item}
                   </div>
                 ))}
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-card-foreground">AI Temperature</label>
-                  <span className="rounded-lg bg-[#6387ff]/10 px-3 py-1.5 text-sm font-semibold text-[#6387ff]">{settings.aiTemperature}</span>
-                </div>
-                <div className="relative">
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(settings.aiTemperature * 100)}
-                    onChange={(e) => updateSetting('aiTemperature', parseInt(e.target.value) / 100)}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-[#6387ff]"
-                  />
-                  <div className="mt-3 flex justify-between text-xs text-muted-foreground">
-                    <span>Precise</span>
-                    <span>Creative</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

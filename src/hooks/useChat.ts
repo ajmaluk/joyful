@@ -17,8 +17,23 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
       status: 'pending',
     });
   }
+  for (const patch of response.patches || []) {
+    todos.push({
+      id: `todo_${Date.now()}_${index++}`,
+      label: `Patch ${patch.path}`,
+      status: 'pending',
+    });
+  }
 
   if (todos.length > 0) {
+    for (const command of response.metadata?.sandboxCommands || []) {
+      todos.push({
+        id: `todo_${Date.now()}_${index++}`,
+        label: `Run ${[command.command, ...(command.args || [])].join(' ')}`,
+        status: 'pending',
+      });
+    }
+
     todos.push({
       id: `todo_${Date.now()}_${index}`,
       label: 'Refresh preview',
@@ -100,6 +115,7 @@ function buildDevelopmentPlanMessage(content: string, existingFiles: ProjectFile
 
 function buildWalkthrough(response: AIGenerationResponse): string {
   const files = response.files;
+  const patches = response.patches || [];
   const creates = files.filter(f => f.action === 'create');
   const modifies = files.filter(f => f.action === 'modify');
   const deletes = files.filter(f => f.action === 'delete');
@@ -120,9 +136,20 @@ function buildWalkthrough(response: AIGenerationResponse): string {
     const paths = deletes.map(f => f.path).join(', ');
     parts.push(`Deleted ${deletes.length} file${deletes.length > 1 ? 's' : ''}: ${paths}.`);
   }
+  if (patches.length > 0) {
+    parts.push(`Applied ${patches.length} targeted patch${patches.length > 1 ? 'es' : ''}: ${patches.map(p => p.path).join(', ')}.`);
+  }
 
   if (response.summary) {
     parts.push(response.summary);
+  }
+
+  const sandboxResults = response.metadata?.sandboxResults || [];
+  const failedChecks = sandboxResults.filter(result => result.status === 'error');
+  if (sandboxResults.length > 0 && failedChecks.length === 0) {
+    parts.push(`Sandbox validation passed: ${sandboxResults.map(result => result.command).join(', ')}.`);
+  } else if (failedChecks.length > 0) {
+    parts.push(`Sandbox validation needs attention: ${failedChecks.map(result => result.command).join(', ')}.`);
   }
 
   return parts.join(' ');
@@ -321,14 +348,24 @@ export function useChat(projectId: string) {
         content: walkthrough,
         timestamp: new Date().toISOString(),
         nextSteps: response.nextSteps,
-        files: response.files.map(f => ({
-          path: f.path,
-          action: f.action || (existingFiles.some(file => file.path === f.path) ? 'modify' : 'create'),
-          content: f.content || '',
-        })),
+        files: [
+          ...response.files.map(f => ({
+            path: f.path,
+            action: f.action || (existingFiles.some(file => file.path === f.path) ? 'modify' as const : 'create' as const),
+            content: f.content || '',
+          })),
+          ...(response.patches || []).map(patch => ({
+            path: patch.path,
+            action: 'modify' as const,
+            content: patch.newString || patch.content || '',
+          })),
+        ],
         metadata: {
           contextFiles: contextGraph.map(node => node.path),
           complexity: response.metadata?.estimatedComplexity,
+          agentPlan: response.metadata?.agentPlan,
+          sandboxCommands: response.metadata?.sandboxCommands,
+          sandboxResults: response.metadata?.sandboxResults,
         },
       };
 

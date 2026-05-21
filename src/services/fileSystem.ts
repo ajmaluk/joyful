@@ -1,4 +1,4 @@
-import type { ProjectFile, FileType } from '@/types';
+import type { FileOperation, FilePatchOperation, ProjectFile, FileType } from '@/types';
 
 // Detect file type from extension
 export function getFileType(path: string): FileType {
@@ -43,6 +43,154 @@ export function validatePath(path: string): boolean {
   // Max length
   if (path.length > 200) return false;
   return true;
+}
+
+export function normalizeProjectPath(path: string): string {
+  return path
+    .trim()
+    .replace(/^\.\/+/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+/g, '/');
+}
+
+export interface ApplyFileOperationsResult {
+  files: ProjectFile[];
+  applied: (FileOperation | FilePatchOperation)[];
+  skipped: { operation: FileOperation | FilePatchOperation; reason: string }[];
+}
+
+function applyPatchToContent(content: string, patch: FilePatchOperation): { content: string; changed: boolean; reason?: string } {
+  if (typeof patch.oldString === 'string' && typeof patch.newString === 'string') {
+    if (!content.includes(patch.oldString)) {
+      return { content, changed: false, reason: 'Patch target text was not found.' };
+    }
+    return { content: content.replace(patch.oldString, patch.newString), changed: true };
+  }
+
+  if (typeof patch.insertBefore === 'string' && typeof patch.content === 'string') {
+    if (!content.includes(patch.insertBefore)) {
+      return { content, changed: false, reason: 'Insert-before anchor was not found.' };
+    }
+    return { content: content.replace(patch.insertBefore, `${patch.content}${patch.insertBefore}`), changed: true };
+  }
+
+  if (typeof patch.insertAfter === 'string' && typeof patch.content === 'string') {
+    if (!content.includes(patch.insertAfter)) {
+      return { content, changed: false, reason: 'Insert-after anchor was not found.' };
+    }
+    return { content: content.replace(patch.insertAfter, `${patch.insertAfter}${patch.content}`), changed: true };
+  }
+
+  if (typeof patch.lineStart === 'number' && typeof patch.lineEnd === 'number' && typeof patch.content === 'string') {
+    const lines = content.split('\n');
+    const start = Math.max(1, Math.floor(patch.lineStart));
+    const end = Math.max(0, Math.floor(patch.lineEnd));
+    if (start > lines.length + 1) {
+      return { content, changed: false, reason: 'Patch line range is outside the file.' };
+    }
+    const replacement = patch.content.split('\n');
+    lines.splice(start - 1, Math.max(0, end - start + 1), ...replacement);
+    return { content: lines.join('\n'), changed: true };
+  }
+
+  return { content, changed: false, reason: 'Patch is missing oldString/newString, insert anchor, or line range.' };
+}
+
+export function applyPatchOperations(
+  currentFiles: ProjectFile[],
+  patches: FilePatchOperation[],
+): ApplyFileOperationsResult {
+  const files = currentFiles.map(file => ({ ...file }));
+  const applied: FilePatchOperation[] = [];
+  const skipped: { operation: FilePatchOperation; reason: string }[] = [];
+
+  for (const patch of patches) {
+    const path = normalizeProjectPath(patch.path);
+    const normalizedPatch: FilePatchOperation = { ...patch, path };
+
+    if (!path || !validatePath(path)) {
+      skipped.push({ operation: normalizedPatch, reason: 'Invalid relative file path.' });
+      continue;
+    }
+
+    const existingIdx = files.findIndex(file => file.path === path);
+    if (existingIdx < 0) {
+      skipped.push({ operation: normalizedPatch, reason: 'File does not exist for patch operation.' });
+      continue;
+    }
+
+    const result = applyPatchToContent(files[existingIdx].content, normalizedPatch);
+    if (!result.changed) {
+      skipped.push({ operation: normalizedPatch, reason: result.reason || 'Patch did not change the file.' });
+      continue;
+    }
+
+    files[existingIdx] = {
+      ...files[existingIdx],
+      content: result.content,
+      isModified: false,
+    };
+    applied.push(normalizedPatch);
+  }
+
+  return { files, applied, skipped };
+}
+
+export function applyFileOperations(
+  currentFiles: ProjectFile[],
+  operations: FileOperation[],
+): ApplyFileOperationsResult {
+  const files = currentFiles.map(file => ({ ...file }));
+  const applied: FileOperation[] = [];
+  const skipped: { operation: FileOperation; reason: string }[] = [];
+
+  for (const operation of operations) {
+    const path = normalizeProjectPath(operation.path);
+    const normalizedOperation: FileOperation = { ...operation, path };
+
+    if (!path || !validatePath(path)) {
+      skipped.push({ operation: normalizedOperation, reason: 'Invalid relative file path.' });
+      continue;
+    }
+
+    const existingIdx = files.findIndex(file => file.path === path);
+
+    if (operation.action === 'delete') {
+      if (existingIdx < 0) {
+        skipped.push({ operation: normalizedOperation, reason: 'File does not exist.' });
+        continue;
+      }
+      files.splice(existingIdx, 1);
+      applied.push(normalizedOperation);
+      continue;
+    }
+
+    if (typeof operation.content !== 'string') {
+      skipped.push({ operation: normalizedOperation, reason: 'Missing complete file content.' });
+      continue;
+    }
+
+    const nextFile: ProjectFile = {
+      id: existingIdx >= 0 ? files[existingIdx].id : `file_${Date.now()}_${applied.length}_${path}`,
+      path,
+      content: operation.content,
+      type: getFileType(path),
+      isModified: false,
+      isOpen: files[existingIdx]?.isOpen,
+    };
+
+    if (existingIdx >= 0) {
+      files[existingIdx] = nextFile;
+      applied.push({ ...normalizedOperation, action: operation.action || 'modify' });
+    } else {
+      files.push(nextFile);
+      applied.push({ ...normalizedOperation, action: operation.action || 'create' });
+    }
+  }
+
+  files.sort((a, b) => a.path.localeCompare(b.path));
+
+  return { files, applied, skipped };
 }
 
 // Get file name from path

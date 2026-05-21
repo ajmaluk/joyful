@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { executeInSandbox as runSandboxCommand } from '@/services/clientSandbox';
+import type { PreviewIssue, ProjectFile } from '@/types';
 
 export interface SandboxLogEntry {
   id: string;
   level: 'log' | 'warn' | 'error' | 'info';
   message: string;
   timestamp: number;
+  path?: string;
+  line?: number;
+  column?: number;
 }
 
 export interface SandboxNetworkEntry {
@@ -44,7 +49,40 @@ export interface InspectorSelection {
   backgroundColor: string;
 }
 
-export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement | null>) {
+function parseIssueLocation(message: string, files: ProjectFile[]) {
+  const direct = message.match(/\b([A-Za-z0-9_./-]+\.(?:jsx|tsx|js|ts|css|html|json)):(\d+)(?::(\d+))?/);
+  if (direct) {
+    return {
+      path: direct[1].replace(/^\/+/, ''),
+      line: Number(direct[2]),
+      column: direct[3] ? Number(direct[3]) : undefined,
+    };
+  }
+
+  const lower = message.toLowerCase();
+  const likelyFile = files.find(file => lower.includes(file.path.toLowerCase())) ||
+    files.find(file => file.path === 'src/App.jsx' || file.path === 'src/App.tsx') ||
+    files.find(file => file.path === 'index.html');
+
+  return likelyFile ? { path: likelyFile.path, line: undefined, column: undefined } : {};
+}
+
+function buildIssueFromLog(log: SandboxLogEntry, files: ProjectFile[]): PreviewIssue | null {
+  if (log.level !== 'error' && log.level !== 'warn') return null;
+  const location = log.path ? { path: log.path, line: log.line, column: log.column } : parseIssueLocation(log.message, files);
+  return {
+    id: `issue_${log.id}`,
+    severity: log.level === 'error' ? 'error' : 'warning',
+    message: log.message,
+    source: 'console',
+    path: location.path,
+    line: location.line,
+    column: location.column,
+    timestamp: log.timestamp,
+  };
+}
+
+export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement | null>, files: ProjectFile[] = []) {
   const [logs, setLogs] = useState<SandboxLogEntry[]>([]);
   const [network, setNetwork] = useState<SandboxNetworkEntry[]>([]);
   const [metrics, setMetrics] = useState<SandboxMetrics>({ domNodes: 0, heapMB: 0, loadMs: 0 });
@@ -60,11 +98,15 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
       switch (msg.type) {
         case 'console':
           setLogs(prev => {
+            const location = parseIssueLocation(msg.data.message, files);
             const next = [...prev, {
               id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               level: msg.data.level,
               message: msg.data.message,
               timestamp: msg.timestamp,
+              path: location.path,
+              line: location.line,
+              column: location.column,
             }];
             return next.length > 500 ? next.slice(-500) : next;
           });
@@ -129,7 +171,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [files]);
 
   const sendToIframe = useCallback((type: string, data: unknown) => {
     const iframe = iframeRef.current;
@@ -153,49 +195,48 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     pendingRequests.current.clear();
   }, []);
 
-  const subscribeRunLogs = useCallback((runId: string) => {
-    if (!runId) return () => {};
-    const base = (import.meta.env.VITE_SANDBOX_SERVER_URL as string) || '';
-    const url = base ? `${base.replace(/\/$/, '')}/sandbox/stream/${runId}` : `/sandbox/stream/${runId}`;
-    const es = new EventSource(url);
-    es.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === 'stdout' || msg.type === 'stderr') {
-          setLogs(prev => {
-            const entry: SandboxLogEntry = {
-              id: `run_${runId}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-              level: msg.type === 'stderr' ? 'error' : 'info',
-              message: String(msg.data).replace(/\n$/, ''),
-              timestamp: Date.now(),
-            };
-            const next = [...prev, entry];
-            return next.length > 1000 ? next.slice(-1000) : next;
-          });
-        }
-        if (msg.type === 'exit') {
-          setLogs(prev => [...prev, { id: `run_${runId}_exit`, level: 'info', message: `process exited (${msg.data.code})`, timestamp: Date.now() }]);
-          es.close();
-        }
-      } catch (e) {
-        // ignore parse errors
+  const executeInSandbox = useCallback(async (command: string): Promise<void> => {
+    try {
+      const events = await runSandboxCommand(command);
+      const newLogs: SandboxLogEntry[] = [];
+      for (const event of events) {
+        const logEntry: SandboxLogEntry = {
+          id: `sandbox_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          level: event.type === 'stderr' || event.type === 'error' ? 'error' : event.type === 'exit' ? 'info' : 'log',
+          message: typeof event.data === 'string' ? event.data : `exit code: ${(event.data as { code: number }).code}`,
+          timestamp: event.timestamp,
+        };
+        newLogs.push(logEntry);
       }
-    };
-    es.onerror = () => { try { es.close(); } catch (e) {} };
-    return () => { try { es.close(); } catch (e) {} };
+      setLogs(prev => {
+        const next = [...prev, ...newLogs];
+        return next.length > 1000 ? next.slice(-1000) : next;
+      });
+    } catch (error) {
+      const errorLog: SandboxLogEntry = {
+        id: `sandbox_error_${Date.now()}`,
+        level: 'error',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now(),
+      };
+      setLogs(prev => [...prev, errorLog]);
+    }
   }, []);
 
   return {
     logs,
     network,
     metrics,
+    issues: logs
+      .map(log => buildIssueFromLog(log, files))
+      .filter(Boolean) as PreviewIssue[],
     inspectorSelection,
     inspectorEnabled,
     toggleInspector,
     requestMetrics,
     clearLogs,
     clearNetwork,
-    subscribeRunLogs,
+    executeInSandbox,
     sendToIframe,
   };
 }

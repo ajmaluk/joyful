@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Copy, RotateCcw, Check, AlertCircle } from 'lucide-react';
+import { ArrowRight, Copy, RotateCcw, Check, AlertCircle, FileCode2, Terminal } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { TypingText } from '@/components/ui/TypingText';
 
@@ -12,7 +12,7 @@ interface MessageBubbleProps {
   isGenerating?: boolean;
 }
 
-export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, isGenerating }: MessageBubbleProps) {
+export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, onProceedPlan, isGenerating }: MessageBubbleProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const isPlanMessage = message.role === 'assistant' && message.actionType === 'plan';
 
@@ -81,6 +81,48 @@ export function MessageBubble({ message, isLatest, onRegenerate, onProceedPlan, 
           )}
         </p>
       </div>
+
+      {message.files && message.files.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-1">
+          {message.files.slice(0, 8).map((file) => (
+            <button
+              key={`${file.action}-${file.path}`}
+              type="button"
+              onClick={() => onOpenFile?.(file.path)}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-gray-400 transition-colors hover:border-primary/25 hover:text-primary"
+              title={file.path}
+            >
+              <FileCode2 className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{file.action || 'modify'} {file.path}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {message.metadata?.sandboxResults && message.metadata.sandboxResults.length > 0 && (
+        <div className="space-y-1 px-1">
+          {message.metadata.sandboxResults.map((result) => (
+            <div
+              key={result.command}
+              className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-[11px] ${
+                result.status === 'done'
+                  ? 'border-emerald-500/15 bg-emerald-500/5 text-emerald-300'
+                  : 'border-red-500/20 bg-red-500/5 text-red-300'
+              }`}
+            >
+              <Terminal className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="font-semibold">{result.command}</p>
+                {(result.stderr || result.stdout) && (
+                  <p className="mt-0.5 line-clamp-2 text-[10px] opacity-75">
+                    {(result.stderr || result.stdout).trim()}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {isPlanMessage && isLatest && onProceedPlan && (
         <div className="flex justify-end px-1">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2, Columns, Smartphone as SmartphoneFrame } from 'lucide-react';
-import type { ProjectFile } from '@/types';
+import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2, Columns, Smartphone as SmartphoneFrame, Wrench } from 'lucide-react';
+import type { PreviewIssue, ProjectFile } from '@/types';
 import { generatePreview } from '@/services/fileSystem';
 import { SANDBOX_BRIDGE_SCRIPT } from '@/utils/sandboxBridge';
 import { useSandboxMessages } from '@/hooks/useSandboxMessages';
@@ -11,7 +11,7 @@ import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
 interface PreviewPanelProps {
   files: ProjectFile[];
   projectId?: string;
-  runLogIds?: string[];
+  onRequestFix?: (prompt: string) => void;
 }
 
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
@@ -22,7 +22,27 @@ const BOTTOM_HEIGHT = 200;
 
 const PREVIEW_ROUTE_PREFIX = 'joyful_preview_route_';
 
-export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps) {
+function buildFixPrompt(issues: PreviewIssue[], files: ProjectFile[]) {
+  const topIssues = issues.slice(0, 6);
+  const mentionedPaths = Array.from(new Set(topIssues.map(issue => issue.path).filter(Boolean))) as string[];
+  const fallbackPaths = files
+    .filter(file => /^src\/App\.(jsx|tsx)$/i.test(file.path) || file.path === 'index.html' || file.path.endsWith('.css'))
+    .slice(0, 4)
+    .map(file => file.path);
+  const paths = mentionedPaths.length > 0 ? mentionedPaths : fallbackPaths;
+
+  return `Fix the preview/runtime issues below. Prefer targeted patch operations for small edits instead of rewriting entire files. Read the broken files again, identify the root cause, and return only the minimal create/modify/delete or patch operations needed.
+
+Issues:
+${topIssues.map((issue, index) => `${index + 1}. ${issue.severity.toUpperCase()}${issue.path ? ` in ${issue.path}${issue.line ? `:${issue.line}` : ''}${issue.column ? `:${issue.column}` : ''}` : ''}: ${issue.message}`).join('\n')}
+
+Likely files to inspect:
+${paths.length > 0 ? paths.map(path => `- ${path}`).join('\n') : '- No specific file detected; inspect the preview entry and recent changes.'}
+
+After fixing, run browser-safe validation such as npm run build or npm run lint when package scripts exist.`;
+}
+
+export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [srcDoc, setSrcDoc] = useState('');
@@ -45,20 +65,14 @@ export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps)
     logs,
     network,
     metrics,
+    issues,
     inspectorSelection,
     inspectorEnabled,
     toggleInspector,
     requestMetrics,
     clearLogs,
     clearNetwork,
-    subscribeRunLogs,
-  } = useSandboxMessages(iframeRef);
-
-  useEffect(() => {
-    if (!subscribeRunLogs || !runLogIds || runLogIds.length === 0) return;
-    const unsubscribes = runLogIds.map(id => subscribeRunLogs(id));
-    return () => unsubscribes.forEach(fn => { try { fn && fn(); } catch (e) {} });
-  }, [runLogIds, subscribeRunLogs]);
+  } = useSandboxMessages(iframeRef, files);
 
   const pageOptions = useMemo(() => {
     const routes = new Set<string>(['/']);
@@ -175,6 +189,7 @@ export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps)
     { tab: 'network', icon: Network, label: 'Network', badge: network.filter(r => r.pending).length || undefined },
     { tab: 'performance', icon: Activity, label: 'Perf' },
   ];
+  const actionableIssues = issues.filter(issue => issue.severity === 'error');
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col border-l border-border bg-background">
@@ -378,7 +393,32 @@ export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps)
         >
           Open DevTools
         </button>
+        {onRequestFix && actionableIssues.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onRequestFix(buildFixPrompt(actionableIssues, files))}
+            className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-0.5 font-semibold text-red-600 transition-colors hover:bg-red-500/15 dark:text-red-300"
+            title="Send these preview errors to Joyful AI"
+          >
+            <Wrench className="mr-1 inline h-3 w-3" />
+            Fix {actionableIssues.length}
+          </button>
+        )}
       </div>
+
+      {onRequestFix && actionableIssues.length > 0 && (
+        <div className="flex flex-shrink-0 items-center gap-2 border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
+          <AlertSummary issues={actionableIssues} />
+          <button
+            type="button"
+            onClick={() => onRequestFix(buildFixPrompt(actionableIssues, files))}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            Fix in chat
+          </button>
+        </div>
+      )}
 
       {/* Preview iframe — polished */}
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-muted/25 p-4" style={{ flex: bottomOpen ? `1 1 calc(100% - ${BOTTOM_HEIGHT}px)` : '1 1 100%' }}>
@@ -494,6 +534,19 @@ export function PreviewPanel({ files, projectId, runLogIds }: PreviewPanelProps)
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function AlertSummary({ issues }: { issues: PreviewIssue[] }) {
+  const first = issues[0];
+  return (
+    <div className="min-w-0">
+      <p className="truncate font-semibold">
+        Preview found {issues.length} runtime issue{issues.length > 1 ? 's' : ''}
+        {first.path ? ` in ${first.path}${first.line ? `:${first.line}` : ''}` : ''}
+      </p>
+      <p className="truncate opacity-80">{first.message}</p>
     </div>
   );
 }

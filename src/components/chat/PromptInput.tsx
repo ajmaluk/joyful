@@ -1,17 +1,19 @@
-import { useState, useRef, useCallback } from 'react';
-import { ArrowUp, ChevronDown, Loader2, ListChecks, Mic, Pause, Plus, Square, Wand2 } from 'lucide-react';
-import type { ChatMode } from '@/types';
+import { useState, useRef, useCallback, useEffect, type ChangeEvent } from 'react';
+import { ArrowUp, ChevronDown, ImagePlus, Loader2, ListChecks, Mic, Pause, Square, Wand2, X } from 'lucide-react';
+import type { ChatAttachment, ChatMode } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { readImageAttachment } from '@/services/attachments';
 
 interface PromptInputProps {
-  onSend: (content: string, mode?: ChatMode) => void;
+  onSend: (content: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
   disabled?: boolean;
   placeholder?: string;
   onCancel?: () => void;
   isGenerating?: boolean;
   mode?: ChatMode;
   onModeChange?: (mode: ChatMode) => void;
+  externalContext?: string;
 }
 
 const modeOptions: Array<{ value: ChatMode; label: string; hint: string; icon: typeof Wand2 }> = [
@@ -27,13 +29,18 @@ export function PromptInput({
   isGenerating,
   mode = 'build',
   onModeChange,
+  externalContext,
 }: PromptInputProps) {
   const [input, setInput] = useState('');
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const [promptHistory, setPromptHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const lastExternalContextRef = useRef<string | null>(null);
   const activeMode = modeOptions.find(option => option.value === mode) || modeOptions[0];
   const ActiveIcon = activeMode.icon;
 
@@ -45,6 +52,17 @@ export function PromptInput({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, []);
+
+  useEffect(() => {
+    const context = externalContext?.trim();
+    if (!context || lastExternalContextRef.current === context) return;
+    lastExternalContextRef.current = context;
+    setInput(prev => prev.trim() ? `${prev.trim()}\n\n${context}` : context);
+    requestAnimationFrame(() => {
+      handleTextareaInput();
+      textareaRef.current?.focus();
+    });
+  }, [externalContext, handleTextareaInput]);
 
   const appendTranscript = useCallback((transcript: string) => {
     setInput(prev => mergeVoiceTranscript(prev, transcript));
@@ -62,20 +80,38 @@ export function PromptInput({
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
-    if (!trimmed) {
+    if (!trimmed && !attachment) {
       textareaRef.current?.focus();
       return;
     }
     if (disabled) return;
-    setPromptHistory(prev => [trimmed, ...prev.slice(0, 49)]);
+    const content = trimmed || 'Use the attached image as a visual reference and build or update the project accordingly.';
+    setPromptHistory(prev => [content, ...prev.slice(0, 49)]);
     setHistoryIndex(-1);
-    onSend(trimmed, mode);
+    onSend(content, mode, attachment ? [attachment] : []);
     setInput('');
+    setAttachment(null);
+    setAttachmentError('');
     setModeMenuOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [input, disabled, onSend, mode]);
+  }, [input, attachment, disabled, onSend, mode]);
+
+  const handleImageChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setAttachment(await readImageAttachment(file));
+      setAttachmentError('');
+    } catch (error) {
+      setAttachment(null);
+      setAttachmentError(error instanceof Error ? error.message : 'Could not attach that image.');
+    } finally {
+      event.target.value = '';
+    }
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -107,7 +143,7 @@ export function PromptInput({
 
   const charCount = input.length;
   const trimmedInput = input.trim();
-  const canSend = Boolean(trimmedInput) && !disabled && !isGenerating;
+  const canSend = Boolean(trimmedInput || attachment) && !disabled && !isGenerating;
   const sendButtonLabel = isGenerating
     ? 'Generating'
     : canSend
@@ -138,13 +174,35 @@ export function PromptInput({
           className="min-h-16 max-h-[120px] resize-none bg-transparent px-2 pt-1 text-left text-sm font-medium leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
         />
         <div className="flex items-center justify-between gap-3 pt-1.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
+            />
             <button
               type="button"
-              aria-label="Add context"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || isGenerating}
+              aria-label="Attach image"
+              title="Attach one image"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Plus className="h-4 w-4" />
+              <ImagePlus className="h-4 w-4" />
             </button>
+            {attachment && (
+              <div className="flex min-w-0 max-w-[180px] items-center gap-1.5 rounded-full border border-border bg-background px-2 py-1 text-[10px] text-muted-foreground">
+                <img src={attachment.dataUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                <span className="truncate">{attachment.name}</span>
+                <button type="button" onClick={() => setAttachment(null)} aria-label="Remove image" className="text-muted-foreground hover:text-foreground">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {attachmentError && <span className="text-[10px] text-red-500">{attachmentError}</span>}
+          </div>
           <div className="flex items-center gap-2">
             {isGenerating && onCancel ? (
               <button

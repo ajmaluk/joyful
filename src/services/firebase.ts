@@ -44,16 +44,10 @@ export function observeAuthState(callback: (user: User | null) => void) {
 }
 
 export async function signInWithEmail(email: string, password: string) {
-  if (!isGmailAddress(email)) {
-    throw new Error('Use a @gmail.com email address to continue.');
-  }
   return signInWithEmailAndPassword(auth, email.trim(), password);
 }
 
 export async function createAccountWithEmail(name: string, email: string, password: string) {
-  if (!isGmailAddress(email)) {
-    throw new Error('Use a @gmail.com email address to continue.');
-  }
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (name.trim()) {
     await updateProfile(credential.user, { displayName: name.trim() });

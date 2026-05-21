@@ -1,25 +1,26 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
+import type { ChatAttachment, ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
 import { generateWithAI } from '@/services/aiService';
 import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
-import { buildFileContextGraph, defaultBuilderSkills, getActiveUserSkills, getSkillBrief } from '@/services/skills';
+import { buildFileContextGraph, getSkillBrief, getSkillManifest, selectSkillsForPrompt } from '@/services/skills';
 
 function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
   const todos: BuildTodo[] = [];
   let index = 0;
+  const baseId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   for (const file of response.files) {
     const verb = file.action === 'delete' ? 'Delete' : file.action === 'modify' ? 'Update' : 'Create';
     todos.push({
-      id: `todo_${Date.now()}_${index++}`,
+      id: `todo_${baseId}_${index++}`,
       label: `${verb} ${file.path}`,
       status: 'pending',
     });
   }
   for (const patch of response.patches || []) {
     todos.push({
-      id: `todo_${Date.now()}_${index++}`,
+      id: `todo_${baseId}_${index++}`,
       label: `Patch ${patch.path}`,
       status: 'pending',
     });
@@ -28,14 +29,14 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
   if (todos.length > 0) {
     for (const command of response.metadata?.sandboxCommands || []) {
       todos.push({
-        id: `todo_${Date.now()}_${index++}`,
+        id: `todo_${baseId}_${index++}`,
         label: `Run ${[command.command, ...(command.args || [])].join(' ')}`,
         status: 'pending',
       });
     }
 
     todos.push({
-      id: `todo_${Date.now()}_${index}`,
+      id: `todo_${baseId}_${index}`,
       label: 'Refresh preview',
       status: 'pending',
     });
@@ -168,10 +169,10 @@ function getInitialMessages(projectId: string) {
   return cleanedMessages;
 }
 
-function buildImplementationPlan(content: string, existingFiles: ProjectFile[]): ChatMessage {
+function buildImplementationPlan(content: string, existingFiles: ProjectFile[], attachments: ChatAttachment[] = []): ChatMessage {
   const contextGraph = buildFileContextGraph(content, existingFiles);
-  const defaultSkillNames = defaultBuilderSkills.map(skill => skill.name);
-  const userSkillNames = getActiveUserSkills().map(skill => skill.name);
+  const selectedSkillNames = selectSkillsForPrompt(content, existingFiles, attachments).map(skill => skill.name);
+  const manifestSkills = getSkillManifest();
   const hasFiles = existingFiles.length > 0;
 
   const planSteps = hasFiles
@@ -194,10 +195,6 @@ function buildImplementationPlan(content: string, existingFiles: ProjectFile[]):
     ? contextGraph.map((node, index) => `${index + 1}. ${node.path} - ${node.reason}`).join('\n')
     : 'No existing files yet. I will start from a clean React/Vite application structure.';
 
-  const userSkillsText = userSkillNames.length > 0
-    ? `\n\nUser skills active:\n${userSkillNames.map(name => `- ${name}`).join('\n')}`
-    : '';
-
   return {
     id: `msg_${Date.now() + 1}`,
     role: 'assistant',
@@ -205,7 +202,7 @@ function buildImplementationPlan(content: string, existingFiles: ProjectFile[]):
     actionType: 'plan',
     sourcePrompt: content,
     timestamp: new Date().toISOString(),
-    content: `Implementation plan\n\nGoal:\n${content}\n\nContext graph:\n${contextText}\n\nAgent workflow:\n${planSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\nDefault skills active:\n${defaultSkillNames.map(name => `- ${name}`).join('\n')}${userSkillsText}\n\nOnly the latest plan can be proceeded. Ask for more detail anytime and I will replace the build target with the newest plan.`,
+    content: `Implementation plan\n\nGoal:\n${content}\n\nContext graph:\n${contextText}\n\nAgent workflow:\n${planSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\nAvailable skills:\n${manifestSkills.map(skill => `- ${skill.name}: ${skill.description}`).join('\n')}\n\nSelected skills for this request:\n${selectedSkillNames.map(name => `- ${name}`).join('\n')}\n\nOnly the latest plan can be proceeded. Ask for more detail anytime and I will replace the build target with the newest plan.`,
     metadata: {
       contextFiles: contextGraph.map(node => node.path),
       planSteps,
@@ -220,6 +217,11 @@ export function useChat(projectId: string) {
   const [buildTodos, setBuildTodos] = useState<BuildTodo[]>([]);
   const [savedGeneration, setSavedGeneration] = useState<SavedGenerationState | null>(() => storage.getSavedGenerationState(projectId));
   const abortRef = useRef(false);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     setMessages(getInitialMessages(projectId));
@@ -244,7 +246,8 @@ export function useChat(projectId: string) {
   const sendMessage = useCallback(async (
     content: string,
     existingFiles: ProjectFile[],
-    mode: ChatMode = 'build'
+    mode: ChatMode = 'build',
+    attachments: ChatAttachment[] = [],
   ): Promise<AIGenerationResponse | null> => {
     abortRef.current = false;
 
@@ -253,10 +256,12 @@ export function useChat(projectId: string) {
       role: 'user',
       content,
       mode,
+      attachments,
       timestamp: new Date().toISOString(),
     };
 
-    const newMessages = [...messages, userMsg];
+    const currentMessages = messagesRef.current;
+    const newMessages = [...currentMessages, userMsg];
     setMessages(newMessages);
     storage.saveChatHistory(projectId, newMessages);
 
@@ -273,6 +278,7 @@ export function useChat(projectId: string) {
       filesSnapshot: existingFiles,
       messageCount: newMessages.length,
       contextFiles: contextGraph.map(node => node.path),
+      attachments,
     };
     setSavedGeneration(checkpoint);
     storage.saveGenerationState(projectId, checkpoint);
@@ -284,7 +290,7 @@ export function useChat(projectId: string) {
         await new Promise(r => setTimeout(r, 180));
         if (abortRef.current) return null;
 
-        const assistantMsg = buildImplementationPlan(content, existingFiles);
+        const assistantMsg = buildImplementationPlan(content, existingFiles, attachments);
         const finalMessages = [...newMessages, assistantMsg];
         setMessages(finalMessages);
         storage.saveChatHistory(projectId, finalMessages);
@@ -300,8 +306,10 @@ export function useChat(projectId: string) {
       storage.saveChatHistory(projectId, plannedMessages);
 
       const response = await generateWithAI(content, existingFiles, [...history, { role: 'assistant', content: planMsg.content }], {
-        skillBrief: getSkillBrief(),
+        skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
+        skillBrief: getSkillBrief(content, existingFiles, attachments),
         contextFiles: contextGraph.map(node => node.path),
+        attachments,
       });
 
       if (abortRef.current) {
@@ -403,7 +411,7 @@ export function useChat(projectId: string) {
     } finally {
       setIsGenerating(false);
     }
-  }, [messages, projectId]);
+  }, [projectId]);
 
   const clearSavedGeneration = useCallback(() => {
     setSavedGeneration(null);

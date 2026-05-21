@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   Grid3X3,
+  ImagePlus,
   ListChecks,
   Loader2,
   Mic,
@@ -18,19 +19,21 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  X,
 } from 'lucide-react';
 import { NewProjectModal } from '@/components/modals/NewProjectModal';
 import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import { exportProjectAsZip, generatePreview } from '@/services/fileSystem';
-import type { ChatMode, Project } from '@/types';
+import type { ChatAttachment, ChatMode, Project } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { readImageAttachment } from '@/services/attachments';
 
 interface DashboardPageProps {
   projects: Project[];
   onCreateProject: (name: string, description: string) => Project;
   onDeleteProject: (id: string) => void;
-  onStartProject?: (prompt: string, mode?: ChatMode) => void;
+  onStartProject?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
 }
 
 const tabs = ['My projects', 'Recently viewed', 'Templates'] as const;
@@ -42,8 +45,11 @@ function formatDate(value: string) {
 export function DashboardPage({ projects, onCreateProject, onDeleteProject, onStartProject }: DashboardPageProps) {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [promptAttachment, setPromptAttachment] = useState<ChatAttachment | null>(null);
+  const [promptAttachmentError, setPromptAttachmentError] = useState('');
   const [promptMode, setPromptMode] = useState<ChatMode>('build');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -96,19 +102,35 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
   const handlePromptSubmit = () => {
     const trimmed = prompt.trim();
-    if (!trimmed) {
+    if (!trimmed && !promptAttachment) {
       textareaRef.current?.focus();
       return;
     }
+    const request = trimmed || 'Use the attached image as a visual reference and build the website from it.';
+    const attachments = promptAttachment ? [promptAttachment] : [];
     if (onStartProject) {
-      onStartProject(trimmed, promptMode);
+      onStartProject(request, promptMode, attachments);
       return;
     }
-    const project = onCreateProject(trimmed.slice(0, 54), trimmed);
-    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmed, initialMode: promptMode } });
+    const project = onCreateProject(request.slice(0, 54), request);
+    navigate(`/builder/${project.id}`, { state: { initialPrompt: request, initialMode: promptMode, initialAttachments: attachments } });
   };
 
-  const canSubmitPrompt = prompt.trim().length > 0;
+  const handlePromptImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setPromptAttachment(await readImageAttachment(file));
+      setPromptAttachmentError('');
+    } catch (error) {
+      setPromptAttachment(null);
+      setPromptAttachmentError(error instanceof Error ? error.message : 'Could not attach that image.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const canSubmitPrompt = prompt.trim().length > 0 || Boolean(promptAttachment);
   const promptButtonLabel = canSubmitPrompt
     ? promptMode === 'plan'
       ? 'Create implementation plan'
@@ -135,7 +157,11 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
   const handleExportProject = async (project: Project) => {
     if (project.files.length === 0) return;
-    await exportProjectAsZip(project);
+    try {
+      await exportProjectAsZip(project);
+    } catch {
+      // Export failed silently - user can retry
+    }
   };
 
   return (
@@ -178,12 +204,24 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
             <div className="flex items-center justify-between gap-3 pt-1.5">
               <button
                 type="button"
-                onClick={() => navigate('/templates')}
-                aria-label="Create project"
+                onClick={() => imageInputRef.current?.click()}
+                aria-label="Attach image"
+                title="Attach one image"
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-950 dark:bg-white/5 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white"
               >
-                <Plus className="h-4 w-4" />
+                <ImagePlus className="h-4 w-4" />
               </button>
+              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handlePromptImageChange} />
+              {promptAttachment && (
+                <div className="flex min-w-0 max-w-[190px] items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-[#d8d3ca]">
+                  <img src={promptAttachment.dataUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                  <span className="truncate">{promptAttachment.name}</span>
+                  <button type="button" onClick={() => setPromptAttachment(null)} aria-label="Remove image" className="hover:text-gray-950 dark:hover:text-white">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {promptAttachmentError && <span className="text-[10px] font-medium text-red-500">{promptAttachmentError}</span>}
               <div className="flex items-center gap-2">
                 <div ref={modeMenuRef} className="relative">
                   <button

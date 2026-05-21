@@ -13,19 +13,28 @@ import { SignupPage } from '@/pages/SignupPage';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/useToast';
-import { useCallback, useEffect, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { ChatMode, UserSettings } from '@/types';
+import type { ChatAttachment, ChatMode, UserSettings } from '@/types';
 import * as storage from '@/services/storage';
 import { SitePage } from '@/pages/SitePage';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
 import { AuthProvider } from '@/hooks/AuthProvider';
 import { useAuth } from '@/hooks/useAuth';
-import { consumePendingPrompt, savePendingPrompt } from '@/services/pendingPrompt';
+import { consumePendingPromptFull, savePendingPrompt } from '@/services/pendingPrompt';
 
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isAuthed, isAuthReady } = useAuth();
+  const didRedirectRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthReady || isAuthed || didRedirectRef.current) return;
+
+    didRedirectRef.current = true;
+    navigate('/login', { replace: true, state: { from: location.pathname } });
+  }, [isAuthed, isAuthReady, location.pathname, navigate]);
 
   if (!isAuthReady) {
     return (
@@ -36,7 +45,11 @@ function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthed) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return (
+      <div className="flex h-full items-center justify-center bg-background text-sm font-medium text-muted-foreground">
+        Redirecting to login...
+      </div>
+    );
   }
 
   return children;
@@ -87,11 +100,11 @@ function AppLayout() {
     return project;
   };
 
-  const handleStartProject = useCallback((prompt: string, mode: ChatMode = 'build') => {
+  const handleStartProject = useCallback((prompt: string, mode: ChatMode = 'build', attachments: ChatAttachment[] = []) => {
     const trimmedPrompt = prompt.trim();
 
     if (!isAuthed) {
-      savePendingPrompt(trimmedPrompt);
+      savePendingPrompt(trimmedPrompt, mode, attachments.length > 0 ? attachments : undefined);
       addToast('info', 'Log in to start building. Your prompt is saved.');
       navigate('/login', { state: { from: '/builder' } });
       return;
@@ -124,16 +137,16 @@ function AppLayout() {
       .replace(/[.,;:!?-]+$/g, '')
       .trim();
     const project = createProject(cleanName || 'New Joyful project', trimmedPrompt);
-    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmedPrompt, initialMode: mode } });
+    navigate(`/builder/${project.id}`, { state: { initialPrompt: trimmedPrompt, initialMode: mode, initialAttachments: attachments } });
     addToast('success', `Created project "${project.name}"`);
   }, [addToast, createProject, isAuthed, navigate, projects]);
 
   useEffect(() => {
     if (!isAuthReady || !isAuthed || !isAuthPage) return;
 
-    const pendingPrompt = consumePendingPrompt();
-    if (pendingPrompt !== null) {
-      handleStartProject(pendingPrompt);
+    const pendingData = consumePendingPromptFull();
+    if (pendingData !== null) {
+      handleStartProject(pendingData.prompt, pendingData.mode, pendingData.attachments || []);
       return;
     }
 

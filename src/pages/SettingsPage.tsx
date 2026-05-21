@@ -162,7 +162,8 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => updateSetting('autoSave', !settings.autoSave)}
-                  aria-pressed={settings.autoSave}
+                  role="switch"
+                  aria-checked={settings.autoSave}
                   className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
                     settings.autoSave 
                       ? 'bg-[#6387ff]' 
@@ -182,7 +183,8 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => updateSetting('livePreview', !settings.livePreview)}
-                  aria-pressed={settings.livePreview}
+                  role="switch"
+                  aria-checked={settings.livePreview}
                   className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
                     settings.livePreview 
                       ? 'bg-[#6387ff]' 
@@ -422,7 +424,8 @@ export function SettingsPage() {
                         <button
                           type="button"
                           onClick={() => updateEditorSetting(item.key, (isCompact ? (settings.explorerDensity === 'compact' ? 'comfortable' : 'compact') : !isEnabled) as UserSettings[typeof item.key])}
-                          aria-pressed={Boolean(isEnabled)}
+                          role="switch"
+                          aria-checked={Boolean(isEnabled)}
                           className={`relative h-7 w-12 rounded-full p-1 transition-all duration-300 ${
                             isEnabled ? 'bg-primary' : 'bg-muted'
                           }`}
@@ -583,7 +586,7 @@ export function SettingsPage() {
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                  Defaults cover React architecture, context graph file reading, code review, responsive UI, and preview readiness. They stay fixed and are not editable here.
+                  Defaults cover architecture, file selection, code review, accessibility, responsiveness, testing, and performance. They stay fixed and are not editable here.
                 </p>
               </div>
 

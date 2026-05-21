@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { executeInSandbox as runSandboxCommand } from '@/services/clientSandbox';
 import type { PreviewIssue, ProjectFile } from '@/types';
 
@@ -89,16 +89,23 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
   const [inspectorSelection, setInspectorSelection] = useState<InspectorSelection | null>(null);
   const [inspectorEnabled, setInspectorEnabled] = useState(false);
   const pendingRequests = useRef<Map<string, SandboxNetworkEntry>>(new Map());
+  const filesRef = useRef(files);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
       const msg = event.data;
       if (!msg || !msg.__joyfulSandbox) return;
 
       switch (msg.type) {
         case 'console':
           setLogs(prev => {
-            const location = parseIssueLocation(msg.data.message, files);
+            const currentFiles = filesRef.current;
+            const location = parseIssueLocation(msg.data.message, currentFiles);
             const next = [...prev, {
               id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               level: msg.data.level,
@@ -171,7 +178,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [files]);
+  }, []);
 
   const sendToIframe = useCallback((type: string, data: unknown) => {
     const iframe = iframeRef.current;
@@ -227,9 +234,10 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     logs,
     network,
     metrics,
-    issues: logs
-      .map(log => buildIssueFromLog(log, files))
-      .filter(Boolean) as PreviewIssue[],
+    issues: useMemo(
+      () => logs.map(log => buildIssueFromLog(log, files)).filter(Boolean) as PreviewIssue[],
+      [logs, files],
+    ),
     inspectorSelection,
     inspectorEnabled,
     toggleInspector,

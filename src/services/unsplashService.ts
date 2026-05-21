@@ -1,5 +1,16 @@
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY || '';
 const BASE = 'https://api.unsplash.com';
+const MIN_INTERVAL = 1000;
+let lastUnsplashCall = 0;
+
+async function rateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastUnsplashCall;
+  if (elapsed < MIN_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_INTERVAL - elapsed));
+  }
+  lastUnsplashCall = Date.now();
+}
 
 export interface UnsplashImage {
   id: string;
@@ -53,6 +64,7 @@ export async function searchImages(
 ): Promise<UnsplashImage[]> {
   if (!UNSPLASH_KEY) return [];
   try {
+    await rateLimit();
     const params = new URLSearchParams({
       query,
       per_page: String(count),
@@ -75,6 +87,7 @@ export async function getRandomImages(
 ): Promise<UnsplashImage[]> {
   if (!UNSPLASH_KEY) return [];
   try {
+    await rateLimit();
     const params = new URLSearchParams({
       query,
       count: String(count),

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChrome';
 import { sitePageContent } from '@/pages/site/sitePageContent';
-import type { ChatMode } from '@/types';
+import type { ChatAttachment, ChatMode } from '@/types';
 
 const relatedPages: Record<string, Array<{ label: string; path: string }>> = {
   privacy: [
@@ -42,7 +42,7 @@ const revealUp = {
 
 interface SitePageProps {
   slug: keyof typeof sitePageContent;
-  onStartProject?: (prompt: string, mode?: ChatMode) => void;
+  onStartProject?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
 }
 
 export function SitePage({ slug, onStartProject }: SitePageProps) {

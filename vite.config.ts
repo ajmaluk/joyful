@@ -6,11 +6,15 @@ import { inspectAttr } from 'kimi-plugin-inspect-react'
 // https://vite.dev/config/
 export default defineConfig({
   base: './',
-  plugins: [inspectAttr(), react()],
+  plugins: [
+    ...(process.env.NODE_ENV !== 'production' ? [inspectAttr()] : []),
+    react(),
+  ],
   server: {
     port: 3000,
   },
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -25,6 +29,15 @@ export default defineConfig({
           }
           if (id.includes('node_modules/lucide-react')) {
             return 'icons';
+          }
+          if (id.includes('node_modules/recharts')) {
+            return 'charts';
+          }
+          if (id.includes('node_modules/firebase')) {
+            return 'firebase';
+          }
+          if (id.includes('node_modules/jszip') || id.includes('node_modules/file-saver')) {
+            return 'export-utils';
           }
         },
       },

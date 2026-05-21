@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Copy, RotateCcw, Check, AlertCircle, FileCode2, Terminal } from 'lucide-react';
+import { ArrowRight, Copy, RotateCcw, Check, AlertCircle, FileCode2, Terminal, Image as ImageIcon } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { TypingText } from '@/components/ui/TypingText';
 
@@ -34,6 +34,23 @@ export function MessageBubble({ message, isLatest, onOpenFile, onRegenerate, onP
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
               {message.content}
             </p>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {message.attachments.map(attachment => (
+                  <div key={attachment.id} className="overflow-hidden rounded-lg border border-primary/20 bg-background/60">
+                    <img
+                      src={attachment.dataUrl}
+                      alt={attachment.name}
+                      className="h-20 w-28 object-cover"
+                    />
+                    <div className="flex max-w-28 items-center gap-1 px-1.5 py-1 text-[10px] text-muted-foreground">
+                      <ImageIcon className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{attachment.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <p className="mt-1 px-1 text-right text-[10px] text-muted-foreground/70">
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

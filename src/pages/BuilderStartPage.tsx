@@ -1,18 +1,22 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronDown, FolderOpen, ListChecks, Plus, Send, Wand2 } from 'lucide-react';
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { ChevronDown, FolderOpen, ImagePlus, ListChecks, Plus, Send, Wand2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import type { ChatMode, Project } from '@/types';
+import type { ChatAttachment, ChatMode, Project } from '@/types';
+import { readImageAttachment } from '@/services/attachments';
 
 interface BuilderStartPageProps {
   projects: Project[];
-  onStartProject: (prompt: string, mode?: ChatMode) => void;
+  onStartProject: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
 }
 
 export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageProps) {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState('');
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const [promptMode, setPromptMode] = useState<ChatMode>('build');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const recentProjects = [...projects].sort(
@@ -26,8 +30,23 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
   };
 
   const handleSubmit = () => {
-    onStartProject(prompt.trim(), promptMode);
+    const trimmed = prompt.trim();
+    onStartProject(trimmed || (attachment ? 'Use the attached image as a visual reference and build the website from it.' : ''), promptMode, attachment ? [attachment] : []);
     setModeMenuOpen(false);
+  };
+
+  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setAttachment(await readImageAttachment(file));
+      setAttachmentError('');
+    } catch (error) {
+      setAttachment(null);
+      setAttachmentError(error instanceof Error ? error.message : 'Could not attach that image.');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -72,6 +91,28 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
                   <Plus className="h-4 w-4" />
                   Browse templates
                 </button>
+                <div className="flex min-w-0 items-center gap-2">
+                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#aaa69d] transition-colors hover:bg-white/5 hover:text-white"
+                    aria-label="Attach image"
+                    title="Attach one image"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                  </button>
+                  {attachment && (
+                    <div className="flex min-w-0 max-w-[170px] items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-[#d8d3ca]">
+                      <img src={attachment.dataUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                      <span className="truncate">{attachment.name}</span>
+                      <button type="button" onClick={() => setAttachment(null)} aria-label="Remove image" className="hover:text-white">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {attachmentError && <span className="text-[10px] font-medium text-red-300">{attachmentError}</span>}
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <button

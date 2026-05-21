@@ -26,6 +26,15 @@ export interface Project {
 
 export type ChatMode = 'build' | 'plan';
 
+export interface ChatAttachment {
+  id: string;
+  type: 'image';
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  size: number;
+}
+
 // Chat message
 export interface ChatMessage {
   id: string;
@@ -33,6 +42,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   mode?: ChatMode;
+  attachments?: ChatAttachment[];
   sourcePrompt?: string;
   files?: FileOperation[];
   tasks?: ChatTask[];
@@ -63,6 +73,7 @@ export interface SavedGenerationState {
   filesSnapshot: ProjectFile[];
   messageCount: number;
   contextFiles?: string[];
+  attachments?: ChatAttachment[];
   error?: string;
 }
 

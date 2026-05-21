@@ -32,13 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     window.addEventListener('joyful_auth_changed', handleLocalAuthChanged);
-    window.addEventListener('storage', handleLocalAuthChanged);
-    window.addEventListener('popstate', handleLocalAuthChanged);
 
     return () => {
       window.removeEventListener('joyful_auth_changed', handleLocalAuthChanged);
-      window.removeEventListener('storage', handleLocalAuthChanged);
-      window.removeEventListener('popstate', handleLocalAuthChanged);
     };
   }, []);
 

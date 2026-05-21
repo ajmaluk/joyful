@@ -1,10 +1,47 @@
-import type { AIGenerationResponse, AgentPlanStep, AIStreamChunk, FilePatchOperation, ProjectFile, SandboxCommandRequest, SandboxCommandResult } from '@/types';
+import type { AIGenerationResponse, AgentPlanStep, AIStreamChunk, ChatAttachment, FilePatchOperation, ProjectFile, SandboxCommandRequest, SandboxCommandResult } from '@/types';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { executeInSandbox, loadVirtualFS } from '@/services/clientSandbox';
+import { describeAttachment } from '@/services/attachments';
 
 interface AIGenerationOptions {
   skillBrief?: string[];
+  skillManifest?: string[];
   contextFiles?: string[];
+  attachments?: ChatAttachment[];
+  signal?: AbortSignal;
+}
+
+type JoyfulMessageContent = string | Array<
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+>;
+
+function stripImagesFromMessages<T extends { content: JoyfulMessageContent }>(messages: T[]): T[] {
+  return messages.map(message => {
+    if (typeof message.content === 'string') return message;
+    const text = message.content
+      .filter(part => part.type === 'text')
+      .map(part => part.text)
+      .join('\n\n');
+    return {
+      ...message,
+      content: `${text}\n\nNote: the current NVIDIA model rejected direct image input, so this retry uses the image filename metadata only. Ask the user for visual details if needed.`,
+    };
+  });
+}
+
+function scoreVisionModel(model: string) {
+  const value = model.toLowerCase();
+  let score = 0;
+  if (/vision|multimodal|multi-modal|\bvl\b/.test(value)) score += 3;
+  if (/qwen.*vision|llava|pixtral/.test(value)) score += 4;
+  if (/gpt-4o|claude-3-5|gemini/.test(value)) score += 2;
+  return score;
+}
+
+function sortCandidateModelsForAttachments(models: string[], hasAttachments: boolean) {
+  if (!hasAttachments) return models;
+  return [...models].sort((left, right) => scoreVisionModel(right) - scoreVisionModel(left));
 }
 
 interface JoyfulFunctionCall {
@@ -44,10 +81,15 @@ function stripMarkdownJson(value: string) {
 
 function isSafeProjectPath(path: string): boolean {
   const normalized = path.trim().replace(/^\/+/, '');
+  const reservedNames = new Set(['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
+  const baseName = normalized.split('/').pop()?.split('.')[0]?.toUpperCase();
   return Boolean(
     normalized &&
     normalized.length <= 200 &&
     !normalized.includes('..') &&
+    !normalized.startsWith(' ') &&
+    !normalized.endsWith(' ') &&
+    !reservedNames.has(baseName || '') &&
     /^[/\w\-. ]+$/.test(normalized)
   );
 }
@@ -191,17 +233,35 @@ function buildJoyfulMessages(
     .slice(0, 24)
     .map(file => `--- ${file.path} ---\n${file.content.slice(0, 12000)}`)
     .join('\n\n');
+  const manifestText = options?.skillManifest?.length
+    ? `\n\nAvailable skills manifest (load full instructions only when selected):\n${options.skillManifest.map(skill => `- ${skill}`).join('\n')}`
+    : '';
   const skillText = options?.skillBrief?.length
-    ? `\n\nUser enabled skills:\n${options.skillBrief.map(skill => `- ${skill}`).join('\n')}`
+    ? `\n\nSelected skill instructions for this request:\n${options.skillBrief.map(skill => `- ${skill}`).join('\n')}`
     : '';
   const contextText = options?.contextFiles?.length
     ? `\n\nAdditional context:\n${options.contextFiles.join('\n\n')}`
     : '';
 
+  const attachments = options?.attachments || [];
+  const attachmentText = attachments.length
+    ? `\n\nAttached image references:\n${attachments.map(describeAttachment).map(item => `- ${item}`).join('\n')}\nUse the image content as visual context when the active model supports vision. If visual details are ambiguous, say so in the summary.`
+    : '';
+  const userContentText = `User request:\n${prompt}${attachmentText}\n\nExisting files:\n${filesForContext || 'No existing files. Create a complete React/Vite project.'}`;
+  const userContent: JoyfulMessageContent = attachments.length
+    ? [
+        { type: 'text', text: userContentText },
+        ...attachments.map(attachment => ({
+          type: 'image_url' as const,
+          image_url: { url: attachment.dataUrl },
+        })),
+      ]
+    : userContentText;
+
   return [
     {
       role: 'system',
-      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Follow a Vercel-style development loop, adapted for Joyful's browser sandbox: understand the request, inspect the provided files, plan concrete tasks, generate complete file operations, choose browser-safe validation commands, and summarize what changed. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy. For existing-file maintenance, bug fixes, and feature additions, prefer targeted patches over full-file modifications when the exact target code is present. Every imported local component, hook, or utility must be included as a file operation in the same response. Do not reference undefined identifiers. If you use icons from lucide-react, import every icon you reference. For complex apps, complete one coherent implementation pass and put any remaining work in nextSteps as concrete follow-up tasks.${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
+      content: `You are Joyful AI, an agentic website builder inside a React/Vite workspace. Follow a Vercel-style development loop, adapted for Joyful's browser sandbox: understand the request, inspect the provided files, plan concrete tasks, generate complete file operations, choose browser-safe validation commands, and summarize what changed. Preserve existing project intent unless the user asks to replace it. Prefer React/Vite files, accessible UI, responsive layouts, valid imports, and concise copy. For existing-file maintenance, bug fixes, and feature additions, prefer targeted patches over full-file modifications when the exact target code is present. Treat the available skill manifest as a catalog only, and treat the selected skill instructions as required constraints. Do not activate unrelated skills or assume unselected skills are in force. Apply the most specific selected skill first. Every imported local component, hook, or utility must be included as a file operation in the same response. Do not reference undefined identifiers. If you use icons from lucide-react, import every icon you reference. For complex apps, complete one coherent implementation pass and put any remaining work in nextSteps as concrete follow-up tasks. Prefer semantic markup, keyboard-friendly controls, explicit empty states, and build/lint/preview validation whenever the change affects behavior.${manifestText}${skillText}${contextText}\n\n${RESPONSE_SCHEMA_HINT}`,
     },
     ...conversationHistory
       .filter(message => message.role === 'user' || message.role === 'assistant')
@@ -212,7 +272,7 @@ function buildJoyfulMessages(
       })),
     {
       role: 'user',
-      content: `User request:\n${prompt}\n\nExisting files:\n${filesForContext || 'No existing files. Create a complete React/Vite project.'}`,
+      content: userContent,
     },
   ];
 }
@@ -293,7 +353,7 @@ function buildLinePatchFromFullEdit(file: AIGenerationResponse['files'][number],
     path: file.path,
     action: 'patch',
     lineStart: prefix + 1,
-    lineEnd: prefix + oldChanged.length,
+    lineEnd: prefix + Math.max(1, oldChanged.length),
     content: newChanged.join('\n'),
     reason: 'Compressed model full-file modify response into a targeted line patch.',
   };
@@ -344,9 +404,10 @@ async function generateWithJoyfulAI(
     joyfulProviderConfig.model,
     ...joyfulProviderConfig.fallbackModels,
   ].filter(Boolean)));
+  const orderedModels = sortCandidateModelsForAttachments(candidateModels, Boolean(options?.attachments?.length));
   const failures: string[] = [];
 
-  for (const model of candidateModels) {
+  for (const model of orderedModels) {
     try {
       let activeMessages = messages;
       let repairedOnce = false;
@@ -372,10 +433,22 @@ async function generateWithJoyfulAI(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: options?.signal,
       });
 
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
+        const hasImagePayload = activeMessages.some(message => Array.isArray(message.content) && message.content.some(part => part.type === 'image_url'));
+        if (hasImagePayload && !repairedOnce) {
+          repairedOnce = true;
+          lastError = `NVIDIA API error ${res.status}: ${bodyText}`;
+          activeMessages = stripImagesFromMessages(activeMessages);
+          activeMessages.push({
+            role: 'user',
+            content: `The provider rejected direct image input for this model. Continue with the text request and attached image metadata. If the visual content is required and not described in text, ask for the missing details in nextSteps.\n\nProvider error:\n${lastError}`,
+          });
+          continue;
+        }
         throw new Error(`NVIDIA API error ${res.status}: ${bodyText}`);
       }
 
@@ -1527,6 +1600,80 @@ ${footerHTML(p)}`
   };
 }
 
+function buildPhotography(analysis: PromptAnalysis): AIGenerationResponse {
+  const p = pickPalette(analysis);
+  const sections = ['hero', 'gallery', 'about', 'contact'];
+
+  const html = htmlDoc('Photography',
+    `<link rel="stylesheet" href="style.css">`,
+    `${navHTML(p, ['Gallery', 'About', 'Contact'])}
+${heroHTML(p, 'Capturing Moments', 'Fine art photography that tells stories through light and shadow.', 'View Gallery')}
+  <section id="gallery" class="fade-up">
+    <h2 class="section-title">Portfolio</h2>
+    <div class="masonry-grid">
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:3/4;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127748;</div></div>
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:4/3;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127742;</div></div>
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:1/1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127749;</div></div>
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:3/4;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127750;</div></div>
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:4/3;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127743;</div></div>
+      <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:1/1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127744;</div></div>
+    </div>
+  </section>
+  <section id="about" class="fade-up" style="background:${p.bgAlt}">
+    <div style="max-width:800px;margin:0 auto;display:grid;grid-template-columns:1fr 2fr;gap:3rem;align-items:center">
+      <div style="aspect-ratio:1;background:${p.surface};border-radius:1rem;display:flex;align-items:center;justify-content:center;font-size:4rem">&#128247;</div>
+      <div><p style="font-size:.85rem;color:${p.primary};font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem">About the Photographer</p><h2 style="font-size:clamp(1.5rem,3vw,2rem);font-weight:800;margin-bottom:1rem">Visual Storyteller</h2><p style="color:${p.textMuted};line-height:1.7">With over a decade of experience capturing the world's most breathtaking moments, I specialize in landscape, portrait, and street photography. Every frame is an opportunity to reveal something extraordinary in the ordinary.</p></div>
+    </div>
+  </section>
+  <section id="contact" class="fade-up">
+    <h2 class="section-title">Get in Touch</h2>
+    <p class="section-subtitle">Available for commissions, collaborations, and prints.</p>
+    <form style="max-width:500px;margin:0 auto;display:flex;flex-direction:column;gap:1rem">
+      <input type="text" placeholder="Your name" required style="border-radius:50px;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text}">
+      <input type="email" placeholder="Your email" required style="border-radius:50px;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text}">
+      <textarea placeholder="Tell me about your project" rows="4" style="border-radius:1rem;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text};resize:vertical"></textarea>
+      <button type="submit" class="btn" style="border-radius:50px;align-self:center">Send Message</button>
+    </form>
+  </section>
+${footerHTML(p)}`
+  );
+
+  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssFooter(p), cssAnimations(), `
+    .masonry-grid { columns: 3; column-gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; border-radius: 0.75rem; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+    .masonry-item:hover { transform: scale(1.02); }
+    @media (max-width: 768px) { .masonry-grid { columns: 2; } }
+    @media (max-width: 480px) { .masonry-grid { columns: 1; } }
+    #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer; }
+    #lightbox img, #lightbox div { max-width: 90vw; max-height: 90vh; border-radius: 0.5rem; }
+    #lightbox-close { position: absolute; top: 1rem; right: 1rem; color: #fff; font-size: 2rem; cursor: pointer; }
+  `].join('\n');
+
+  const js = `${jsBase()}
+    function openLightbox(el) {
+      var overlay = document.createElement('div');
+      overlay.id = 'lightbox';
+      overlay.onclick = function() { overlay.remove(); };
+      var content = el.querySelector('div').cloneNode(true);
+      content.style.fontSize = '8rem';
+      overlay.appendChild(content);
+      var close = document.createElement('div');
+      close.id = 'lightbox-close';
+      close.textContent = '\\u00d7';
+      overlay.appendChild(close);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+    }
+  `;
+
+  return {
+    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
+    summary: 'Built a photography portfolio with masonry gallery, lightbox, about section, and contact form.',
+    nextSteps: ['Add high-res images', 'Integrate Instagram feed', 'Add print shop', 'Add EXIF data display'],
+    metadata: { template: 'photography', sections, estimatedComplexity: 'simple' },
+  };
+}
+
 function buildBlog(analysis: PromptAnalysis): AIGenerationResponse {
   const p = pickPalette(analysis);
   const sections = ['hero', 'articles', 'newsletter'];
@@ -2067,11 +2214,15 @@ const TEMPLATE_BUILDERS: Record<string, (analysis: PromptAnalysis) => AIGenerati
   saas: buildSaaS,
   restaurant: buildRestaurant,
   ecommerce: buildEcommerce,
+  photography: buildPhotography,
   blog: buildBlog,
   dashboard: buildDashboard,
   webapp: buildWebApp,
   agency: buildAgency,
   event: buildEvent,
+  realestate: buildPortfolio,
+  fitness: buildPortfolio,
+  startup: buildSaaS,
 };
 
 // ─── Main Generation Function ──────────────────────────────────────

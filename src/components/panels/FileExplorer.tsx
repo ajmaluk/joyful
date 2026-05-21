@@ -102,11 +102,13 @@ function TreeNode({
   if (node.type === 'folder') {
     return (
       <div>
-        <button
-          onClick={() => toggleFolder(node.path)}
-          className={`mx-1 flex w-full items-center gap-2 rounded-md px-3 text-left transition-all duration-150 hover:bg-white/[0.06] ${isCompact ? 'py-1' : 'py-1.5'}`}
-          style={{ paddingLeft: `${paddingLeft}px` }}
-        >
+          <button
+            onClick={() => toggleFolder(node.path)}
+            className={`mx-1 flex w-full items-center gap-2 rounded-md px-3 text-left transition-all duration-150 hover:bg-white/[0.06] ${isCompact ? 'py-1' : 'py-1.5'}`}
+            style={{ paddingLeft: `${paddingLeft}px` }}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${node.name} folder`}
+          >
           <ChevronDown
             className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${
               isExpanded ? 'rotate-0' : '-rotate-90'
@@ -285,8 +287,12 @@ export function FileExplorer({
     });
   }, []);
 
-  // Auto-expand folders when a project first loads.
+  // Auto-expand folders only on initial load (when tree first becomes non-empty).
+  const hasInitializedRef = useRef(false);
   useEffect(() => {
+    if (hasInitializedRef.current || tree.length === 0) return;
+    hasInitializedRef.current = true;
+
     const allFolders = new Set<string>();
     function collectFolders(nodes: FileTreeNode[]) {
       for (const node of nodes) {
@@ -297,11 +303,7 @@ export function FileExplorer({
       }
     }
     collectFolders(tree);
-    setExpandedFolders(prev => {
-      const next = new Set(prev);
-      allFolders.forEach(folder => next.add(folder));
-      return next;
-    });
+    setExpandedFolders(allFolders);
   }, [tree]);
 
   const collapseAll = useCallback(() => setExpandedFolders(new Set()), []);

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { ChatMessage, ProjectFile, ChatMode, SavedGenerationState } from '@/types';
+import type { ChatAttachment, ChatMessage, ProjectFile, ChatMode, SavedGenerationState } from '@/types';
 import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { exportChatAsMarkdown } from '@/components/chat/chatExport';
 import { MessageBubble } from '@/components/chat/MessageBubble';
@@ -12,7 +12,7 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   isGenerating: boolean;
   buildTodos: BuildTodo[];
-  onSendMessage: (content: string, mode?: ChatMode) => void;
+  onSendMessage: (content: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
   onOpenFile: (path: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onClearMessages?: () => void;
@@ -24,6 +24,7 @@ interface ChatPanelProps {
   onCloseSidebar?: () => void;
   files?: ProjectFile[];
   activeFile?: ProjectFile | null;
+  pendingContext?: string;
 }
 
 export function ChatPanel({
@@ -41,6 +42,7 @@ export function ChatPanel({
   onSelectTemplate,
   onCloseSidebar,
   files = [],
+  pendingContext,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [sessionName, setSessionName] = useState('AI Chat');
@@ -222,6 +224,7 @@ export function ChatPanel({
         isGenerating={isGenerating}
         mode={chatMode}
         onModeChange={setChatMode}
+        externalContext={pendingContext}
       />
     </div>
   );

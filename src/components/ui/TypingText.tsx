@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTypingEffect } from '@/hooks/useTypingEffect';
 
 interface TypingTextProps {
@@ -26,11 +26,15 @@ export function TypingText({
 }: TypingTextProps) {
   const displayText = useTypingEffect({ text, speed, delay, enabled });
   const isComplete = displayText === text;
+  const didCompleteRef = useRef(false);
 
   // Call onComplete when typing finishes
   useEffect(() => {
-    if (isComplete && onComplete) {
+    if (isComplete && onComplete && !didCompleteRef.current) {
+      didCompleteRef.current = true;
       onComplete();
+    } else if (!isComplete) {
+      didCompleteRef.current = false;
     }
   }, [isComplete, onComplete]);
 

@@ -12,6 +12,7 @@ interface PreviewPanelProps {
   files: ProjectFile[];
   projectId?: string;
   onRequestFix?: (prompt: string) => void;
+  onUseSelection?: (context: string) => void;
 }
 
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
@@ -42,7 +43,17 @@ ${paths.length > 0 ? paths.map(path => `- ${path}`).join('\n') : '- No specific 
 After fixing, run browser-safe validation such as npm run build or npm run lint when package scripts exist.`;
 }
 
-export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelProps) {
+function buildSelectionPrompt(selection: NonNullable<ReturnType<typeof useSandboxMessages>['inspectorSelection']>) {
+  return `Selected preview element:
+selector: ${selection.selector}
+element: <${selection.tag}>${selection.id ? ` #${selection.id}` : ''}${selection.classes.length ? ` .${selection.classes.slice(0, 4).join('.')}` : ''}
+box: ${selection.width} x ${selection.height} at ${selection.x}, ${selection.y}
+styles: display=${selection.display}; position=${selection.position}; font-size=${selection.fontSize}; color=${selection.color}; background=${selection.backgroundColor}
+
+Use this selected element as the target for my next change.`;
+}
+
+export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [srcDoc, setSrcDoc] = useState('');
@@ -126,12 +137,18 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
     }, 300);
   }, [currentPath, files, requestMetrics]);
 
+  const refreshPreviewRef = useRef(refreshPreview);
+
+  useEffect(() => {
+    refreshPreviewRef.current = refreshPreview;
+  }, [refreshPreview]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      refreshPreview();
+      refreshPreviewRef.current();
     }, 500);
     return () => clearTimeout(timer);
-  }, [files, refreshPreview]);
+  }, [files]);
 
   const deviceFrames: Record<DeviceMode, { width: string; height: string; label: string }> = {
     desktop: { width: '100%', height: '100%', label: 'Desktop' },
@@ -200,6 +217,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
             onClick={refreshPreview}
             className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
             title="Home"
+            aria-label="Home"
           >
             <Home className="w-3.5 h-3.5" />
           </button>
@@ -207,6 +225,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
             onClick={refreshPreview}
             className="rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
             title="Refresh preview"
+            aria-label="Refresh preview"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -249,6 +268,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Desktop preview"
+            aria-label="Desktop preview"
           >
             <Monitor className="w-3.5 h-3.5" />
           </button>
@@ -260,6 +280,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Tablet preview"
+            aria-label="Tablet preview"
           >
             <Tablet className="w-3.5 h-3.5" />
           </button>
@@ -271,6 +292,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Mobile preview"
+            aria-label="Mobile preview"
           >
             <Smartphone className="w-3.5 h-3.5" />
           </button>
@@ -286,6 +308,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Single view"
+            aria-label="Single view"
           >
             <Monitor className="w-3.5 h-3.5" />
           </button>
@@ -297,6 +320,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
             title="Split view"
+            aria-label="Split view"
           >
             <Columns className="w-3.5 h-3.5" />
           </button>
@@ -311,6 +335,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           }`}
           title="Toggle device frame"
+          aria-label="Toggle device frame"
         >
           <SmartphoneFrame className="w-3.5 h-3.5" />
         </button>
@@ -318,6 +343,7 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
         <button
           className="ml-1.5 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
           title="Open preview in new tab"
+          aria-label="Open preview in new tab"
           onClick={() => {
             const html = generatePreview(files, currentPath);
             const blob = new Blob([html], { type: 'text/html' });
@@ -361,6 +387,15 @@ export function PreviewPanel({ files, projectId, onRequestFix }: PreviewPanelPro
               )}
               <div className="h-3 w-px bg-border" />
               <span className="font-medium tabular-nums text-primary">{inspectorSelection.width} x {inspectorSelection.height}</span>
+              {onUseSelection && (
+                <button
+                  type="button"
+                  onClick={() => onUseSelection(buildSelectionPrompt(inspectorSelection))}
+                  className="ml-1 rounded-md bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  Use in chat
+                </button>
+              )}
             </div>
           )}
           {inspectorEnabled && !inspectorSelection && (

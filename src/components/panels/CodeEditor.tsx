@@ -175,7 +175,7 @@ export function CodeEditor({
   useEffect(() => {
     const timer = setTimeout(() => {
       handleSave();
-    }, 500);
+    }, 1500);
     return () => clearTimeout(timer);
   }, [content, handleSave]);
 
@@ -314,6 +314,7 @@ export function CodeEditor({
             onClick={handleFormat}
             className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Format code (Shift+Alt+F)"
+            aria-label="Format code"
           >
             <Zap className="h-3.5 w-3.5" />
           </button>
@@ -321,6 +322,7 @@ export function CodeEditor({
             onClick={handleCopy}
             className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Copy file"
+            aria-label="Copy file content"
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
@@ -328,6 +330,7 @@ export function CodeEditor({
             onClick={handleDownload}
             className="rounded-md p-1.5 text-gray-600 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
             title="Download file"
+            aria-label="Download file"
           >
             <Download className="h-3.5 w-3.5" />
           </button>

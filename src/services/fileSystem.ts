@@ -188,8 +188,6 @@ export function applyFileOperations(
     }
   }
 
-  files.sort((a, b) => a.path.localeCompare(b.path));
-
   return { files, applied, skipped };
 }
 
@@ -398,6 +396,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(<JoyfulApp />);
 </html>`;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Generate a preview HTML from project files
 export function generatePreview(files: ProjectFile[], routePath = '/'): string {
   const hasFrameworkEntry = files.some(f =>
@@ -422,12 +424,11 @@ export function generatePreview(files: ProjectFile[], routePath = '/'): string {
   const cssFiles = files.filter(f => f.type === 'css');
   for (const css of cssFiles) {
     const href = css.path;
-    // Replace <link> tags referencing this CSS file
-    const linkRegex = new RegExp(`<link[^>]*href=["']${href}["'][^>]*>`, 'i');
+    const escapedHref = escapeRegExp(href);
+    const linkRegex = new RegExp(`<link[^>]*href=["']${escapedHref}["'][^>]*>`, 'i');
     if (linkRegex.test(html)) {
       html = html.replace(linkRegex, `<style>${css.content}</style>`);
     } else if (!htmlFile.content.includes(css.path)) {
-      // Append if not already referenced
       html = html.replace('</head>', `<style>${css.content}</style></head>`);
     }
   }
@@ -436,7 +437,8 @@ export function generatePreview(files: ProjectFile[], routePath = '/'): string {
   const jsFiles = files.filter(f => f.type === 'js');
   for (const js of jsFiles) {
     const src = js.path;
-    const scriptRegex = new RegExp(`<script[^>]*src=["']${src}["'][^>]*></script>`, 'i');
+    const escapedSrc = escapeRegExp(src);
+    const scriptRegex = new RegExp(`<script[^>]*src=["']${escapedSrc}["'][^>]*></script>`, 'i');
     if (scriptRegex.test(html)) {
       html = html.replace(scriptRegex, `<script>${js.content}</script>`);
     } else if (!htmlFile.content.includes(js.path)) {

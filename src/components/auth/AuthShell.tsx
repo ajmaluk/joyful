@@ -4,6 +4,13 @@ import { ArrowUp, Github, LockKeyhole, Send } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { TypingCycle } from '@/components/ui/TypingCycle';
 
+const authHeroTexts = [
+  'Ask Joyful to build your SaaS page.',
+  'Ask Joyful to create a dashboard.',
+  'Ask Joyful to design a portfolio.',
+  'Ask Joyful to code a landing page.',
+];
+
 type AuthShellProps = {
   title: string;
   subtitle: string;
@@ -109,12 +116,7 @@ export function AuthShell({
                 <div className="flex min-h-16 items-center gap-4 rounded-[1.05rem] px-4 py-3 text-left text-gray-950 dark:text-white">
                   <span className="min-w-0 flex-1 text-base font-medium sm:text-lg">
                     <TypingCycle
-                      texts={[
-                        'Ask Joyful to build your SaaS page.',
-                        'Ask Joyful to create a dashboard.',
-                        'Ask Joyful to design a portfolio.',
-                        'Ask Joyful to code a landing page.',
-                      ]}
+                      texts={authHeroTexts}
                       speed={30}
                       deleteSpeed={12}
                       delayBetweenTexts={1600}

@@ -9,7 +9,7 @@ export const SANDBOX_BRIDGE_SCRIPT = `
 (function() {
   'use strict';
 
-  var PARENT_ORIGIN = '*';
+  var PARENT_ORIGIN = window.location.origin;
   var inspectorEnabled = false;
 
   function postToParent(type, data) {
@@ -26,7 +26,18 @@ export const SANDBOX_BRIDGE_SCRIPT = `
       if (arg === null) return 'null';
       if (arg === undefined) return 'undefined';
       if (typeof arg === 'object') {
-        try { return JSON.stringify(arg, null, 2); } catch (e) { return String(arg); }
+        try {
+          var seen = new Set();
+          return JSON.stringify(arg, function(key, value) {
+            if (typeof value === 'object' && value !== null) {
+              if (seen.has(value)) return '[Circular]';
+              seen.add(value);
+            }
+            if (value instanceof Date) return value.toISOString();
+            if (typeof value === 'function') return '[Function]';
+            return value;
+          }, 2);
+        } catch (e) { return String(arg); }
       }
       return String(arg);
     }).join(' ');
@@ -206,11 +217,11 @@ export const SANDBOX_BRIDGE_SCRIPT = `
   function collectMetrics() {
     var domNodes = document.querySelectorAll('*').length;
     var heapSize = 0;
-    if (performance.memory) {
+    if (performance.memory && performance.memory.usedJSHeapSize) {
       heapSize = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024 * 100) / 100;
     }
-    var timing = performance.timing;
-    var loadTime = timing.loadEventEnd > 0 ? timing.loadEventEnd - timing.navigationStart : 0;
+    var entries = performance.getEntriesByType('navigation');
+    var loadTime = entries.length > 0 && entries[0].loadEventEnd > 0 ? entries[0].loadEventEnd : 0;
     postToParent('metrics', { domNodes: domNodes, heapMB: heapSize, loadMs: loadTime });
   }
 

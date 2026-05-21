@@ -21,7 +21,10 @@ export function useThemeSetting() {
   }, []);
 
   const cycleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+    const cycle: UserSettings['theme'][] = ['system', 'light', 'dark'];
+    const currentIndex = cycle.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % cycle.length;
+    setTheme(cycle[nextIndex]);
   }, [setTheme, theme]);
 
   return { theme, setTheme, cycleTheme, isDark: theme === 'dark' };

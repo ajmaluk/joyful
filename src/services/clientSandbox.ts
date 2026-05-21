@@ -308,7 +308,7 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
 
   try {
     const wrappedScript = `
-      (function(require, console, globalThis, setTimeout, setInterval, clearTimeout, clearInterval) {
+      (function(require, console, restrictedGlobal, setTimeout, setInterval, clearTimeout, clearInterval) {
         ${script}
       })
     `;
@@ -331,10 +331,38 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
       return setInterval(cb, ms);
     };
 
+    const restrictedGlobal = {
+      Math,
+      JSON,
+      Date,
+      Array,
+      Object,
+      String,
+      Number,
+      Boolean,
+      RegExp,
+      Error,
+      TypeError,
+      RangeError,
+      SyntaxError,
+      ReferenceError,
+      parseInt,
+      parseFloat,
+      isNaN,
+      isFinite,
+      encodeURI,
+      decodeURI,
+      encodeURIComponent,
+      decodeURIComponent,
+      Infinity,
+      NaN,
+      undefined,
+    };
+
     fn(
       mockRequire,
       sandboxConsole,
-      globalThis,
+      restrictedGlobal,
       cappedSetTimeout,
       cappedSetInterval,
       clearTimeout,

@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback, type KeyboardEvent } from 'react';
-import { ChevronDown, Github, ListChecks, Loader2, Mail, Mic, Pause, Plus, Twitter, Heart, Wand2, Zap, ArrowUp } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from 'react';
+import { ChevronDown, Github, ImagePlus, ListChecks, Loader2, Mail, Mic, Pause, Twitter, Heart, Wand2, Zap, ArrowUp, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { marketingFooterLinks, marketingFooterRoutes } from '@/components/marketing/marketingRoutes';
-import type { ChatMode } from '@/types';
+import type { ChatAttachment, ChatMode } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { readImageAttachment } from '@/services/attachments';
 
 const promptExamples = [
   "Landing page for a SaaS startup",
@@ -14,45 +15,63 @@ const promptExamples = [
   "E-commerce product page",
 ];
 
-let currentExample = 0;
-
 interface PromptBoxProps {
   compact?: boolean;
-  onSubmit?: (prompt: string, mode?: ChatMode) => void;
+  onSubmit?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
 }
 
 export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [prompt, setPrompt] = useState('');
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState('');
   const [placeholder, setPlaceholder] = useState(promptExamples[0]);
   const [mode, setMode] = useState<ChatMode>('build');
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const exampleIndexRef = useRef(Math.floor(Math.random() * promptExamples.length));
 
   useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
 
   useEffect(() => {
     if (compact) return;
     const interval = setInterval(() => {
-      currentExample = (currentExample + 1) % promptExamples.length;
-      setPlaceholder(promptExamples[currentExample]);
+      exampleIndexRef.current = (exampleIndexRef.current + 1) % promptExamples.length;
+      setPlaceholder(promptExamples[exampleIndexRef.current]);
     }, 3000);
     return () => clearInterval(interval);
   }, [compact]);
 
   const handleSubmit = () => {
     const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt) {
+    if (!trimmedPrompt && !attachment) {
       textareaRef.current?.focus();
       return;
     }
+    const request = trimmedPrompt || 'Use the attached image as a visual reference and build the website from it.';
+    const attachments = attachment ? [attachment] : [];
     if (onSubmit) {
-      onSubmit(trimmedPrompt, mode);
+      onSubmit(request, mode, attachments);
     } else {
-      navigate('/builder', { state: { prompt: trimmedPrompt, initialMode: mode } });
+      navigate('/builder', { state: { prompt: request, initialMode: mode, initialAttachments: attachments } });
     }
     setModeMenuOpen(false);
+  };
+
+  const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setAttachment(await readImageAttachment(file));
+      setAttachmentError('');
+    } catch (error) {
+      setAttachment(null);
+      setAttachmentError(error instanceof Error ? error.message : 'Could not attach that image.');
+    } finally {
+      event.target.value = '';
+    }
   };
 
   const handleInput = useCallback(() => {
@@ -103,11 +122,24 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label="Add context"
+              onClick={() => imageInputRef.current?.click()}
+              aria-label="Attach image"
+              title="Attach one image"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100/80 text-gray-500 transition-all duration-200 hover:bg-gray-200 hover:text-gray-950 hover:scale-105 hover:shadow-md dark:bg-white/5 dark:text-[#aaa69d] dark:hover:bg-white/10 dark:hover:text-white"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <ImagePlus className="h-3.5 w-3.5" />
             </button>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+            {attachment && (
+              <div className="flex min-w-0 max-w-[150px] items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-[#d8d3ca]">
+                <img src={attachment.dataUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                <span className="truncate">{attachment.name}</span>
+                <button type="button" onClick={() => setAttachment(null)} aria-label="Remove image" className="hover:text-gray-950 dark:hover:text-white">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            {attachmentError && <span className="text-[10px] font-medium text-red-500">{attachmentError}</span>}
           </div>
           <div className="flex items-center gap-2">
             <div ref={modeMenuRef} className="relative">
@@ -183,11 +215,11 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!prompt.trim()}
-              aria-label={prompt.trim() ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
-              title={prompt.trim() ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
+              disabled={!prompt.trim() && !attachment}
+              aria-label={(prompt.trim() || attachment) ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
+              title={(prompt.trim() || attachment) ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
               className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
-                prompt.trim()
+                prompt.trim() || attachment
                   ? 'bg-[#2f5bff] text-white shadow-[#2f5bff]/25 hover:scale-105'
                   : 'bg-gray-200 text-gray-500 shadow-none hover:scale-100 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-white/10 dark:text-[#aaa69d]'
               }`}

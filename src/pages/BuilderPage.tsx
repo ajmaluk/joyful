@@ -7,7 +7,7 @@ import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { FileOperation, Project, ProjectFile, ChatMode } from '@/types';
+import type { ChatAttachment, FileOperation, Project, ProjectFile, ChatMode } from '@/types';
 import { applyFileOperations, applyPatchOperations, exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
@@ -16,6 +16,7 @@ import type { Template } from '@/components/chat/TemplateSelector';
 import {
   ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles
 } from 'lucide-react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 interface BuilderPageProps {
   projects: Project[];
@@ -30,7 +31,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const { user } = useAuth();
   const initialPromptRef = useRef<string | null>((location.state as { initialPrompt?: string } | null)?.initialPrompt?.trim() || null);
   const initialModeRef = useRef<ChatMode>((location.state as { initialMode?: ChatMode } | null)?.initialMode || 'build');
+  const initialAttachmentsRef = useRef<ChatAttachment[]>((location.state as { initialAttachments?: ChatAttachment[] } | null)?.initialAttachments || []);
   const hasSubmittedInitialPrompt = useRef(false);
+  // refs for accessing latest files/messages inside callbacks
 
   // Get or create project
   const project = projects.find(p => p.id === projectId);
@@ -42,7 +45,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showChatSidebar, setShowChatSidebar] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [pendingChatContext, setPendingChatContext] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(profileMenuRef, () => setProfileOpen(false), profileOpen);
 
   const {
     messages,
@@ -54,6 +61,12 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     abortGeneration,
     clearSavedGeneration,
   } = useChat(projectId || 'default');
+
+  const filesRef = useRef<ProjectFile[]>(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
+
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -98,8 +111,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }, [project, onUpdateProject]);
 
   // Handle AI message
-  const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build') => {
-    const response = await sendMessage(content, files, mode);
+  const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build', attachments: ChatAttachment[] = []) => {
+    setPendingChatContext('');
+    const currentFiles = filesRef.current;
+    const response = await sendMessage(content, currentFiles, mode, attachments);
     if (response) {
       const commitAppliedFiles = (newFiles: ProjectFile[], appliedCount: number, skippedCount: number) => {
         setFiles(newFiles);
@@ -121,7 +136,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         setViewMode('preview');
       };
 
-      let workingFiles = files;
+      let workingFiles = currentFiles;
       let appliedCount = 0;
       let skippedCount = 0;
       let firstSkipReason = '';
@@ -162,7 +177,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       } else {
         applyOperations(response.files.map(file => ({
           path: file.path,
-          action: file.action || (files.some(existing => existing.path === file.path) ? 'modify' : 'create'),
+          action: file.action || (currentFiles.some(existing => existing.path === file.path) ? 'modify' : 'create'),
           content: file.content,
         })));
       }
@@ -173,13 +188,19 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         addToast('info', firstSkipReason || 'No file operations to apply');
       }
     }
-  }, [files, selectedFile, sendMessage, persistFiles, addToast]);
+  }, [selectedFile, sendMessage, persistFiles, addToast]);
 
   const handleRequestFix = useCallback((prompt: string) => {
     setShowChatSidebar(true);
     setMobileChatOpen(true);
     void handleSendMessage(prompt, 'build');
   }, [handleSendMessage]);
+
+  const handleUseInspectorSelection = useCallback((context: string) => {
+    setShowChatSidebar(true);
+    setMobileChatOpen(true);
+    setPendingChatContext(context);
+  }, []);
 
   useEffect(() => {
     if (!project || hasSubmittedInitialPrompt.current || !initialPromptRef.current) return;
@@ -188,8 +209,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     initialPromptRef.current = null;
     navigate(location.pathname, { replace: true, state: null });
     const mode = initialModeRef.current;
+    const attachments = initialAttachmentsRef.current;
     initialModeRef.current = 'build';
-    void handleSendMessage(prompt, mode);
+    initialAttachmentsRef.current = [];
+    void handleSendMessage(prompt, mode, attachments);
   }, [project, handleSendMessage, navigate, location.pathname]);
 
   // Open file in editor
@@ -230,7 +253,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       const next = prev.map(f =>
         f.path === path ? { ...f, content, isModified: false } : f
       );
-      persistFiles(next);
       return next;
     });
     setOpenFiles(prev =>
@@ -239,7 +261,18 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     if (selectedFile?.path === path) {
       setSelectedFile(prev => prev ? { ...prev, content, isModified: false } : null);
     }
-  }, [selectedFile, persistFiles]);
+  }, [selectedFile]);
+
+  // Persist files to storage when they change
+  const filesJsonRef = useRef(JSON.stringify(files));
+  useEffect(() => {
+    const filesJson = JSON.stringify(files);
+    if (filesJson !== filesJsonRef.current && project) {
+      filesJsonRef.current = filesJson;
+      const updated = { ...project, files, updatedAt: new Date().toISOString() };
+      onUpdateProject(updated);
+    }
+  }, [files, project, onUpdateProject]);
 
   // Create new file
   const handleCreateFile = useCallback((path: string) => {
@@ -328,21 +361,22 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   // Regenerate message
   const handleRegenerateMessage = useCallback((messageId: string) => {
-    const messageIndex = messages.findIndex(m => m.id === messageId);
+    const currentMessages = messagesRef.current;
+    const messageIndex = currentMessages.findIndex(m => m.id === messageId);
     if (messageIndex >= 0 && messageIndex > 0) {
       // Find the user message before this assistant message
       for (let i = messageIndex - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          handleSendMessage(messages[i].content, 'build');
+        if (currentMessages[i].role === 'user') {
+          handleSendMessage(currentMessages[i].content, 'build', currentMessages[i].attachments || []);
           break;
         }
       }
     }
-  }, [messages, handleSendMessage]);
+  }, [handleSendMessage]);
 
   const handleRetrySavedGeneration = useCallback(() => {
     if (!savedGeneration || isGenerating) return;
-    void handleSendMessage(savedGeneration.prompt, savedGeneration.mode);
+    void handleSendMessage(savedGeneration.prompt, savedGeneration.mode, savedGeneration.attachments || []);
   }, [handleSendMessage, isGenerating, savedGeneration]);
 
   // Handle export
@@ -523,7 +557,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 </div>
               </button>
               {profileOpen && (
-                <div className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-border bg-popover text-left shadow-xl">
+                <div ref={profileMenuRef} className="absolute right-8 top-10 z-50 w-64 overflow-hidden rounded-xl border border-border bg-popover text-left shadow-xl">
                   <div className="flex items-center gap-3 border-b border-border px-4 py-3">
                     <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
                       {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
@@ -575,7 +609,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 onUpdateFile={handleUpdateFile}
               />
             ) : (
-              <PreviewPanel files={files} projectId={project?.id} onRequestFix={handleRequestFix} />
+          <PreviewPanel files={files} projectId={project?.id} onRequestFix={handleRequestFix} onUseSelection={handleUseInspectorSelection} />
             )}
           </div>
         </section>
@@ -598,6 +632,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
               onDismissSavedGeneration={clearSavedGeneration}
               onSelectTemplate={handleSelectTemplate}
               onCloseSidebar={() => setShowChatSidebar(false)}
+              pendingContext={pendingChatContext}
             />
           </div>
         </aside>
@@ -659,6 +694,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                   onRetrySavedGeneration={handleRetrySavedGeneration}
                   onDismissSavedGeneration={clearSavedGeneration}
                   onSelectTemplate={handleSelectTemplate}
+                  pendingContext={pendingChatContext}
                 />
               </div>
             </div>

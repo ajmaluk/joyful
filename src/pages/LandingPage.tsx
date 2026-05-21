@@ -16,7 +16,7 @@ import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChro
 import { FeatureShowcase } from '@/components/marketing/FeatureShowcase';
 import { AnimatedDemo } from '@/components/marketing/AnimatedDemo';
 import { TestimonialsSection } from '@/components/marketing/TestimonialCard';
-import type { ChatMode } from '@/types';
+import type { ChatAttachment, ChatMode } from '@/types';
 import { CountUpStats } from '@/components/marketing/CountUpStats';
 
 const templates = [
@@ -61,7 +61,7 @@ const stats = [
 ];
 
 interface LandingPageProps {
-  onStartProject: (prompt: string, mode?: ChatMode) => void;
+  onStartProject: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
 }
 
 const joyfulCode = [
@@ -392,7 +392,7 @@ function StatsSection() {
   );
 }
 
-function CTASection({ onStartProject }: { onStartProject: (prompt: string, mode?: ChatMode) => void }) {
+function CTASection({ onStartProject }: { onStartProject: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-60px' });
 

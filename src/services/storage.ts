@@ -21,6 +21,19 @@ export function getProjects(): Project[] {
   }
 }
 
+function safeSetItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      console.warn(`localStorage quota exceeded for key: ${key}`);
+      window.dispatchEvent(new CustomEvent('joyful_storage_quota', { detail: { key, size: value.length } }));
+    }
+    return false;
+  }
+}
+
 export function saveProject(project: Project): void {
   const projects = getProjects();
   const idx = projects.findIndex(p => p.id === project.id);
@@ -29,13 +42,13 @@ export function saveProject(project: Project): void {
   } else {
     projects.push(project);
   }
-  localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
-  localStorage.setItem(`${STORAGE_KEYS.PROJECT_PREFIX}${project.id}`, JSON.stringify(project));
+  safeSetItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+  safeSetItem(`${STORAGE_KEYS.PROJECT_PREFIX}${project.id}`, JSON.stringify(project));
 }
 
 export function deleteProject(projectId: string): void {
   const projects = getProjects().filter(p => p.id !== projectId);
-  localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+  safeSetItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   localStorage.removeItem(`${STORAGE_KEYS.PROJECT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
@@ -61,7 +74,7 @@ export function getChatHistory(projectId: string): ChatMessage[] {
 }
 
 export function saveChatHistory(projectId: string, messages: ChatMessage[]): void {
-  localStorage.setItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`, JSON.stringify(messages));
+  safeSetItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`, JSON.stringify(messages));
 }
 
 export function getSavedGenerationState(projectId: string): SavedGenerationState | null {
@@ -74,7 +87,7 @@ export function getSavedGenerationState(projectId: string): SavedGenerationState
 }
 
 export function saveGenerationState(projectId: string, state: SavedGenerationState): void {
-  localStorage.setItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`, JSON.stringify(state));
+  safeSetItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`, JSON.stringify(state));
 }
 
 export function clearGenerationState(projectId: string): void {
@@ -115,7 +128,7 @@ export function getSettings(): UserSettings {
 }
 
 export function saveSettings(settings: UserSettings): void {
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  safeSetItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   window.dispatchEvent(new CustomEvent('joyful_settings_changed', { detail: settings }));
 }
 
@@ -130,7 +143,7 @@ export function getUserSkills(): UserSkill[] {
 }
 
 export function saveUserSkills(skills: UserSkill[]): void {
-  localStorage.setItem(STORAGE_KEYS.USER_SKILLS, JSON.stringify(skills));
+  safeSetItem(STORAGE_KEYS.USER_SKILLS, JSON.stringify(skills));
   window.dispatchEvent(new CustomEvent('joyful_user_skills_changed', { detail: skills }));
 }
 
@@ -141,7 +154,7 @@ export function isAuthenticated(): boolean {
 
 export function setAuthenticated(value: boolean): void {
   if (value) {
-    localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, 'true');
+    safeSetItem(STORAGE_KEYS.AUTH_SESSION, 'true');
   } else {
     localStorage.removeItem(STORAGE_KEYS.AUTH_SESSION);
   }

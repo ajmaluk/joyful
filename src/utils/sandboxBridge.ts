@@ -4,12 +4,11 @@
  * Communicates with the parent window via postMessage.
  */
 
-export const SANDBOX_BRIDGE_SCRIPT = `
-<script>
+export const SANDBOX_BRIDGE_JS = `
 (function() {
   'use strict';
 
-  var PARENT_ORIGIN = window.location.origin;
+  var PARENT_ORIGIN = '*';
   var inspectorEnabled = false;
 
   function postToParent(type, data) {
@@ -231,7 +230,7 @@ export const SANDBOX_BRIDGE_SCRIPT = `
     if (!msg || !msg.__joyfulSandbox) return;
 
     if (msg.type === 'toggle-inspector') {
-      inspectorEnabled = msg.enabled;
+      inspectorEnabled = !!(msg.data && msg.data.enabled);
       if (inspectorEnabled) {
         createInspectorOverlay();
         document.addEventListener('mouseover', handleMouseOver, true);
@@ -256,5 +255,4 @@ export const SANDBOX_BRIDGE_SCRIPT = `
     setTimeout(function() { collectMetrics(); }, 200);
   });
 })();
-</script>
 `;

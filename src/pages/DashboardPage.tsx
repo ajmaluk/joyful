@@ -1,5 +1,5 @@
 import { Helmet } from 'react-helmet-async';
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect, type ChangeEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { routeMeta } from '@/lib/seo';
 import {
@@ -26,7 +26,8 @@ import {
 import { NewProjectModal } from '@/components/modals/NewProjectModal';
 import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import { exportProjectAsZip, generatePreview } from '@/services/fileSystem';
-import type { ChatAttachment, ChatMode, Project } from '@/types';
+import { inlineScriptsToSrc } from '@/utils/blob';
+import type { ChatAttachment, ChatMode, Project, ProjectFile } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { readImageAttachment } from '@/services/attachments';
@@ -351,26 +352,26 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               ))}
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[#aaa69d]" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search projects..."
-                  className="h-10 w-full rounded-md border border-gray-200 bg-white pl-9 pr-4 text-sm font-medium text-gray-950 outline-none transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-[#6387ff] focus:ring-2 focus:ring-[#6387ff]/20 sm:w-72 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-[#6f6b64] dark:hover:border-white/18"
-                />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-start">
+                <button
+                  type="button"
+                  onClick={() => setShowNewProject(true)}
+                  className="order-first inline-flex h-10 items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
+                >
+                  <Plus className="h-4 w-4" />
+                  New project
+                </button>
+                <div className="relative sm:ml-auto">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[#aaa69d]" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search projects..."
+                    className="h-10 w-full rounded-md border border-gray-200 bg-white pl-9 pr-4 text-sm font-medium text-gray-950 outline-none transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-[#6387ff] focus:ring-2 focus:ring-[#6387ff]/20 sm:w-72 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:placeholder:text-[#6f6b64] dark:hover:border-white/18"
+                  />
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowNewProject(true)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
-              >
-                <Plus className="h-4 w-4" />
-                New project
-              </button>
-            </div>
           </div>
 
           {projects.length === 0 ? (
@@ -407,7 +408,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               <p className="mt-2 text-sm text-gray-600 dark:text-[#aaa69d]">Try a different search term.</p>
             </div>
           ) : (
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleProjects.map((project) => (
                 <article
                   key={project.id}
@@ -419,13 +420,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                     className="relative block aspect-[16/9] w-full overflow-hidden bg-[#f5f2ea] text-left"
                   >
                     {project.files.length > 0 ? (
-                      <iframe
-                        srcDoc={generatePreview(project.files)}
-                        className="h-full w-full bg-white"
-                        sandbox="allow-scripts allow-same-origin"
-                        style={{ pointerEvents: 'none' }}
-                        title={project.name}
-                      />
+                      <PreviewThumbnail files={project.files} name={project.name} />
                     ) : (
                       <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1a1a18] dark:to-[#2a2a28]">
                         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
@@ -540,5 +535,51 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
       />
     </div>
     </>
+  );
+}
+
+function PreviewThumbnail({ files, name }: { files: ProjectFile[]; name: string }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (files.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const html = await generatePreview(files);
+      if (cancelled) return;
+      const { html: safeHtml } = inlineScriptsToSrc(html);
+      const blob = new Blob([safeHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      urlRef.current = url;
+      if (iframeRef.current) {
+        iframeRef.current.src = url;
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    };
+  }, [files]);
+
+  if (files.length === 0) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1a1a18] dark:to-[#2a2a28]">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">
+          <Wand2 className="h-7 w-7" />
+        </div>
+        <span className="text-sm font-medium text-gray-500 dark:text-white/60">Ready for your first prompt</span>
+      </div>
+    );
+  }
+
+  return (
+    <iframe
+      ref={iframeRef}
+      className="h-full w-full bg-white"
+      sandbox="allow-scripts"
+      style={{ pointerEvents: 'none' }}
+      title={name}
+    />
   );
 }

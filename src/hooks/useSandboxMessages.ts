@@ -97,7 +97,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin && event.origin !== null) return;
+      if (event.origin !== window.location.origin && event.origin !== 'null') return;
       const msg = event.data;
       if (!msg || !msg.__joyfulSandbox) return;
 
@@ -183,7 +183,9 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
   const sendToIframe = useCallback((type: string, data: unknown) => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage({ __joyfulSandbox: true, type, data }, iframe.src.startsWith('blob:') ? window.location.origin : '*');
+
+    const targetOrigin = iframe.src.startsWith('blob:') ? '*' : window.location.origin;
+    iframe.contentWindow.postMessage({ __joyfulSandbox: true, type, data }, targetOrigin);
   }, [iframeRef]);
 
   const toggleInspector = useCallback((enabled: boolean) => {

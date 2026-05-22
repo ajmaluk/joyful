@@ -22,11 +22,13 @@ export default defineConfig({
     port: 3000,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://cdn.jsdelivr.net https://apis.google.com https://accounts.google.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' blob: https://static.cloudflareinsights.com https://unpkg.com https://cdn.jsdelivr.net https://apis.google.com https://accounts.google.com; worker-src 'self' blob:; img-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https: ws: blob: https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' about: blob: https://accounts.google.com https://apis.google.com https://*.firebaseapp.com; frame-ancestors 'self'; object-src 'none';",
     },
   },
   preview: {
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://cdn.jsdelivr.net https://apis.google.com https://accounts.google.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' blob: https://static.cloudflareinsights.com https://unpkg.com https://cdn.jsdelivr.net https://apis.google.com https://accounts.google.com; worker-src 'self' blob:; img-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net; connect-src 'self' https: ws: blob: https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self' about: blob: https://accounts.google.com https://apis.google.com https://*.firebaseapp.com; frame-ancestors 'self'; object-src 'none';",
     },
   },
   build: {
@@ -63,5 +65,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['react', 'react-dom'],
   },
 });

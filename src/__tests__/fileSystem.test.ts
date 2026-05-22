@@ -11,6 +11,12 @@ import {
   generatePreview,
 } from '@/services/fileSystem';
 import type { FileOperation, ProjectFile } from '@/types';
+import { vi } from 'vitest';
+
+vi.mock('@/services/previewCompiler', () => ({
+  transpilePreviewCode: vi.fn(async (code: string) => ({ code, error: null })),
+  initPreviewCompiler: vi.fn(async () => {}),
+}));
 
 describe('validatePath', () => {
   it('rejects path traversal', () => {
@@ -317,7 +323,7 @@ describe('findOrphanFiles', () => {
 });
 
 describe('generatePreview', () => {
-  it('inlines JSON imports for React previews', () => {
+  it('inlines JSON imports for React previews', async () => {
     const files: ProjectFile[] = [
       {
         id: 'app',
@@ -337,7 +343,7 @@ export default function App() {
       },
     ];
 
-    const preview = generatePreview(files);
+    const preview = await generatePreview(files);
 
     expect(preview).toContain('const data = {');
     expect(preview).toContain('"title": "Hello from JSON"');

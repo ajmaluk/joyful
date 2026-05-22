@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Home, RotateCcw, ExternalLink, Smartphone, Tablet, Monitor, ShieldCheck, PlayCircle, Terminal, Network, Activity, ChevronDown, ChevronUp, MousePointer2, Columns, Smartphone as SmartphoneFrame, Wrench } from 'lucide-react';
 import type { PreviewIssue, ProjectFile } from '@/types';
 import { generatePreview } from '@/services/fileSystem';
-import { SANDBOX_BRIDGE_SCRIPT } from '@/utils/sandboxBridge';
+import { SANDBOX_BRIDGE_JS } from '@/utils/sandboxBridge';
 import { useSandboxMessages } from '@/hooks/useSandboxMessages';
 import { ConsolePanel } from '@/components/sandbox/ConsolePanel';
 import { NetworkPanel } from '@/components/sandbox/NetworkPanel';
 import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
+import { htmlToBlobUrl, revokeBlobUrl, inlineScriptsToSrc } from '@/utils/blob';
 
 interface PreviewPanelProps {
   files: ProjectFile[];
@@ -57,7 +58,7 @@ Use this selected element as the target for my next change.`;
 export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, onIframeMount }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
-  const [srcDoc, setSrcDoc] = useState('');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [bottomOpen, setBottomOpen] = useState(false);
   const [bottomTab, setBottomTab] = useState<BottomTab>('console');
@@ -72,6 +73,9 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
   });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeRefSplit = useRef<HTMLIFrameElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const cleanupScriptsRef = useRef<(() => void) | null>(null);
+  const delayedCleanupTimerRef = useRef<number | null>(null);
 
   // Expose iframe to parent for BrowserSandbox
   useEffect(() => {
@@ -138,15 +142,38 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
     clearLogs();
     clearNetwork();
     clearInspectorSelection();
-    const html = generatePreview(files, currentPath);
-    const bridgeHtml = html.includes('</body>')
-      ? html.replace('</body>', `${SANDBOX_BRIDGE_SCRIPT}</body>`)
-      : html + SANDBOX_BRIDGE_SCRIPT;
-    setSrcDoc(bridgeHtml);
-    setTimeout(() => {
+    generatePreview(files, currentPath).then(html => {
+      const htmlWithBridge = html.includes('</body>')
+        ? html.replace('</body>', `<script>${SANDBOX_BRIDGE_JS}</script></body>`)
+        : html + `<script>${SANDBOX_BRIDGE_JS}</script>`;
+
+      const previousCleanupScripts = cleanupScriptsRef.current;
+      const previousPreviewUrl = previewUrlRef.current;
+
+      const { html: safeHtml, cleanup: cleanupScripts } = inlineScriptsToSrc(htmlWithBridge);
+      cleanupScriptsRef.current = cleanupScripts;
+
+      const url = htmlToBlobUrl(safeHtml);
+      previewUrlRef.current = url;
+      setPreviewUrl(url);
+
+      if (delayedCleanupTimerRef.current !== null) {
+        window.clearTimeout(delayedCleanupTimerRef.current);
+      }
+      delayedCleanupTimerRef.current = window.setTimeout(() => {
+        previousCleanupScripts?.();
+        if (previousPreviewUrl) {
+          revokeBlobUrl(previousPreviewUrl);
+        }
+      }, 1500);
+
+      setTimeout(() => {
+        setIsLoading(false);
+        requestMetrics();
+      }, 300);
+    }).catch(() => {
       setIsLoading(false);
-      requestMetrics();
-    }, 300);
+    });
   }, [clearInspectorSelection, clearLogs, clearNetwork, currentPath, files, requestMetrics]);
 
   const refreshPreviewRef = useRef(refreshPreview);
@@ -159,7 +186,16 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
     const timer = setTimeout(() => {
       refreshPreviewRef.current();
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (delayedCleanupTimerRef.current !== null) {
+        window.clearTimeout(delayedCleanupTimerRef.current);
+      }
+      cleanupScriptsRef.current?.();
+      if (previewUrlRef.current) {
+        revokeBlobUrl(previewUrlRef.current);
+      }
+    };
   }, [files]);
 
   const deviceFrames: Record<DeviceMode, { width: string; height: string; label: string }> = {
@@ -203,8 +239,8 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
         )}
         <iframe
           ref={iframeRef}
-          srcDoc={srcDoc}
-          sandbox="allow-scripts allow-forms allow-same-origin"
+          src={previewUrl ?? undefined}
+          sandbox="allow-scripts allow-forms"
           className={`w-full bg-white ${showDeviceFrame && !isDesktopDevice ? 'rounded-lg' : ''}`}
           style={{ height: showDeviceFrame && !isDesktopDevice ? frame.height : '100%' }}
           title={isSplit ? 'Preview Split' : 'Preview'}
@@ -363,9 +399,13 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
           className="ml-1.5 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-accent hover:text-foreground hover:shadow-sm"
           title="Open preview in new tab"
           aria-label="Open preview in new tab"
-          onClick={() => {
-            const html = generatePreview(files, currentPath);
-            const blob = new Blob([html], { type: 'text/html' });
+          onClick={async () => {
+            const html = await generatePreview(files, currentPath);
+            const htmlWithBridge = html.includes('</body>')
+              ? html.replace('</body>', `<script>${SANDBOX_BRIDGE_JS}</script></body>`)
+              : html + `<script>${SANDBOX_BRIDGE_JS}</script>`;
+            const { html: safeHtml } = inlineScriptsToSrc(htmlWithBridge);
+            const blob = new Blob([safeHtml], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
           }}

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Terminal, Network, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { generatePreview } from '@/services/fileSystem';
-import { SANDBOX_BRIDGE_SCRIPT } from '@/utils/sandboxBridge';
+import { SANDBOX_BRIDGE_JS } from '@/utils/sandboxBridge';
 import { useSandboxMessages } from '@/hooks/useSandboxMessages';
 import { SandboxToolbar, type DeviceMode } from '@/components/sandbox/SandboxToolbar';
 import { ConsolePanel } from '@/components/sandbox/ConsolePanel';
 import { NetworkPanel } from '@/components/sandbox/NetworkPanel';
 import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
+import { htmlToBlobUrl, revokeBlobUrl, inlineScriptsToSrc } from '@/utils/blob';
 import { ElementInspector } from '@/components/sandbox/ElementInspector';
 
 interface SandboxPanelProps {
@@ -25,7 +26,10 @@ const deviceWidths: Record<DeviceMode, number> = {
 
 export function SandboxPanel({ files }: SandboxPanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [srcDoc, setSrcDoc] = useState('');
+  const previewUrlRef = useRef<string | null>(null);
+  const cleanupScriptsRef = useRef<(() => void) | null>(null);
+  const delayedCleanupTimerRef = useRef<number | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [customWidth, setCustomWidth] = useState(800);
@@ -48,29 +52,66 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
 
   const refreshPreview = useCallback(() => {
     setIsLoading(true);
-    const html = generatePreview(files);
-    const bridgeHtml = html.includes('</body>')
-      ? html.replace('</body>', `${SANDBOX_BRIDGE_SCRIPT}</body>`)
-      : html + SANDBOX_BRIDGE_SCRIPT;
-    setSrcDoc(bridgeHtml);
-    setTimeout(() => {
+    generatePreview(files).then(html => {
+      const htmlWithBridge = html.includes('</body>')
+        ? html.replace('</body>', `<script>${SANDBOX_BRIDGE_JS}</script></body>`)
+        : html + `<script>${SANDBOX_BRIDGE_JS}</script>`;
+
+      const previousCleanupScripts = cleanupScriptsRef.current;
+      const previousPreviewUrl = previewUrlRef.current;
+
+      const { html: safeHtml, cleanup: cleanupScripts } = inlineScriptsToSrc(htmlWithBridge);
+      cleanupScriptsRef.current = cleanupScripts;
+
+      const url = htmlToBlobUrl(safeHtml);
+      previewUrlRef.current = url;
+      setPreviewUrl(url);
+
+      if (delayedCleanupTimerRef.current !== null) {
+        window.clearTimeout(delayedCleanupTimerRef.current);
+      }
+      delayedCleanupTimerRef.current = window.setTimeout(() => {
+        previousCleanupScripts?.();
+        if (previousPreviewUrl) {
+          revokeBlobUrl(previousPreviewUrl);
+        }
+      }, 1500);
+
+      setTimeout(() => {
+        setIsLoading(false);
+        requestMetrics();
+      }, 300);
+    }).catch(() => {
       setIsLoading(false);
-      requestMetrics();
-    }, 300);
+    });
   }, [files, requestMetrics]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       refreshPreview();
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (delayedCleanupTimerRef.current !== null) {
+        window.clearTimeout(delayedCleanupTimerRef.current);
+      }
+      cleanupScriptsRef.current?.();
+      if (previewUrlRef.current) {
+        revokeBlobUrl(previewUrlRef.current);
+      }
+    };
   }, [files, refreshPreview]);
 
   const handleOpenExternal = useCallback(() => {
-    const html = generatePreview(files);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    generatePreview(files).then(html => {
+      const htmlWithBridge = html.includes('</body>')
+        ? html.replace('</body>', `<script>${SANDBOX_BRIDGE_JS}</script></body>`)
+        : html + `<script>${SANDBOX_BRIDGE_JS}</script>`;
+      const { html: safeHtml } = inlineScriptsToSrc(htmlWithBridge);
+      const blob = new Blob([safeHtml], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    });
   }, [files]);
 
   const handleDeviceChange = useCallback((newDevice: DeviceMode) => {
@@ -157,8 +198,8 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
               )}
               <iframe
                 ref={iframeRef}
-                srcDoc={srcDoc}
-                sandbox="allow-scripts allow-forms allow-same-origin"
+                src={previewUrl ?? undefined}
+                sandbox="allow-scripts allow-forms"
                 className="w-full bg-white"
                 style={{ height: device === 'custom' ? customHeight : '100%', minHeight: device === 'custom' ? customHeight : '100%' }}
                 title="Sandbox preview"

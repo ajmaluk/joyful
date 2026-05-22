@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild-wasm';
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import { errorCollector } from '@/engine/errors';
+import { htmlToBlobUrl } from '@/utils/blob';
 
 export interface CompileResult {
   success: boolean;
@@ -23,6 +24,7 @@ export class BrowserSandbox {
   private currentAbortController: AbortController | null = null;
   private lastConsoleMessage = '';
   private consoleRepeatCount = 0;
+  private pendingBlobUrls: string[] = [];
 
   async init(): Promise<void> {
     if (esbuildInitialized) return;
@@ -111,6 +113,45 @@ export class BrowserSandbox {
   async updatePreview(compiledCode: string): Promise<void> {
     if (!this.iframe) return;
 
+    for (const url of this.pendingBlobUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.pendingBlobUrls = [];
+
+    const bridgeCode = `
+const origLog = console.log;
+const origError = console.error;
+const origWarn = console.warn;
+const origInfo = console.info;
+function send(level, args) {
+  window.parent.postMessage({
+    type: '__joyful_console__',
+    level: level,
+    message: args.map(a =>
+      typeof a === 'object' ? JSON.stringify(a, null, 2)
+      : typeof a === 'undefined' ? 'undefined'
+      : String(a)
+    ).join(' ')
+  }, '*');
+}
+console.log = function() { origLog.apply(console, arguments); send('log', arguments); };
+console.error = function() { origError.apply(console, arguments); send('error', arguments); };
+console.warn = function() { origWarn.apply(console, arguments); send('warn', arguments); };
+console.info = function() { origInfo.apply(console, arguments); send('info', arguments); };
+window.onerror = function(msg, src, line, col, error) {
+  send('error', ['Runtime error: ' + msg + ' at line ' + line]);
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  send('error', ['Unhandled Promise rejection: ' + e.reason]);
+});`;
+
+    const bridgeBlob = new Blob([bridgeCode], { type: 'application/javascript' });
+    const bridgeUrl = URL.createObjectURL(bridgeBlob);
+    const codeBlob = new Blob([compiledCode], { type: 'application/javascript' });
+    const codeUrl = URL.createObjectURL(codeBlob);
+    this.pendingBlobUrls = [bridgeUrl, codeUrl];
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -124,45 +165,12 @@ export class BrowserSandbox {
 </head>
 <body>
   <div id="root"></div>
-  <script>
-    const origLog = console.log;
-    const origError = console.error;
-    const origWarn = console.warn;
-    const origInfo = console.info;
-
-    function send(level, args) {
-      window.parent.postMessage({
-        type: '__joyful_console__',
-        level: level,
-        message: args.map(a =>
-          typeof a === 'object' ? JSON.stringify(a, null, 2)
-          : typeof a === 'undefined' ? 'undefined'
-          : String(a)
-        ).join(' ')
-      }, '*');
-    }
-
-    console.log = function() { origLog.apply(console, arguments); send('log', arguments); };
-    console.error = function() { origError.apply(console, arguments); send('error', arguments); };
-    console.warn = function() { origWarn.apply(console, arguments); send('warn', arguments); };
-    console.info = function() { origInfo.apply(console, arguments); send('info', arguments); };
-
-    window.onerror = function(msg, src, line, col, error) {
-      send('error', ['Runtime error: ' + msg + ' at line ' + line]);
-      return false;
-    };
-
-    window.addEventListener('unhandledrejection', function(e) {
-      send('error', ['Unhandled Promise rejection: ' + e.reason]);
-    });
-  </script>
-  <script>
-    ${compiledCode}
-  </script>
+  <script src="${bridgeUrl}"></script>
+  <script src="${codeUrl}"></script>
 </body>
 </html>`;
 
-    this.iframe.srcdoc = html;
+    this.iframe.src = htmlToBlobUrl(html);
   }
 
   private handleMessage = (event: MessageEvent): void => {

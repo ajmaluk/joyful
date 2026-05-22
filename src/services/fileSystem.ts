@@ -1,4 +1,5 @@
 import type { FileOperation, FilePatchOperation, ProjectFile, FileType } from '@/types';
+import { transpilePreviewCode } from './previewCompiler';
 
 // Detect file type from extension
 export function getFileType(path: string): FileType {
@@ -809,7 +810,7 @@ function MemoryRouter({ children }) {
 function BrowserRouter({ children }) { return React.createElement(MemoryRouter, null, children); }`;
 }
 
-function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
+async function generateReactPreviewAsync(files: ProjectFile[], routePath = '/'): Promise<string> {
   const appFile =
     files.find(f => /^src\/App\.(jsx|tsx)$/i.test(f.path)) ||
     files.find(f => /^app\/page\.(jsx|tsx)$/i.test(f.path)) ||
@@ -825,10 +826,12 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
     return '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0A0A0F;color:#8A8AA0;font-family:sans-serif;"><div>No React entry found. Create src/App.jsx or app/page.tsx to preview.</div></body></html>';
   }
 
-  const componentSource = stripModuleSyntax(inlineJsonImports(appFile.content, appFile.path, files));
+  const cleanedSource = stripModuleSyntax(inlineJsonImports(appFile.content, appFile.path, files));
+  const { code: compiledSource, error: compileError } = await transpilePreviewCode(cleanedSource);
+  const finalSource = compileError ? cleanedSource : compiledSource;
   const needsRouter = /react-router-dom/.test(appFile.content);
   const importFallbacks = buildPreviewFallbacks(extractImportedNames(appFile.content));
-  const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(componentSource);
+  const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(finalSource);
   const appResolver = hasNamedApp
     ? 'const JoyfulApp = window.__JoyfulApp || (typeof App !== "undefined" ? App : Page);'
     : 'const JoyfulApp = window.__JoyfulApp;';
@@ -838,7 +841,7 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https:; object-src 'none'; frame-ancestors 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com https://cdn.jsdelivr.net; script-src-elem 'self' 'unsafe-inline' blob: https://unpkg.com https://cdn.jsdelivr.net; worker-src 'self' blob:; img-src 'self' data: https: blob:; connect-src 'self' https: blob: https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https:; frame-src 'self' about: blob:; object-src 'none';">
   <title>Joyful React Preview</title>
   <style>${css}</style>
 </head>
@@ -846,8 +849,7 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
   <div id="root"></div>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script type="text/babel" data-presets="env,react,typescript">
+  <script>
 window.__JOYFUL_PREVIEW_PATH = ${JSON.stringify(routePath || '/')};
 try {
   if (window.location.origin !== 'null') {
@@ -857,12 +859,12 @@ try {
 const { useState, useMemo, useEffect, useRef, useCallback, useReducer, useId } = React;
 ${needsRouter ? reactRouterPolyfill() : ''}
 ${importFallbacks}
-${escapeClosingScript(componentSource)}
+${escapeClosingScript(finalSource)}
 ${appResolver}
 if (!JoyfulApp) {
   throw new Error('Could not find a default App/Page component to render.');
 }
-ReactDOM.createRoot(document.getElementById('root')).render(<JoyfulApp />);
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(JoyfulApp));
   </script>
 </body>
 </html>`;
@@ -873,7 +875,7 @@ function escapeRegExp(value: string): string {
 }
 
 // Generate a preview HTML from project files
-export function generatePreview(files: ProjectFile[], routePath = '/'): string {
+export async function generatePreview(files: ProjectFile[], routePath = '/'): Promise<string> {
   const hasFrameworkEntry = files.some(f =>
     /^src\/App\.(jsx|tsx)$/i.test(f.path) ||
     /^app\/page\.(jsx|tsx)$/i.test(f.path) ||
@@ -881,7 +883,7 @@ export function generatePreview(files: ProjectFile[], routePath = '/'): string {
   );
 
   if (hasFrameworkEntry) {
-    return generateReactPreview(files, routePath);
+    return generateReactPreviewAsync(files, routePath);
   }
 
   const requestedHtmlPath = routePathToFilePath(routePath);

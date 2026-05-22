@@ -98,20 +98,23 @@ export function getFriendlyFirebaseAuthError(error: unknown) {
   }
 }
 
-export const firebaseApp = initializeApp(firebaseConfig);
-export const auth = getAuth(firebaseApp);
+export const firebaseApp = isFirebaseConfigReady() ? initializeApp(firebaseConfig) : undefined;
+export const auth = firebaseApp ? getAuth(firebaseApp) : undefined;
 
-// Ensure we attempt to persist auth in the browser, but don't fail the app if it errors.
-void setPersistence(auth, browserLocalPersistence).catch((err) => {
-  // Persistence failing is non-fatal for most flows; surface to console for debugging.
-  console.warn('Failed to set Firebase persistence:', err);
-});
+// Ensure we attempt to persist auth in the browser if auth is available, but don't fail the app if it errors.
+if (auth) {
+  void setPersistence(auth, browserLocalPersistence).catch((err) => {
+    // Persistence failing is non-fatal for most flows; surface to console for debugging.
+    console.warn('Failed to set Firebase persistence:', err);
+  });
+}
 
 /**
  * After a redirect sign-in this returns the redirect result or null.
  * Kept for backward compatibility — new sign-ins use popup.
  */
 export async function handleRedirectResult(): Promise<UserCredential | null> {
+  if (!isFirebaseConfigReady() || !auth) return null;
   try {
     const result = await getRedirectResult(auth);
     return result;
@@ -137,6 +140,10 @@ export function isGmailAddress(email: string) {
 }
 
 export function observeAuthState(callback: (user: User | null) => void) {
+  if (!isFirebaseConfigReady() || !auth) {
+    // Return a no-op unsubscribe to keep calling code simple.
+    return () => {};
+  }
   return onAuthStateChanged(auth, callback);
 }
 
@@ -145,6 +152,7 @@ export async function signInWithEmail(email: string, password: string) {
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
+  if (!auth) throw new Error('Firebase auth is not initialized.');
   return signInWithEmailAndPassword(auth, email.trim(), password);
 }
 
@@ -153,6 +161,7 @@ export async function createAccountWithEmail(name: string, email: string, passwo
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
+  if (!auth) throw new Error('Firebase auth is not initialized.');
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (name.trim()) {
     await updateProfile(credential.user, { displayName: name.trim() });
@@ -165,6 +174,7 @@ export async function signInWithGoogle() {
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
+  if (!auth) throw new Error('Firebase auth is not initialized.');
   const result = await signInWithPopup(auth, googleProvider);
   return result;
 }
@@ -174,10 +184,12 @@ export async function signInWithGithub() {
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
+  if (!auth) throw new Error('Firebase auth is not initialized.');
   const result = await signInWithPopup(auth, githubProvider);
   return result;
 }
 
 export function signOutUser() {
+  if (!isFirebaseConfigReady() || !auth) return Promise.resolve();
   return signOut(auth);
 }

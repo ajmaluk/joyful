@@ -2,12 +2,6 @@ import type { ChatAttachment, ProjectFile, UserSkill } from '@/types';
 import * as storage from '@/services/storage';
 import { QualityGateOrchestrator, qualityGates } from '@/services/agentRuntime';
 
-const skillDocModules = import.meta.glob('/skills/**/SKILL.md', {
-  eager: true,
-  query: '?raw',
-  import: 'default',
-}) as Record<string, string>;
-
 export interface BuilderSkill {
   id: string;
   name: string;
@@ -124,10 +118,6 @@ export function getSkillManifest() {
   ];
 }
 
-function getSkillDoc(sourcePath: string) {
-  return skillDocModules[`/${sourcePath}`]?.trim() || '';
-}
-
 function scoreSkill(skill: BuilderSkill | UserSkill, promptTokens: Set<string>, attachments: ChatAttachment[], files: ProjectFile[]) {
   const lowerPrompt = Array.from(promptTokens).join(' ');
   const haystack = `${skill.name} ${skill.description} ${'keywords' in skill ? skill.keywords.join(' ') : ''}`.toLowerCase();
@@ -184,9 +174,7 @@ export function selectSkillsForPrompt(
 
 export function getSkillBrief(prompt: string, files: ProjectFile[] = [], attachments: ChatAttachment[] = []) {
   return selectSkillsForPrompt(prompt, files, attachments).map(skill => {
-    const doc = 'sourcePath' in skill ? getSkillDoc(skill.sourcePath) : '';
-    const content = doc || skill.instructions;
-    return `## ${skill.name}\n${content}`;
+    return `## ${skill.name}\n${skill.instructions}`;
   });
 }
 
@@ -310,13 +298,11 @@ export function mergeSkillBriefs(
 
     // The highest-priority skill in the group provides the main instruction
     const primary = group.skills[0];
-    const doc = 'sourcePath' in primary ? getSkillDoc(primary.sourcePath) : '';
-    const mainContent = doc || primary.instructions;
+    const mainContent = primary.instructions;
 
     // Secondary skills provide supplementary constraints
     const supplements = group.skills.slice(1).map(s => {
-      const doc2 = 'sourcePath' in s ? getSkillDoc(s.sourcePath) : '';
-      return doc2 || s.instructions;
+      return s.instructions;
     });
 
     merged.push(`## ${primary.name} (Group: ${group.id})\n${mainContent}`);

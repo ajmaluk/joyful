@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useChat } from '@/hooks/useChat';
+import { useAgent } from '@/hooks/useAgent';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import type { ApplyReport, ChatAttachment, FileOperation, PendingFileOperation, Project, ProjectFile, ChatMode } from '@/types';
@@ -75,6 +76,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     abortGeneration,
     clearSavedGeneration,
   } = useChat(projectId || 'default');
+
+  const {
+    setPreviewIframe,
+  } = useAgent(projectId);
 
   const filesRef = useRef<ProjectFile[]>(files);
   useEffect(() => { filesRef.current = files; }, [files]);
@@ -239,7 +244,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const handleRequestFix = useCallback((prompt: string) => {
     setShowChatSidebar(true);
     setMobileChatOpen(true);
-    void handleSendMessage(prompt, 'build');
+    handleSendMessage(prompt, 'build').catch(() => {});
   }, [handleSendMessage]);
 
   const handleUseInspectorSelection = useCallback((context: string) => {
@@ -258,7 +263,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     const attachments = initialAttachmentsRef.current;
     initialModeRef.current = 'build';
     initialAttachmentsRef.current = [];
-    void handleSendMessage(prompt, mode, attachments);
+    handleSendMessage(prompt, mode, attachments).catch(() => {});
   }, [project, handleSendMessage, navigate, location.pathname]);
 
   // Open file in editor
@@ -422,7 +427,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   const handleRetrySavedGeneration = useCallback(() => {
     if (!savedGeneration || isGenerating) return;
-    void handleSendMessage(savedGeneration.prompt, savedGeneration.mode, savedGeneration.attachments || []);
+    handleSendMessage(savedGeneration.prompt, savedGeneration.mode, savedGeneration.attachments || []).catch(() => {});
   }, [handleSendMessage, isGenerating, savedGeneration]);
 
   // Handle export
@@ -640,7 +645,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                       type="button"
                       onClick={() => {
                         setProfileOpen(false);
-                        void signOutUser().then(() => navigate('/'));
+                        signOutUser().then(() => navigate('/')).catch(() => {});
                       }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
@@ -670,7 +675,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
                 onUpdateFile={handleUpdateFile}
               />
             ) : (
-          <PreviewPanel files={files} projectId={project?.id} onRequestFix={handleRequestFix} onUseSelection={handleUseInspectorSelection} />
+          <PreviewPanel files={files} projectId={project?.id} onRequestFix={handleRequestFix} onUseSelection={handleUseInspectorSelection} onIframeMount={setPreviewIframe} />
             )}
           </div>
         </section>

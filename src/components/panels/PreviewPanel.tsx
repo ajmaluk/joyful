@@ -13,6 +13,7 @@ interface PreviewPanelProps {
   projectId?: string;
   onRequestFix?: (prompt: string) => void;
   onUseSelection?: (context: string) => void;
+  onIframeMount?: (iframe: HTMLIFrameElement | null) => void;
 }
 
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
@@ -53,7 +54,7 @@ styles: display=${selection.display}; position=${selection.position}; font-size=
 Use this selected element as the target for my next change.`;
 }
 
-export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }: PreviewPanelProps) {
+export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, onIframeMount }: PreviewPanelProps) {
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [srcDoc, setSrcDoc] = useState('');
@@ -71,6 +72,12 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }:
   });
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iframeRefSplit = useRef<HTMLIFrameElement>(null);
+
+  // Expose iframe to parent for BrowserSandbox
+  useEffect(() => {
+    onIframeMount?.(iframeRef.current);
+    return () => onIframeMount?.(null);
+  }, [onIframeMount]);
 
   const {
     logs,

@@ -97,7 +97,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== window.location.origin && event.origin !== null) return;
       const msg = event.data;
       if (!msg || !msg.__joyfulSandbox) return;
 

@@ -548,12 +548,9 @@ export function analyzeDependencies(
     const deps = depGraph.get(current);
     if (deps) {
       for (const dep of deps) {
-        // Resolve dep to a file path
-        for (const fp of filePaths) {
-          if (fp.endsWith(dep.replace('@/', 'src/')) || dep.includes(fp.split('/').pop()?.replace(/\.[^.]+$/, '') || '')) {
-            dfs(fp);
-            break;
-          }
+        const resolved = resolveImport(current, dep);
+        if (resolved) {
+          dfs(resolved);
         }
       }
     }

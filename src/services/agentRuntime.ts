@@ -1003,6 +1003,13 @@ export class MultiStepPipelineExecutor {
 
     return `You are a software architect. Given a user's request and existing project context, create a detailed build plan.
 
+Strict Guidelines for Path, Alias, & Import Management:
+1. Alias Usage: For all imports to files in the \`src/\` directory, prefer the absolute alias \`@/\` (e.g. \`import { X } from '@/components/X'\`).
+2. Extension Integrity: NEVER append duplicate extensions such as \`.tsx.tsx\` or \`.ts.ts\` to file paths or import specifiers.
+3. No Double Slashes: Ensure there are no double slashes \`//\` in any paths or import paths.
+4. Capitalization & Consistency: Match directory capitalization exactly (use lowercase \`src/components/\` and \`src/services/\`, do not mix \`Components/\` and \`components/\`).
+5. Complete Reference Map: Ensure every component or file listed in the dependencies is defined and created/modified in the plan. Do not reference missing files.
+
 Your task is to analyze the requirements and output a plan (as JSON) that lists:
 - Every file that needs to be created, modified, or deleted
 - The reason for each file operation
@@ -1057,6 +1064,11 @@ The execution order will be determined by the dependency graph (files with no de
       : '';
 
     return `You are generating a single file for a project. Focus only on this file's complete content.
+
+Strict Path & Import Instructions:
+1. Import Paths: Use correct paths. Prefer using the \`@/\` absolute alias (e.g., \`import { X } from '@/components/X'\`) for imports pointing inside \`src/\`. If using relative paths, make sure they are accurate and do not contain double slashes \`//\` or duplicate file extensions (like \`Comp.tsx.tsx\`).
+2. Existing Structure: Match existing file exports and interfaces exactly. Do not assume or invent non-existent files or functions.
+3. Completely Filled: Do NOT output any placeholder comments or truncated sections. Complete the implementation.
 
 Project architecture:\n${plan.slice(0, 2000)}
 

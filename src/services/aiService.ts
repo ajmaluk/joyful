@@ -497,7 +497,7 @@ function providerRejectedTools(status: number, bodyText: string) {
   return status >= 400 && /tools?|tool_choice|function_call|function/i.test(bodyText);
 }
 
-async function runBrowserSandboxChecks(
+export async function runBrowserSandboxChecks(
   response: AIGenerationResponse,
   existingFiles: ProjectFile[],
 ): Promise<{ commands: SandboxCommandRequest[]; results: SandboxCommandResult[] }> {
@@ -1944,7 +1944,7 @@ export default function ContactPage() {
     setIsSubmitting(true);
     // Simulate form submission — replace with actual API call
     setTimeout(() => {
-      toast.success('Message sent! We\'ll get back to you soon.');
+      toast.success("Message sent! We'll get back to you soon.");
       setFormData({ name: '', email: '', message: '' });
       setIsSubmitting(false);
     }, 800);

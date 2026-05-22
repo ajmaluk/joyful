@@ -1,31 +1,41 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Suspense, lazy, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { LeftSidebar } from '@/components/layout/LeftSidebar';
-import { LandingPage } from '@/pages/LandingPage';
-import { BuilderPage } from '@/pages/BuilderPage';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { TemplatesPage } from '@/pages/TemplatesPage';
-import { SettingsPage } from '@/pages/SettingsPage';
-import { DocsPage } from '@/pages/DocsPage';
-import { PricingPage } from '@/pages/PricingPage';
-import { LoginPage } from '@/pages/LoginPage';
-import { SignupPage } from '@/pages/SignupPage';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { NotFoundPage } from '@/pages/NotFoundPage';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/useToast';
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { ChatAttachment, ChatMode, UserSettings } from '@/types';
 import * as storage from '@/services/storage';
-import { SitePage } from '@/pages/SitePage';
-import { BlogListPage } from '@/pages/BlogListPage';
-import { BlogPostPage } from '@/pages/BlogPostPage';
+import { storageManager } from '@/engine/storage';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
 import { AuthProvider } from '@/hooks/AuthProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { consumePendingPromptFull, savePendingPrompt } from '@/services/pendingPrompt';
+
+const LandingPage = lazy(() => import('@/pages/LandingPage').then(module => ({ default: module.LandingPage })));
+const BuilderPage = lazy(() => import('@/pages/BuilderPage').then(module => ({ default: module.BuilderPage })));
+const DashboardPage = lazy(() => import('@/pages/DashboardPage').then(module => ({ default: module.DashboardPage })));
+const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then(module => ({ default: module.TemplatesPage })));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(module => ({ default: module.SettingsPage })));
+const DocsPage = lazy(() => import('@/pages/DocsPage').then(module => ({ default: module.DocsPage })));
+const PricingPage = lazy(() => import('@/pages/PricingPage').then(module => ({ default: module.PricingPage })));
+const LoginPage = lazy(() => import('@/pages/LoginPage').then(module => ({ default: module.LoginPage })));
+const SignupPage = lazy(() => import('@/pages/SignupPage').then(module => ({ default: module.SignupPage })));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then(module => ({ default: module.NotFoundPage })));
+const SitePage = lazy(() => import('@/pages/SitePage').then(module => ({ default: module.SitePage })));
+const BlogListPage = lazy(() => import('@/pages/BlogListPage').then(module => ({ default: module.BlogListPage })));
+const BlogPostPage = lazy(() => import('@/pages/BlogPostPage').then(module => ({ default: module.BlogPostPage })));
+
+function RouteLoadingState() {
+  return (
+    <div className="flex h-full items-center justify-center bg-background text-sm font-medium text-muted-foreground">
+      Loading route...
+    </div>
+  );
+}
 
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -88,6 +98,13 @@ function AppLayout() {
       window.removeEventListener('joyful_settings_changed', handleSettingsChanged);
       mediaQuery.removeEventListener('change', syncTheme);
     };
+  }, []);
+
+  // Initialize IndexedDB-backed StorageManager
+  useEffect(() => {
+    storageManager.init().catch((err) => {
+      console.warn('[Storage] Init failed, falling back to localStorage:', err);
+    });
   }, []);
 
   // Cross-tab synchronization
@@ -188,107 +205,109 @@ function AppLayout() {
               transition={{ duration: 0.2 }}
               className="h-full min-h-0"
             >
-              <Routes location={location}>
-                <Route path="/" element={isAuthed ? <Navigate to="/builder" replace /> : <LandingPage onStartProject={handleStartProject} />} />
-                <Route
-                  path="/dashboard"
-                  element={<Navigate to="/builder" replace />}
-                />
-                <Route
-                  path="/builder"
-                  element={
-                    <ErrorBoundary>
-                      <AuthGate>
-                        <DashboardPage
-                          projects={projects}
-                          onCreateProject={handleCreateProject}
-                          onDeleteProject={removeProject}
-                          onStartProject={handleStartProject}
-                        />
-                      </AuthGate>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/builder/:projectId"
-                  element={
-                    <ErrorBoundary>
-                      <AuthGate>
-                        <BuilderPage
-                          projects={projects}
-                          onUpdateProject={updateProject}
-                        />
-                      </AuthGate>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/templates"
-                  element={
-                    <ErrorBoundary>
-                      <AuthGate>
-                        <TemplatesPage onCreateProject={handleCreateProject} onUpdateProject={updateProject} />
-                      </AuthGate>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ErrorBoundary>
-                      <AuthGate>
-                        <SettingsPage />
-                      </AuthGate>
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/docs"
-                  element={
-                    <ErrorBoundary>
-                      <DocsPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/pricing"
-                  element={
-                    <ErrorBoundary>
-                      <PricingPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/login"
-                  element={
-                    <ErrorBoundary>
-                      <LoginPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/signup"
-                  element={
-                    <ErrorBoundary>
-                      <SignupPage />
-                    </ErrorBoundary>
-                  }
-                />
-                <Route path="/blog" element={<ErrorBoundary><BlogListPage onStartProject={handleStartProject} /></ErrorBoundary>} />
-                <Route path="/blog/:slug" element={<ErrorBoundary><BlogPostPage onStartProject={handleStartProject} /></ErrorBoundary>} />
-                <Route path="/guides" element={<SitePage slug="guides" onStartProject={handleStartProject} />} />
-                <Route path="/examples" element={<SitePage slug="examples" onStartProject={handleStartProject} />} />
-                <Route path="/support" element={<SitePage slug="support" onStartProject={handleStartProject} />} />
-                <Route path="/about" element={<SitePage slug="about" onStartProject={handleStartProject} />} />
-                <Route path="/security" element={<SitePage slug="security" onStartProject={handleStartProject} />} />
-                <Route path="/contact" element={<SitePage slug="contact" onStartProject={handleStartProject} />} />
-                <Route path="/status" element={<SitePage slug="status" onStartProject={handleStartProject} />} />
-                <Route path="/privacy" element={<SitePage slug="privacy" onStartProject={handleStartProject} />} />
-                <Route path="/terms" element={<SitePage slug="terms" onStartProject={handleStartProject} />} />
-                <Route path="/cookies" element={<SitePage slug="cookies" onStartProject={handleStartProject} />} />
-                <Route path="/licenses" element={<SitePage slug="licenses" onStartProject={handleStartProject} />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
+              <Suspense fallback={<RouteLoadingState />}>
+                <Routes location={location}>
+                  <Route path="/" element={isAuthed ? <Navigate to="/builder" replace /> : <LandingPage onStartProject={handleStartProject} />} />
+                  <Route
+                    path="/dashboard"
+                    element={<Navigate to="/builder" replace />}
+                  />
+                  <Route
+                    path="/builder"
+                    element={
+                      <ErrorBoundary>
+                        <AuthGate>
+                          <DashboardPage
+                            projects={projects}
+                            onCreateProject={handleCreateProject}
+                            onDeleteProject={removeProject}
+                            onStartProject={handleStartProject}
+                          />
+                        </AuthGate>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/builder/:projectId"
+                    element={
+                      <ErrorBoundary>
+                        <AuthGate>
+                          <BuilderPage
+                            projects={projects}
+                            onUpdateProject={updateProject}
+                          />
+                        </AuthGate>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/templates"
+                    element={
+                      <ErrorBoundary>
+                        <AuthGate>
+                          <TemplatesPage onCreateProject={handleCreateProject} onUpdateProject={updateProject} />
+                        </AuthGate>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ErrorBoundary>
+                        <AuthGate>
+                          <SettingsPage />
+                        </AuthGate>
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/docs"
+                    element={
+                      <ErrorBoundary>
+                        <DocsPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/pricing"
+                    element={
+                      <ErrorBoundary>
+                        <PricingPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/login"
+                    element={
+                      <ErrorBoundary>
+                        <LoginPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/signup"
+                    element={
+                      <ErrorBoundary>
+                        <SignupPage />
+                      </ErrorBoundary>
+                    }
+                  />
+                  <Route path="/blog" element={<ErrorBoundary><BlogListPage onStartProject={handleStartProject} /></ErrorBoundary>} />
+                  <Route path="/blog/:slug" element={<ErrorBoundary><BlogPostPage onStartProject={handleStartProject} /></ErrorBoundary>} />
+                  <Route path="/guides" element={<SitePage slug="guides" onStartProject={handleStartProject} />} />
+                  <Route path="/examples" element={<SitePage slug="examples" onStartProject={handleStartProject} />} />
+                  <Route path="/support" element={<SitePage slug="support" onStartProject={handleStartProject} />} />
+                  <Route path="/about" element={<SitePage slug="about" onStartProject={handleStartProject} />} />
+                  <Route path="/security" element={<SitePage slug="security" onStartProject={handleStartProject} />} />
+                  <Route path="/contact" element={<SitePage slug="contact" onStartProject={handleStartProject} />} />
+                  <Route path="/status" element={<SitePage slug="status" onStartProject={handleStartProject} />} />
+                  <Route path="/privacy" element={<SitePage slug="privacy" onStartProject={handleStartProject} />} />
+                  <Route path="/terms" element={<SitePage slug="terms" onStartProject={handleStartProject} />} />
+                  <Route path="/cookies" element={<SitePage slug="cookies" onStartProject={handleStartProject} />} />
+                  <Route path="/licenses" element={<SitePage slug="licenses" onStartProject={handleStartProject} />} />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

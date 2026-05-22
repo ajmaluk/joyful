@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ApplyReport, ChatAttachment, ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
-import { generateWithAI } from '@/services/aiService';
+import { generateWithAI, runBrowserSandboxChecks } from '@/services/aiService';
+import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
 import { buildFileContextGraph, getSkillManifest, selectSkillsWithConfidence, composeSkills, mergeSkillBriefs, buildQualityGatesForPrompt, type BuilderSkill } from '@/services/skills';
@@ -393,7 +394,8 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
       if (isMultiStep && !abortRef.current) {
         try {
           // ── Multi-step pipeline: Plan → Execute files → Validate ──
-        const pipelineExec = new MultiStepPipelineExecutor((phase: PipelinePhase) => {
+        let pipelineExec: MultiStepPipelineExecutor | null = null;
+        pipelineExec = new MultiStepPipelineExecutor((phase: PipelinePhase) => {
           if (phase.type === 'planning') {
             setBuildTodos(prev => prev.map(todo =>
               todo.label.includes('Generating')
@@ -401,9 +403,10 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
                 : todo
             ));
           } else if (phase.type === 'executing_file') {
+            const progress = pipelineExec!.getProgress();
             setBuildTodos(prev => prev.map(todo =>
               todo.label.includes('Generating')
-                ? { ...todo, detail: `Generating ${phase.path} (${pipelineExec.getProgress().filesGenerated + 1}/${pipelineExec.getProgress().totalFiles})` }
+                ? { ...todo, detail: `Generating ${phase.path} (${progress.filesGenerated + 1}/${progress.totalFiles})` }
                 : todo
             ));
           } else if (phase.type === 'validating') {
@@ -637,6 +640,133 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
         throw new Error('Generation did not produce a response');
       }
 
+      // Hook-level autonomous self-repair if provider is enabled and compilation fails
+      if (joyfulProviderConfig.enabled && !abortRef.current) {
+        let attempts = 0;
+        let sandbox = await runBrowserSandboxChecks(response, existingFiles);
+        let failedChecks = sandbox.results.filter(result => result.status === 'error');
+
+        if (failedChecks.length > 0) {
+          const healTodoId = `heal_${Date.now()}`;
+          setBuildTodos(prev => [
+            ...prev.map(todo =>
+              todo.label.includes('Generating') ? { ...todo, status: 'done' as const }
+                : todo.label.includes('Applying') ? { ...todo, status: 'active' as const }
+                : todo
+            ),
+            {
+              id: healTodoId,
+              label: 'Autonomous Self-Repair',
+              status: 'active' as const,
+              detail: `Found ${failedChecks.length} compile/sandbox error(s). Healing...`,
+            }
+          ]);
+
+          while (failedChecks.length > 0 && attempts < 2) {
+            attempts++;
+            const lastError = failedChecks.map(result => `Command: ${result.command}\nError:\n${result.stderr || result.stdout}`).join('\n\n');
+            const repairPrompt = `Joyful browser sandbox compilation/validation failed. Repair the generated output now.
+
+Validation errors:
+${lastError}
+
+Return the corrected files or patches. Make sure all imports use exact paths or correct '@/' aliases.`;
+
+            try {
+              const repairResponse = await generateWithAI(repairPrompt, response.files as unknown as ProjectFile[], history, {
+                skillBrief,
+                skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
+                contextFiles: contextGraph.map(node => node.path),
+                memoryNotes: [...memoryNotes, ...sessionMemory.buildMemoryNotes()],
+                attachments,
+                signal: abortControllerRef.current!.signal,
+              });
+
+              if (abortRef.current) return null;
+
+              if (repairResponse && repairResponse.files.length > 0) {
+                const updatedFiles: AIGenerationResponse['files'] = [...response.files];
+                for (const fix of repairResponse.files) {
+                  const existingIdx = updatedFiles.findIndex((file) => file.path === fix.path);
+                  if (existingIdx >= 0) {
+                    updatedFiles[existingIdx] = {
+                      ...updatedFiles[existingIdx],
+                      content: fix.content || updatedFiles[existingIdx].content,
+                      action: fix.action || updatedFiles[existingIdx].action
+                    };
+                  } else {
+                    updatedFiles.push({
+                      path: fix.path,
+                      action: fix.action || 'modify',
+                      content: fix.content || ''
+                    });
+                  }
+                }
+
+                const updatedPatches: NonNullable<AIGenerationResponse['patches']> = [...(response.patches || [])];
+                if (repairResponse.patches) {
+                  updatedPatches.push(...repairResponse.patches);
+                }
+
+                response = {
+                  ...response,
+                  files: updatedFiles,
+                  patches: updatedPatches,
+                  metadata: {
+                    ...response.metadata,
+                    repaired: true,
+                  }
+                };
+
+                sandbox = await runBrowserSandboxChecks(response, existingFiles);
+                failedChecks = sandbox.results.filter(result => result.status === 'error');
+
+                setBuildTodos(prev =>
+                  prev.map(t =>
+                    t.id === healTodoId
+                      ? {
+                          ...t,
+                          detail: failedChecks.length > 0
+                            ? `Attempt ${attempts} finished. Still has ${failedChecks.length} error(s). Retrying...`
+                            : `Successfully healed all compile errors!`,
+                        }
+                      : t
+                  )
+                );
+              } else {
+                break;
+              }
+            } catch (err) {
+              console.error('Self-healing iteration encountered an error:', err);
+              break;
+            }
+          }
+
+          setBuildTodos(prev =>
+            prev.map(t =>
+              t.id === healTodoId
+                ? {
+                    ...t,
+                    status: failedChecks.length > 0 ? ('error' as const) : ('done' as const),
+                    detail: failedChecks.length > 0
+                      ? `Self-repair finished with remaining build error(s).`
+                      : `Successfully repaired and validated codebase integrity.`,
+                  }
+                : t
+            )
+          );
+        }
+
+        response = {
+          ...response,
+          metadata: {
+            ...response.metadata,
+            sandboxCommands: sandbox.commands,
+            sandboxResults: sandbox.results,
+          }
+        };
+      }
+
       setBuildTodos(prev =>
         prev.map(todo =>
           todo.label.includes('Generating') ? { ...todo, status: 'done' as const }
@@ -726,7 +856,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
         optionsRef.current?.onToast?.('error', `${failedPatches.length} patch(es) failed to apply to ${failedPatches.map(p => p.path).join(', ')}`);
       }
 
-      setTimeout(() => buildTodos.length > 0 ? setBuildTodos([]) : null, 12000);
+      setTimeout(() => setBuildTodos(prev => prev.length > 0 ? [] : prev), 12000);
 
       return response;
     } catch (error) {

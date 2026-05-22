@@ -1,5 +1,7 @@
+import { Helmet } from 'react-helmet-async';
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { routeMeta } from '@/lib/seo';
 import {
   ArrowRight,
   ArrowUp,
@@ -44,6 +46,8 @@ function formatDate(value: string) {
 
 export function DashboardPage({ projects, onCreateProject, onDeleteProject, onStartProject }: DashboardPageProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const meta = routeMeta[location.pathname] || routeMeta['/'];
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -165,7 +169,18 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
+    <>
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
+      <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
       <section className="relative isolate overflow-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#edf1ff_26%,#7890ff_50%,#d76cd1_69%,#f34f78_84%,#ff7748_100%)] dark:bg-[linear-gradient(180deg,#111214_0%,#1d2d50_28%,#586fe4_52%,#b656b7_70%,#d83e69_86%,#e9643d_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.88)_24%,rgba(255,255,255,0.26)_48%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.09),transparent_40%),linear-gradient(180deg,rgba(12,13,15,0.88)_0%,rgba(12,13,15,0.2)_45%,rgba(12,13,15,0)_100%)]" />
@@ -407,7 +422,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                       <iframe
                         srcDoc={generatePreview(project.files)}
                         className="h-full w-full bg-white"
-                        sandbox="allow-scripts"
+                        sandbox="allow-scripts allow-same-origin"
                         style={{ pointerEvents: 'none' }}
                         title={project.name}
                       />
@@ -524,5 +539,6 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
         }}
       />
     </div>
+    </>
   );
 }

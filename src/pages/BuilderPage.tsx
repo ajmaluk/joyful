@@ -1,20 +1,30 @@
+import { Helmet } from 'react-helmet-async';
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { routeMeta } from '@/lib/seo';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChatPanel } from '@/components/panels/ChatPanel';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { CodeEditor } from '@/components/panels/CodeEditor';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { ChatAttachment, FileOperation, Project, ProjectFile, ChatMode } from '@/types';
+import type { ApplyReport, ChatAttachment, FileOperation, PendingFileOperation, Project, ProjectFile, ChatMode } from '@/types';
 import { applyFileOperations, applyPatchOperations, exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import { generateWithAI } from '@/services/aiService';
 import type { Template } from '@/components/chat/TemplateSelector';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles
+  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles, Files
 } from 'lucide-react';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
@@ -24,6 +34,7 @@ interface BuilderPageProps {
 }
 
 export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
+  const meta = routeMeta['/builder'];
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,7 +58,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [pendingChatContext, setPendingChatContext] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [pendingOperationReview, setPendingOperationReview] = useState<PendingFileOperation[] | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const pendingOperationReviewResolver = useRef<((approved: boolean) => void) | null>(null);
 
   useClickOutside(profileMenuRef, () => setProfileOpen(false), profileOpen);
 
@@ -57,6 +70,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     buildTodos,
     savedGeneration,
     sendMessage,
+    recordApplyResult,
     clearMessages,
     abortGeneration,
     clearSavedGeneration,
@@ -67,6 +81,19 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  const resolvePendingOperationReview = useCallback((approved: boolean) => {
+    pendingOperationReviewResolver.current?.(approved);
+    pendingOperationReviewResolver.current = null;
+    setPendingOperationReview(null);
+  }, []);
+
+  const requestPendingOperationReview = useCallback((operations: PendingFileOperation[]) => {
+    return new Promise<boolean>((resolve) => {
+      pendingOperationReviewResolver.current = resolve;
+      setPendingOperationReview(operations);
+    });
+  }, []);
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -140,6 +167,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       let appliedCount = 0;
       let skippedCount = 0;
       let firstSkipReason = '';
+      const appliedFiles: string[] = [];
+      const skippedOperations: ApplyReport['skippedOperations'] = [];
 
       if (response.patches?.length) {
         const patchResult = applyPatchOperations(workingFiles, response.patches);
@@ -147,6 +176,12 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         appliedCount += patchResult.applied.length;
         skippedCount += patchResult.skipped.length;
         firstSkipReason ||= patchResult.skipped[0]?.reason || '';
+        appliedFiles.push(...patchResult.applied.map(operation => operation.path));
+        skippedOperations.push(...patchResult.skipped.map(item => ({
+          path: item.operation.path,
+          action: item.operation.action,
+          reason: item.reason,
+        })));
       }
 
       const applyOperations = (operations: FileOperation[]) => {
@@ -155,14 +190,18 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         appliedCount += result.applied.length;
         skippedCount += result.skipped.length;
         firstSkipReason ||= result.skipped[0]?.reason || '';
+        appliedFiles.push(...result.applied.map(operation => operation.path));
+        skippedOperations.push(...result.skipped.map(item => ({
+          path: item.operation.path,
+          action: item.operation.action,
+          reason: item.reason,
+        })));
       };
 
       // If AI suggested pending file operations, prompt the user before applying
       const pending = response.metadata?.pendingFileOps;
       if (Array.isArray(pending) && pending.length > 0) {
-        const summary = pending.map((op) => `${op.name.replace(/_/g, ' ')} ${op.args?.path || ''}`).join('\n');
-        // Simple confirmation flow — UI modal could replace this
-        const ok = window.confirm(`AI suggests these operations:\n\n${summary}\n\nApprove and apply?`);
+        const ok = await requestPendingOperationReview(pending);
         if (ok) {
           applyOperations(pending
             .filter(op => op.args?.path)
@@ -187,8 +226,15 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       } else {
         addToast('info', firstSkipReason || 'No file operations to apply');
       }
+
+      recordApplyResult({
+        applied: appliedCount,
+        skipped: skippedCount,
+        appliedFiles: Array.from(new Set(appliedFiles)),
+        skippedOperations,
+      });
     }
-  }, [selectedFile, sendMessage, persistFiles, addToast]);
+  }, [selectedFile, sendMessage, requestPendingOperationReview, recordApplyResult, persistFiles, addToast]);
 
   const handleRequestFix = useCallback((prompt: string) => {
     setShowChatSidebar(true);
@@ -427,6 +473,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   if (!project) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
+        <Helmet>
+          <title>{meta.title}</title>
+          <meta name="description" content={meta.description} />
+          <link rel="canonical" href={meta.canonical} />
+        </Helmet>
         <p className="text-gray-600 mb-4">Project not found</p>
         <button
           onClick={() => navigate('/builder')}
@@ -440,6 +491,16 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   return (
     <div className="relative isolate h-[100dvh] overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] p-0 text-foreground dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] md:p-2">
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.7)_0%,rgba(255,255,255,0.3)_38%,rgba(255,255,255,0)_100%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
       <div className="relative flex h-full min-h-0 overflow-hidden border border-white/70 bg-white/78 shadow-2xl shadow-indigo-950/10 backdrop-blur-xl dark:border-border/80 dark:bg-background/95 dark:shadow-black/40 md:rounded-2xl">
@@ -703,6 +764,75 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <Dialog
+        open={Boolean(pendingOperationReview)}
+        onOpenChange={(open) => {
+          if (!open) resolvePendingOperationReview(false);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-2xl gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#171816] p-0 text-[#f6f2ea] shadow-2xl shadow-black/45"
+        >
+          <DialogHeader className="border-b border-white/8 px-5 py-4 text-left">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
+                <Files className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-base font-bold text-white">Review AI file operations</DialogTitle>
+                <DialogDescription className="mt-1 text-sm leading-5 text-[#aaa69d]">
+                  Joyful used file tools during planning. Approve these operations before they are applied to the workspace.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="max-h-[52vh] overflow-auto px-5 py-4">
+            <div className="space-y-2">
+              {(pendingOperationReview || []).map((operation, index) => {
+                const actionLabel = operation.name.replace(/_/g, ' ');
+                const contentLength = operation.args.content?.length || 0;
+                return (
+                  <div
+                    key={`${operation.name}-${operation.args.path || 'unknown'}-${index}`}
+                    className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-white/[0.08] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-indigo-200">
+                        {actionLabel}
+                      </span>
+                      <span className="min-w-0 flex-1 break-all font-mono text-xs text-white">
+                        {operation.args.path || 'Missing path'}
+                      </span>
+                    </div>
+                    {operation.name !== 'delete_file' && (
+                      <p className="mt-2 text-xs text-[#aaa69d]">
+                        {contentLength > 0 ? `${contentLength.toLocaleString()} characters ready to apply` : 'No content supplied'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 border-t border-white/8 px-5 py-4 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => resolvePendingOperationReview(false)}
+              className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-4 text-sm font-semibold text-[#aaa69d] transition-colors hover:bg-white/[0.06] hover:text-white"
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              onClick={() => resolvePendingOperationReview(true)}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-[#f5f2ea] px-4 text-sm font-bold text-[#171816] transition-colors hover:bg-white"
+            >
+              Apply operations
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

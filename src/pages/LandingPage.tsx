@@ -1,3 +1,4 @@
+import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -17,6 +18,7 @@ import { FeatureShowcase } from '@/components/marketing/FeatureShowcase';
 import { AnimatedDemo } from '@/components/marketing/AnimatedDemo';
 import { TestimonialsSection } from '@/components/marketing/TestimonialCard';
 import type { ChatAttachment, ChatMode } from '@/types';
+import { routeMeta } from '@/lib/seo';
 import { CountUpStats } from '@/components/marketing/CountUpStats';
 
 const templates = [
@@ -411,8 +413,6 @@ function CTASection({ onStartProject }: { onStartProject: (prompt: string, mode?
           AI App Builder
         </div>
         <h2 className="max-w-4xl text-balance text-4xl font-bold leading-[1.03] tracking-normal text-gray-950 sm:text-5xl lg:text-6xl dark:text-white">Ready to build?</h2>
-        <div className="mt-4 flex items-center justify-center gap-3">
-        </div>
         <div className="mt-8 w-full">
           <PromptBox onSubmit={onStartProject} />
         </div>
@@ -424,8 +424,21 @@ function CTASection({ onStartProject }: { onStartProject: (prompt: string, mode?
 export function LandingPage({ onStartProject }: LandingPageProps) {
   const navigate = useNavigate();
 
+  const meta = routeMeta['/'];
+
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
+
       {/* Hero */}
       <section className="relative isolate min-h-screen overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />

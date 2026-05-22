@@ -1,8 +1,10 @@
+import { Helmet } from 'react-helmet-async';
 import { ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { MarketingFooter, PromptBox } from '@/components/marketing/MarketingChrome';
 import { sitePageContent } from '@/pages/site/sitePageContent';
+import { routeMeta } from '@/lib/seo';
 import type { ChatAttachment, ChatMode } from '@/types';
 
 const relatedPages: Record<string, Array<{ label: string; path: string }>> = {
@@ -50,9 +52,22 @@ export function SitePage({ slug, onStartProject }: SitePageProps) {
   const page = sitePageContent[slug];
   const Icon = page.icon;
   const related = relatedPages[slug] ?? defaultRelatedPages;
+  const path = slug === 'home' ? '/' : `/${slug}`;
+  const meta = routeMeta[path] || routeMeta['/'];
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
+    <>
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
+      <div className="min-h-screen bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
       <section className="relative isolate min-h-screen overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_28%,#6e89ff_48%,#ef83df_66%,#f23c78_84%,#ff713a_100%)] dark:bg-[linear-gradient(180deg,#161719_0%,#21365f_20%,#6387ff_38%,#f096dc_56%,#ee397d_76%,#ff713a_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.92)_22%,rgba(255,255,255,0.35)_42%,transparent_62%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.08),transparent_42%),linear-gradient(180deg,rgba(18,19,18,0.72)_0%,rgba(18,19,18,0.12)_34%,rgba(18,19,18,0)_100%)]" />
@@ -270,5 +285,6 @@ export function SitePage({ slug, onStartProject }: SitePageProps) {
 
       <MarketingFooter />
     </div>
+    </>
   );
 }

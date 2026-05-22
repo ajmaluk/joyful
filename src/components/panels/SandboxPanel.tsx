@@ -158,7 +158,7 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
               <iframe
                 ref={iframeRef}
                 srcDoc={srcDoc}
-                sandbox="allow-scripts allow-forms"
+                sandbox="allow-scripts allow-forms allow-same-origin"
                 className="w-full bg-white"
                 style={{ height: device === 'custom' ? customHeight : '100%', minHeight: device === 'custom' ? customHeight : '100%' }}
                 title="Sandbox preview"

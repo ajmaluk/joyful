@@ -1,4 +1,6 @@
+import { Helmet } from 'react-helmet-async';
 import { useState, useCallback } from 'react';
+import { routeMeta } from '@/lib/seo';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,6 +20,7 @@ interface TemplatesPageProps {
 }
 
 export function TemplatesPage({ onCreateProject, onUpdateProject }: TemplatesPageProps) {
+  const meta = routeMeta['/templates'];
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
@@ -66,6 +69,16 @@ export function TemplatesPage({ onCreateProject, onUpdateProject }: TemplatesPag
 
   return (
     <div className="h-full overflow-y-auto bg-[linear-gradient(180deg,#ffffff_0%,#e8ecff_20%,#d4dcff_38%,#f0e0ff_56%,#ffe0ec_72%,#fff0e0_100%)] text-gray-950 dark:bg-[linear-gradient(180deg,#0a0a0a_0%,#161719_20%,#21365f_38%,#3a2040_56%,#4a1030_72%,#4a2010_100%)] dark:text-[#f6f2ea]">
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
       <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
         {/* Header */}
         <div className="mb-8">

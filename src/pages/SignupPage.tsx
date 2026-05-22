@@ -1,9 +1,12 @@
+import { Helmet } from 'react-helmet-async';
 import { useState } from 'react';
+import { routeMeta } from '@/lib/seo';
 import { AlertCircle } from 'lucide-react';
 import { AuthShell, GithubMarker, GoogleMarker, ProviderButton } from '@/components/auth/AuthShell';
-import { createAccountWithEmail, isGmailAddress, signInWithGithub, signInWithGoogle } from '@/services/firebase';
+import { createAccountWithEmail, getFriendlyFirebaseAuthError, isGmailAddress, signInWithGithub, signInWithGoogle } from '@/services/firebase';
 
 export function SignupPage() {
+  const meta = routeMeta['/signup'];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +35,7 @@ export function SignupPage() {
     try {
       await createAccountWithEmail(name, email, password);
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Could not create your account. Please try again.');
+      setAuthError(getFriendlyFirebaseAuthError(err));
     } finally {
       setIsLoading(false);
     }
@@ -44,13 +47,24 @@ export function SignupPage() {
     try {
       await (provider === 'google' ? signInWithGoogle() : signInWithGithub());
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Could not continue with that provider.');
+      setAuthError(getFriendlyFirebaseAuthError(err));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
+    <>
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
     <AuthShell
       title="Create your account"
       subtitle="Start building beautiful websites in minutes."
@@ -166,5 +180,6 @@ export function SignupPage() {
         <a href="#" className="underline hover:text-gray-700 dark:hover:text-white">Privacy Policy</a>.
       </p>
     </AuthShell>
+    </>
   );
 }

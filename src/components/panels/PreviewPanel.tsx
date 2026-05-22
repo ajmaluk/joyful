@@ -83,6 +83,8 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }:
     requestMetrics,
     clearLogs,
     clearNetwork,
+    clearInspectorSelection,
+    sendToIframe,
   } = useSandboxMessages(iframeRef, files);
 
   const pageOptions = useMemo(() => {
@@ -126,6 +128,9 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }:
 
   const refreshPreview = useCallback(() => {
     setIsLoading(true);
+    clearLogs();
+    clearNetwork();
+    clearInspectorSelection();
     const html = generatePreview(files, currentPath);
     const bridgeHtml = html.includes('</body>')
       ? html.replace('</body>', `${SANDBOX_BRIDGE_SCRIPT}</body>`)
@@ -135,7 +140,7 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }:
       setIsLoading(false);
       requestMetrics();
     }, 300);
-  }, [currentPath, files, requestMetrics]);
+  }, [clearInspectorSelection, clearLogs, clearNetwork, currentPath, files, requestMetrics]);
 
   const refreshPreviewRef = useRef(refreshPreview);
 
@@ -192,10 +197,17 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection }:
         <iframe
           ref={iframeRef}
           srcDoc={srcDoc}
-          sandbox="allow-scripts allow-forms"
+          sandbox="allow-scripts allow-forms allow-same-origin"
           className={`w-full bg-white ${showDeviceFrame && !isDesktopDevice ? 'rounded-lg' : ''}`}
           style={{ height: showDeviceFrame && !isDesktopDevice ? frame.height : '100%' }}
           title={isSplit ? 'Preview Split' : 'Preview'}
+          onLoad={() => {
+            setIsLoading(false);
+            requestMetrics();
+            if (inspectorEnabled && !isSplit) {
+              sendToIframe('toggle-inspector', { enabled: true });
+            }
+          }}
         />
       </div>
     );

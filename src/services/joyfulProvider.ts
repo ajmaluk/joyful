@@ -7,5 +7,5 @@ export const joyfulProviderConfig = {
     .split(',')
     .map(model => model.trim())
     .filter(Boolean),
-  topP: Number(import.meta.env.VITE_NV_API_TOP_P || 0.8),
+  topP: Number(import.meta.env.VITE_NV_TOP_P || import.meta.env.VITE_NV_API_TOP_P || 0.8),
 };

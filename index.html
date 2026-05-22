@@ -5,20 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Joyful - AI SaaS Website Builder</title>
     <link rel="icon" type="image/png" sizes="64x64" href="/brand-logo-64.png" />
-    <link rel="apple-touch-icon" href="/brand-logo-180.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand-logo-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand-logo-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand-logo-180.png" />
+    <link rel="canonical" href="https://joyful.ai/" />
+
+    <!-- Primary Meta Tags -->
     <meta
       name="description"
       content="Joyful is a local-first AI website builder for creating, editing, previewing, and exporting polished SaaS websites without paid cloud sandboxes."
     />
     <meta name="theme-color" content="#FFFFFF" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://images.unsplash.com data: blob:; frame-src 'self' blob:; connect-src 'self' https://api.nvidia.com https://api.unsplash.com https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com;" />
+    <meta name="application-name" content="Joyful" />
+    <meta name="robots" content="index, follow" />
+    <meta name="googlebot" content="index, follow" />
+
+    <!-- Content Security Policy -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://apis.google.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https://images.unsplash.com data: blob:; frame-src 'self' blob: https://accounts.google.com https://apis.google.com https://*.firebaseapp.com; connect-src 'self' https://api.unsplash.com https://integrate.api.nvidia.com https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com https://apis.google.com https://accounts.google.com;"
+    />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://joyful.ai/" />
     <meta property="og:title" content="Joyful - AI SaaS Website Builder" />
     <meta
       property="og:description"
       content="Build professional SaaS websites with a local browser sandbox, live preview, code editor, and export-ready HTML, CSS, and JavaScript."
     />
-    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://joyful.ai/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Joyful" />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@joyful_ai" />
+    <meta name="twitter:title" content="Joyful - AI SaaS Website Builder" />
+    <meta
+      name="twitter:description"
+      content="Build professional SaaS websites with a local browser sandbox, live preview, code editor, and export-ready HTML, CSS, and JavaScript."
+    />
+    <meta name="twitter:image" content="https://joyful.ai/og-image.png" />
+
+    <!-- Preconnects for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <link rel="preconnect" href="https://api.unsplash.com" crossorigin />
+    <link rel="preconnect" href="https://apis.google.com" crossorigin />
+
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Joyful",
+        "url": "https://joyful.ai/",
+        "description": "A local-first AI website builder for creating, editing, previewing, and exporting polished SaaS websites without paid cloud sandboxes.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Web",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

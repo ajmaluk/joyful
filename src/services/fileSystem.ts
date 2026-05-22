@@ -64,6 +64,10 @@ function applyPatchToContent(content: string, patch: FilePatchOperation): { cont
     if (!content.includes(patch.oldString)) {
       return { content, changed: false, reason: 'Patch target text was not found.' };
     }
+    const matches = content.split(patch.oldString).length - 1;
+    if (matches > 1) {
+      return { content: content.replaceAll(patch.oldString, patch.newString), changed: true, reason: `Warning: replaced ${matches} occurrences of target text` };
+    }
     return { content: content.replace(patch.oldString, patch.newString), changed: true };
   }
 
@@ -71,12 +75,20 @@ function applyPatchToContent(content: string, patch: FilePatchOperation): { cont
     if (!content.includes(patch.insertBefore)) {
       return { content, changed: false, reason: 'Insert-before anchor was not found.' };
     }
+    const matches = content.split(patch.insertBefore).length - 1;
+    if (matches > 1) {
+      return { content: content.replaceAll(patch.insertBefore, `${patch.content}${patch.insertBefore}`), changed: true, reason: `Warning: inserted before ${matches} occurrences of anchor` };
+    }
     return { content: content.replace(patch.insertBefore, `${patch.content}${patch.insertBefore}`), changed: true };
   }
 
   if (typeof patch.insertAfter === 'string' && typeof patch.content === 'string') {
     if (!content.includes(patch.insertAfter)) {
       return { content, changed: false, reason: 'Insert-after anchor was not found.' };
+    }
+    const matches = content.split(patch.insertAfter).length - 1;
+    if (matches > 1) {
+      return { content: content.replaceAll(patch.insertAfter, `${patch.insertAfter}${patch.content}`), changed: true, reason: `Warning: inserted after ${matches} occurrences of anchor` };
     }
     return { content: content.replace(patch.insertAfter, `${patch.insertAfter}${patch.content}`), changed: true };
   }
@@ -324,9 +336,11 @@ function routePathToFilePath(routePath: string): string {
 }
 
 function buildPreviewFallbacks(importedNames: string[]): string {
+  const routerNames = new Set(['Link', 'Routes', 'Route', 'BrowserRouter', 'MemoryRouter', 'useLocation', 'useNavigate', 'useParams', 'useSearchParams', 'Outlet', 'NavLink', 'useRouteMatch', 'useMatch', 'useHref', 'useLinkClickHandler', 'useResolvedPath']);
   const safeNames = importedNames
     .filter(name => /^[A-Za-z_$][\w$]*$/.test(name))
-    .filter(name => !['React', 'useState', 'useEffect', 'useMemo', 'useRef', 'useCallback', 'useReducer', 'useId'].includes(name));
+    .filter(name => !['React', 'useState', 'useEffect', 'useMemo', 'useRef', 'useCallback', 'useReducer', 'useId'].includes(name))
+    .filter(name => !routerNames.has(name));
 
   if (safeNames.length === 0) return '';
 
@@ -338,6 +352,45 @@ function buildPreviewFallbacks(importedNames: string[]): string {
 );
 ${safeNames.map(name => `const ${name} = __JoyfulIcon;`).join('\n')}
 `;
+}
+
+function reactRouterPolyfill(): string {
+  return `
+// react-router-dom polyfill for preview
+const RouterCtx = React.createContext({ pathname: '/', navigate: (to) => { try { window.history.pushState({}, '', to); } catch(e) {} } });
+function useLocation() { return React.useContext(RouterCtx); }
+function useNavigate() { const ctx = React.useContext(RouterCtx); return ctx.navigate; }
+function useParams() { return {}; }
+function useSearchParams() { const [s, setS] = React.useState(new URLSearchParams()); return [s, setS]; }
+function useMatch() { return null; }
+function Outlet() { return null; }
+function Link({ to, children, className, ...props }) {
+  const navigate = useNavigate();
+  return React.createElement('a', { href: to, onClick: (e) => { e.preventDefault(); navigate(to); }, className, ...props }, children);
+}
+function NavLink({ to, children, className, ...props }) {
+  return React.createElement(Link, { to, className: typeof className === 'function' ? className({ isActive: false }) : className, ...props }, children);
+}
+function Routes({ children }) {
+  const loc = useLocation();
+  const path = loc.pathname;
+  const childArr = React.Children.toArray(children);
+  const matched = childArr.find(c => c.props?.path === '*' || c.props?.path === path || (c.props?.path && path.startsWith(c.props.path)));
+  return matched || React.createElement('div', null, 'No route matched: ' + path);
+}
+function Route({ element }) { return element || null; }
+function MemoryRouter({ children }) {
+  const [path, setPath] = React.useState(window.__JOYFUL_PREVIEW_PATH || '/');
+  const navigate = React.useCallback((to) => {
+    if (typeof to === 'number') { window.history.go(to); return; }
+    const p = typeof to === 'string' ? to : to?.pathname || '/';
+    setPath(p);
+    try { window.history.pushState({}, '', p); } catch(e) {}
+  }, []);
+  window.addEventListener('popstate', () => setPath(window.location.pathname));
+  return React.createElement(RouterCtx.Provider, { value: { pathname: path, navigate } }, children);
+}
+function BrowserRouter({ children }) { return React.createElement(MemoryRouter, null, children); }`;
 }
 
 function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
@@ -357,6 +410,7 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
   }
 
   const componentSource = stripModuleSyntax(appFile.content);
+  const needsRouter = /react-router-dom/.test(appFile.content);
   const importFallbacks = buildPreviewFallbacks(extractImportedNames(appFile.content));
   const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(componentSource);
   const appResolver = hasNamedApp
@@ -368,13 +422,14 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; img-src 'self' data: https:; connect-src 'self' https:; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' data: https:; object-src 'none'; frame-ancestors 'self';">
   <title>Joyful React Preview</title>
   <style>${css}</style>
 </head>
 <body>
   <div id="root"></div>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script type="text/babel" data-presets="env,react,typescript">
 window.__JOYFUL_PREVIEW_PATH = ${JSON.stringify(routePath || '/')};
@@ -384,6 +439,7 @@ try {
   }
 } catch (error) {}
 const { useState, useMemo, useEffect, useRef, useCallback, useReducer, useId } = React;
+${needsRouter ? reactRouterPolyfill() : ''}
 ${importFallbacks}
 ${escapeClosingScript(componentSource)}
 ${appResolver}

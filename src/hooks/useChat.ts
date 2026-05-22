@@ -1,14 +1,32 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ChatAttachment, ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
+import type { ApplyReport, ChatAttachment, ChatMessage, ProjectFile, AIGenerationResponse, ChatMode, SavedGenerationState } from '@/types';
 import { generateWithAI } from '@/services/aiService';
 import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
 import { buildFileContextGraph, getSkillBrief, getSkillManifest, selectSkillsForPrompt } from '@/services/skills';
+import { buildAgentPlanFromContext, buildAgentToolTrace, buildProjectMemorySnapshot } from '@/services/agentRuntime';
+
+const MIN_REQUEST_INTERVAL = 3000;
+const lastRequestTimeRef = { current: 0 };
 
 function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
   const todos: BuildTodo[] = [];
   let index = 0;
   const baseId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const failedCommands = new Set(
+    (response.metadata?.sandboxResults || [])
+      .filter(result => result.status === 'error')
+      .map(result => result.command),
+  );
+
+  for (const step of response.metadata?.agentPlan || []) {
+    todos.push({
+      id: `todo_${baseId}_${index++}`,
+      label: step.title,
+      status: step.status === 'error' ? 'error' : 'done',
+      detail: step.detail,
+    });
+  }
 
   for (const file of response.files) {
     const verb = file.action === 'delete' ? 'Delete' : file.action === 'modify' ? 'Update' : 'Create';
@@ -16,13 +34,16 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
       id: `todo_${baseId}_${index++}`,
       label: `${verb} ${file.path}`,
       status: 'pending',
+      detail: file.action === 'modify' ? 'Full file update' : undefined,
     });
   }
   for (const patch of response.patches || []) {
+    const range = patch.lineStart ? `lines ${patch.lineStart}-${patch.lineEnd ?? patch.lineStart}` : 'targeted text edit';
     todos.push({
       id: `todo_${baseId}_${index++}`,
       label: `Patch ${patch.path}`,
       status: 'pending',
+      detail: patch.reason || range,
     });
   }
 
@@ -31,87 +52,51 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
       todos.push({
         id: `todo_${baseId}_${index++}`,
         label: `Run ${[command.command, ...(command.args || [])].join(' ')}`,
-        status: 'pending',
+        status: failedCommands.has([command.command, ...(command.args || [])].join(' ').trim()) ? 'error' : 'pending',
+        detail: command.reason,
       });
     }
 
     todos.push({
       id: `todo_${baseId}_${index}`,
       label: 'Refresh preview',
-      status: 'pending',
+      status: failedCommands.size > 0 ? 'error' : 'pending',
+      detail: failedCommands.size > 0 ? 'Validation has errors to review' : 'Preview ready for review',
     });
   }
 
   return todos;
 }
 
-function buildInitialWorkflowTodos(planSteps: string[], providerLabel = 'Joyful AI provider'): BuildTodo[] {
+function buildInitialWorkflowTodos(hasExistingFiles: boolean, providerLabel = 'Joyful AI'): BuildTodo[] {
   return [
     {
-      id: `todo_${Date.now()}_checkpoint`,
-      label: 'Save request checkpoint',
-      status: 'done',
-    },
-    ...planSteps.slice(0, 5).map((step, index) => ({
-      id: `todo_${Date.now()}_plan_${index}`,
-      label: step,
-      status: index === 0 ? 'done' as const : 'pending' as const,
-    })),
-    {
-      id: `todo_${Date.now()}_provider`,
-      label: `Call ${providerLabel}`,
+      id: `todo_${Date.now()}_analyze`,
+      label: 'Analyzing your request',
       status: 'active',
+      detail: 'Selecting skills, files, and recent conversation context',
     },
     {
-      id: `todo_${Date.now()}_parse`,
-      label: 'Parse AI file operations',
+      id: `todo_${Date.now()}_plan`,
+      label: hasExistingFiles ? 'Planning changes' : 'Planning project structure',
+      status: 'pending',
+    },
+    {
+      id: `todo_${Date.now()}_generate`,
+      label: `Generating code with ${providerLabel}`,
       status: 'pending',
     },
     {
       id: `todo_${Date.now()}_apply`,
-      label: 'Apply generated changes',
+      label: 'Applying changes to files',
+      status: 'pending',
+    },
+    {
+      id: `todo_${Date.now()}_validate`,
+      label: 'Validating in sandbox',
       status: 'pending',
     },
   ];
-}
-
-function getDevelopmentPlanSteps(content: string, existingFiles: ProjectFile[]): string[] {
-  const lower = content.toLowerCase();
-  const hasReactApp = existingFiles.some(file => /^src\/App\.(jsx|tsx)$/i.test(file.path));
-  const hasStyles = existingFiles.some(file => /(^|\/)(styles|style)\.css$/i.test(file.path));
-  const requestsRouting = /route|page|navigation|tab|screen|multi[- ]?page/.test(lower);
-  const requestsDataFlow = /table|form|crud|filter|search|state|save|persist|dashboard|chart|api/.test(lower);
-
-  const steps = [
-    'Read current file structure and rank impacted files',
-    hasReactApp ? 'Plan React component/state edits in src/App.jsx' : 'Create the React app entry and component structure',
-  ];
-
-  if (requestsRouting) steps.push('Add page/navigation flow and preview route coverage');
-  if (requestsDataFlow) steps.push('Add app state, sample data, empty states, and core interactions');
-  steps.push(hasStyles ? 'Update styles for responsive UI without breaking existing layout' : 'Add base styles for responsive UI');
-  steps.push('Verify preview imports, runtime errors, and file operations');
-
-  return steps;
-}
-
-function buildDevelopmentPlanMessage(content: string, existingFiles: ProjectFile[], contextFiles: string[], planSteps: string[]): ChatMessage {
-  const fileStructure = existingFiles.length > 0
-    ? existingFiles.map(file => `- ${file.path}`).join('\n')
-    : '- No files yet';
-
-  return {
-    id: `msg_${Date.now() + 1}`,
-    role: 'assistant',
-    mode: 'plan',
-    timestamp: new Date().toISOString(),
-    content: `Development plan\n\nGoal:\n${content}\n\nCurrent file structure:\n${fileStructure}\n\nTask queue:\n${planSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\nContext files selected:\n${contextFiles.length > 0 ? contextFiles.map(file => `- ${file}`).join('\n') : '- No focused context files yet'}\n\nNext I will ask Joyful AI for the first implementation pass and apply only structured file operations.`,
-    metadata: {
-      contextFiles,
-      planSteps,
-      complexity: existingFiles.length > 8 || content.length > 220 ? 'complex' : 'medium',
-    },
-  };
 }
 
 function buildWalkthrough(response: AIGenerationResponse): string {
@@ -124,36 +109,45 @@ function buildWalkthrough(response: AIGenerationResponse): string {
   const parts: string[] = [];
 
   if (creates.length > 0) {
-    const paths = creates.map(f => f.path).join(', ');
-    parts.push(`Created ${creates.length} file${creates.length > 1 ? 's' : ''}: ${paths}.`);
+    parts.push(`Created ${creates.length} file${creates.length > 1 ? 's' : ''}: ${creates.map(f => f.path).join(', ')}.`);
   }
 
   if (modifies.length > 0) {
-    const paths = modifies.map(f => f.path).join(', ');
-    parts.push(`Updated ${modifies.length} file${modifies.length > 1 ? 's' : ''}: ${paths}.`);
+    parts.push(`Updated ${modifies.length} file${modifies.length > 1 ? 's' : ''}: ${modifies.map(f => f.path).join(', ')}.`);
   }
 
   if (deletes.length > 0) {
-    const paths = deletes.map(f => f.path).join(', ');
-    parts.push(`Deleted ${deletes.length} file${deletes.length > 1 ? 's' : ''}: ${paths}.`);
+    parts.push(`Deleted ${deletes.length} file${deletes.length > 1 ? 's' : ''}: ${deletes.map(f => f.path).join(', ')}.`);
   }
+
   if (patches.length > 0) {
-    parts.push(`Applied ${patches.length} targeted patch${patches.length > 1 ? 'es' : ''}: ${patches.map(p => p.path).join(', ')}.`);
+    parts.push(`Applied ${patches.length} patch${patches.length > 1 ? 'es' : ''}: ${patches.map(p => p.path).join(', ')}.`);
   }
 
   if (response.summary) {
     parts.push(response.summary);
   }
 
-  const sandboxResults = response.metadata?.sandboxResults || [];
-  const failedChecks = sandboxResults.filter(result => result.status === 'error');
-  if (sandboxResults.length > 0 && failedChecks.length === 0) {
-    parts.push(`Sandbox validation passed: ${sandboxResults.map(result => result.command).join(', ')}.`);
-  } else if (failedChecks.length > 0) {
-    parts.push(`Sandbox validation needs attention: ${failedChecks.map(result => result.command).join(', ')}.`);
+  const failedChecks = response.metadata?.sandboxResults?.filter(result => result.status === 'error') || [];
+  if (failedChecks.length > 0) {
+    parts.push(`${failedChecks.length} validation check${failedChecks.length > 1 ? 's need' : ' needs'} attention.`);
   }
 
   return parts.join(' ');
+}
+
+function buildReport(response: AIGenerationResponse) {
+  const files = response.files || [];
+  const sandboxResults = response.metadata?.sandboxResults || [];
+  return {
+    filesCreated: files.filter(file => file.action === 'create' || !file.action).length,
+    filesModified: files.filter(file => file.action === 'modify').length,
+    filesDeleted: files.filter(file => file.action === 'delete').length,
+    patchesApplied: response.patches?.length || 0,
+    validationPassed: sandboxResults.filter(result => result.status === 'done').length,
+    validationFailed: sandboxResults.filter(result => result.status === 'error').length,
+    repaired: response.metadata?.repaired,
+  };
 }
 
 function isObsoleteInternalError(message: ChatMessage) {
@@ -169,55 +163,63 @@ function getInitialMessages(projectId: string) {
   return cleanedMessages;
 }
 
-function buildImplementationPlan(content: string, existingFiles: ProjectFile[], attachments: ChatAttachment[] = []): ChatMessage {
-  const contextGraph = buildFileContextGraph(content, existingFiles);
-  const selectedSkillNames = selectSkillsForPrompt(content, existingFiles, attachments).map(skill => skill.name);
-  const manifestSkills = getSkillManifest();
-  const hasFiles = existingFiles.length > 0;
-
-  const planSteps = hasFiles
-    ? [
-        'Clarify the requested change against the current UI and keep unrelated files stable.',
-        'Review the ranked context files, imports, styles, and state paths that can affect this request.',
-        'Apply the smallest complete set of React, style, and supporting file edits for the behavior.',
-        'Check runtime imports, preview entry points, responsive layout, empty states, and visible copy.',
-        'Summarize the file operations and refresh the preview for review.',
-      ]
-    : [
-        'Create a complete React/Vite project structure with package scripts, preview entry, app source, styles, and README.',
-        'Turn the prompt into a concrete product flow with reusable sections, real navigation, and responsive layout.',
-        'Add sensible interactive, empty, loading, and error states where the app needs them.',
-        'Review generated files for syntax, imports, accessibility, mobile fit, and preview readiness.',
-        'Summarize the build and suggest useful next refinements.',
-      ];
-
-  const contextText = contextGraph.length > 0
-    ? contextGraph.map((node, index) => `${index + 1}. ${node.path} - ${node.reason}`).join('\n')
-    : 'No existing files yet. I will start from a clean React/Vite application structure.';
-
-  return {
-    id: `msg_${Date.now() + 1}`,
-    role: 'assistant',
-    mode: 'plan',
-    actionType: 'plan',
-    sourcePrompt: content,
-    timestamp: new Date().toISOString(),
-    content: `Implementation plan\n\nGoal:\n${content}\n\nContext graph:\n${contextText}\n\nAgent workflow:\n${planSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\nAvailable skills:\n${manifestSkills.map(skill => `- ${skill.name}: ${skill.description}`).join('\n')}\n\nSelected skills for this request:\n${selectedSkillNames.map(name => `- ${name}`).join('\n')}\n\nOnly the latest plan can be proceeded. Ask for more detail anytime and I will replace the build target with the newest plan.`,
-    metadata: {
-      contextFiles: contextGraph.map(node => node.path),
-      planSteps,
-      complexity: existingFiles.length > 8 || content.length > 220 ? 'complex' : 'medium',
-    },
-  };
+function buildConversationContext(messages: ChatMessage[]) {
+  return messages.slice(-20).map(message => {
+    const notes: string[] = [message.content];
+    if (message.metadata?.memory?.recentDecisions?.length) {
+      notes.push(`Memory: ${message.metadata.memory.recentDecisions.slice(-3).join('; ')}`);
+    }
+    if (message.metadata?.contextFiles?.length) {
+      notes.push(`Context files: ${message.metadata.contextFiles.slice(0, 5).join(', ')}`);
+    }
+    if (message.nextSteps?.length) {
+      notes.push(`Next steps: ${message.nextSteps.slice(0, 3).join('; ')}`);
+    }
+    return {
+      role: message.role,
+      content: notes.filter(Boolean).join('\n'),
+    };
+  });
 }
 
-export function useChat(projectId: string) {
+function buildMemoryNotes(messages: ChatMessage[]) {
+  return messages
+    .slice(-12)
+    .flatMap(message => {
+      const memory = message.metadata?.memory;
+      const notes: string[] = [];
+      if (memory?.selectedSkills?.length) notes.push(`Selected skills: ${memory.selectedSkills.join(', ')}`);
+      if (memory?.contextFiles?.length) notes.push(`Recent context: ${memory.contextFiles.slice(0, 5).join(', ')}`);
+      if (memory?.recentDecisions?.length) notes.push(...memory.recentDecisions);
+      if (memory?.knownIssues?.length) notes.push(`Known issues: ${memory.knownIssues.join('; ')}`);
+      return notes;
+    })
+    .filter((note, index, all) => note && all.indexOf(note) === index)
+    .slice(-12);
+}
+
+async function enforceRequestDelay(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTimeRef.current;
+  if (elapsed < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
+  }
+  lastRequestTimeRef.current = Date.now();
+}
+
+export function useChat(projectId: string, options?: { onToast?: (type: 'error' | 'success' | 'info', message: string) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => getInitialMessages(projectId));
   const [isGenerating, setIsGenerating] = useState(false);
   const [buildTodos, setBuildTodos] = useState<BuildTodo[]>([]);
   const [savedGeneration, setSavedGeneration] = useState<SavedGenerationState | null>(() => storage.getSavedGenerationState(projectId));
   const abortRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const messagesRef = useRef(messages);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -241,6 +243,7 @@ export function useChat(projectId: string) {
 
   const abortGeneration = useCallback(() => {
     abortRef.current = true;
+    abortControllerRef.current?.abort();
   }, []);
 
   const sendMessage = useCallback(async (
@@ -250,6 +253,8 @@ export function useChat(projectId: string) {
     attachments: ChatAttachment[] = [],
   ): Promise<AIGenerationResponse | null> => {
     abortRef.current = false;
+
+    await enforceRequestDelay();
 
     const userMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
@@ -267,6 +272,15 @@ export function useChat(projectId: string) {
 
     setIsGenerating(true);
     const contextGraph = buildFileContextGraph(content, existingFiles);
+    const selectedSkills = selectSkillsForPrompt(content, existingFiles, attachments).map(skill => skill.name);
+    setBuildTodos(buildInitialWorkflowTodos(existingFiles.length > 0));
+    setBuildTodos(prev => prev.map(todo =>
+      todo.label.includes('Analyzing')
+        ? { ...todo, status: 'done' as const, detail: contextGraph.length ? `Selected ${contextGraph.length} context file(s)` : 'No existing files to inspect' }
+        : todo.label.includes('Planning')
+          ? { ...todo, status: 'active' as const, detail: contextGraph.slice(0, 3).map(node => node.path).join(', ') }
+          : todo
+    ));
     const checkpoint: SavedGenerationState = {
       id: `generation_${Date.now()}`,
       projectId,
@@ -282,34 +296,62 @@ export function useChat(projectId: string) {
     };
     setSavedGeneration(checkpoint);
     storage.saveGenerationState(projectId, checkpoint);
-    const planSteps = getDevelopmentPlanSteps(content, existingFiles);
-    setBuildTodos(buildInitialWorkflowTodos(planSteps));
 
     try {
       if (mode === 'plan') {
-        await new Promise(r => setTimeout(r, 180));
+        await new Promise(r => setTimeout(r, 800));
         if (abortRef.current) return null;
 
-        const assistantMsg = buildImplementationPlan(content, existingFiles, attachments);
+        const hasFiles = existingFiles.length > 0;
+        const agentPlan = buildAgentPlanFromContext(content, contextGraph, selectedSkills, hasFiles);
+        const planSteps = agentPlan.map(step => step.title);
+
+        const assistantMsg: ChatMessage = {
+          id: `msg_${Date.now() + 1}`,
+          role: 'assistant',
+          mode: 'plan',
+          actionType: 'plan',
+          sourcePrompt: content,
+          timestamp: new Date().toISOString(),
+          content: `Here's my plan:\n\n${agentPlan.map((step, i) => `${i + 1}. ${step.title}${step.detail ? ` — ${step.detail}` : ''}`).join('\n')}\n\n${selectedSkills.length > 0 ? `Using skills: ${selectedSkills.join(', ')}.` : ''}\n\nReady to build when you are.`,
+          metadata: {
+            contextFiles: contextGraph.map(node => node.path),
+            planSteps,
+            agentPlan,
+            memory: buildProjectMemorySnapshot(selectedSkills, contextGraph),
+            complexity: existingFiles.length > 8 || content.length > 220 ? 'complex' : 'medium',
+          },
+        };
+
         const finalMessages = [...newMessages, assistantMsg];
         setMessages(finalMessages);
         storage.saveChatHistory(projectId, finalMessages);
         setSavedGeneration(null);
         storage.clearGenerationState(projectId);
+        setBuildTodos(prev => prev.map(todo => ({ ...todo, status: 'done' as const })));
+        setTimeout(() => setBuildTodos([]), 3000);
         return null;
       }
 
-      const history = newMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
-      const planMsg = buildDevelopmentPlanMessage(content, existingFiles, contextGraph.map(node => node.path), planSteps);
-      const plannedMessages = [...newMessages, planMsg];
-      setMessages(plannedMessages);
-      storage.saveChatHistory(projectId, plannedMessages);
+      const history = buildConversationContext(newMessages);
 
-      const response = await generateWithAI(content, existingFiles, [...history, { role: 'assistant', content: planMsg.content }], {
-        skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
+      await new Promise(r => setTimeout(r, 500));
+      if (abortRef.current) return null;
+
+      setBuildTodos(prev => prev.map(t =>
+        t.label.includes('Planning') ? { ...t, status: 'done' as const }
+          : t.label.includes('Generating') ? { ...t, status: 'active' as const, detail: 'Request sent with ranked context and active skills' }
+          : t
+      ));
+
+      abortControllerRef.current = new AbortController();
+      const response = await generateWithAI(content, existingFiles, history, {
         skillBrief: getSkillBrief(content, existingFiles, attachments),
+        skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
         contextFiles: contextGraph.map(node => node.path),
+        memoryNotes: buildMemoryNotes(currentMessages),
         attachments,
+        signal: abortControllerRef.current.signal,
       });
 
       if (abortRef.current) {
@@ -317,25 +359,29 @@ export function useChat(projectId: string) {
       }
 
       setBuildTodos(prev =>
-        prev.map(todo => (
-          todo.label === 'Call Joyful AI provider' || todo.label === 'Parse AI file operations'
-            ? { ...todo, status: 'done' as const }
-            : todo.label === 'Apply generated changes'
-              ? { ...todo, status: 'active' as const }
-              : todo
-        ))
+        prev.map(todo =>
+          todo.label.includes('Generating') ? { ...todo, status: 'done' as const }
+            : todo.label.includes('Applying') ? { ...todo, status: 'active' as const }
+            : todo
+        )
       );
 
-      // Build todos from response
+      await new Promise(r => setTimeout(r, 400));
+      if (abortRef.current) return null;
+
       const todos = buildTodosFromResponse(response);
       setBuildTodos(todos);
 
-      // Simulate progressive completion
       for (let i = 0; i < todos.length; i++) {
         if (abortRef.current) break;
-        await new Promise(r => setTimeout(r, 200 + Math.random() * 150));
+        await new Promise(r => setTimeout(r, 650));
         setBuildTodos(prev =>
-          prev.map((t, idx) => idx <= i ? { ...t, status: 'done' as const } : idx === i + 1 ? { ...t, status: 'active' as const } : t)
+          prev.map((t, idx) => {
+            if (t.status === 'error') return t;
+            if (idx <= i) return { ...t, status: 'done' as const };
+            if (idx === i + 1) return { ...t, status: 'active' as const };
+            return t;
+          })
         );
       }
 
@@ -343,11 +389,11 @@ export function useChat(projectId: string) {
         return null;
       }
 
-      // Mark all done
-      setBuildTodos(prev => prev.map(t => ({ ...t, status: 'done' as const })));
+      setBuildTodos(prev => prev.map(t => t.status === 'error' ? t : { ...t, status: 'done' as const }));
 
-      // Build clean walkthrough message
       const walkthrough = buildWalkthrough(response);
+      const toolTrace = buildAgentToolTrace(selectedSkills, contextGraph, response);
+      const memory = buildProjectMemorySnapshot(selectedSkills, contextGraph, response);
 
       const assistantMsg: ChatMessage = {
         id: `msg_${Date.now() + 1}`,
@@ -374,17 +420,34 @@ export function useChat(projectId: string) {
           agentPlan: response.metadata?.agentPlan,
           sandboxCommands: response.metadata?.sandboxCommands,
           sandboxResults: response.metadata?.sandboxResults,
+          patchDetails: response.patches,
+          buildReport: buildReport(response),
+          toolTrace,
+          memory,
+          mediaAssets: response.metadata?.mediaAssets,
         },
       };
 
-      const finalMessages = [...plannedMessages, assistantMsg];
+      const finalMessages = [...newMessages, assistantMsg];
       setMessages(finalMessages);
       storage.saveChatHistory(projectId, finalMessages);
       setSavedGeneration(null);
       storage.clearGenerationState(projectId);
 
-      // Clear todos after a brief display
-      setTimeout(() => setBuildTodos([]), 2000);
+      const failedPatches = (response.patches || []).filter(patch => {
+        const existing = existingFiles.find(f => f.path === patch.path);
+        if (!existing) return false;
+        if (patch.oldString && !existing.content.includes(patch.oldString)) return true;
+        if (patch.insertBefore && !existing.content.includes(patch.insertBefore)) return true;
+        if (patch.insertAfter && !existing.content.includes(patch.insertAfter)) return true;
+        return false;
+      });
+
+      if (failedPatches.length > 0) {
+        optionsRef.current?.onToast?.('error', `${failedPatches.length} patch(es) failed to apply to ${failedPatches.map(p => p.path).join(', ')}`);
+      }
+
+      setTimeout(() => setBuildTodos([]), 12000);
 
       return response;
     } catch (error) {
@@ -407,10 +470,63 @@ export function useChat(projectId: string) {
       const finalMessages = [...newMessages, errorMsg];
       setMessages(finalMessages);
       storage.saveChatHistory(projectId, finalMessages);
+      setBuildTodos(prev => prev.length > 0
+        ? prev.map(todo => todo.status === 'active' ? { ...todo, status: 'error' as const, detail } : todo)
+        : [{ id: `todo_${Date.now()}_error`, label: 'Build failed', status: 'error' as const, detail }]
+      );
       return null;
     } finally {
       setIsGenerating(false);
+      abortControllerRef.current = null;
     }
+  }, [projectId]);
+
+  const recordApplyResult = useCallback((report: ApplyReport) => {
+    setMessages(prev => {
+      const index = [...prev].reverse().findIndex(message => message.role === 'assistant' && message.mode === 'build');
+      if (index < 0) return prev;
+      const targetIndex = prev.length - 1 - index;
+      const next = [...prev];
+      const message = next[targetIndex];
+      const skippedTrace = report.skippedOperations.map(operation => ({
+        id: `trace_apply_skip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        tool: operation.action === 'delete' ? 'delete_file' as const : operation.action === 'patch' ? 'apply_patch' as const : 'write_file' as const,
+        label: `Skipped ${operation.path}`,
+        status: 'skipped' as const,
+        target: operation.path,
+        detail: operation.reason,
+        startedAt: new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+      }));
+      next[targetIndex] = {
+        ...message,
+        metadata: {
+          ...message.metadata,
+          applyReport: report,
+          buildReport: message.metadata?.buildReport
+            ? {
+              ...message.metadata.buildReport,
+              filesCreated: message.metadata.buildReport.filesCreated,
+            }
+            : undefined,
+          toolTrace: [
+            ...(message.metadata?.toolTrace || []),
+            {
+              id: `trace_apply_${Date.now()}`,
+              tool: 'write_file',
+              label: `Applied ${report.applied} operation${report.applied === 1 ? '' : 's'}`,
+              status: report.skipped > 0 ? 'skipped' : 'done',
+              detail: report.skipped > 0 ? `${report.skipped} operation(s) skipped` : 'All returned operations were committed to the project',
+              startedAt: new Date().toISOString(),
+              endedAt: new Date().toISOString(),
+            },
+            ...skippedTrace,
+          ],
+        },
+      };
+      storage.saveChatHistory(projectId, next);
+      return next;
+    });
   }, [projectId]);
 
   const clearSavedGeneration = useCallback(() => {
@@ -418,5 +534,5 @@ export function useChat(projectId: string) {
     storage.clearGenerationState(projectId);
   }, [projectId]);
 
-  return { messages, isGenerating, buildTodos, savedGeneration, sendMessage, clearMessages, abortGeneration, clearSavedGeneration };
+  return { messages, isGenerating, buildTodos, savedGeneration, sendMessage, recordApplyResult, clearMessages, abortGeneration, clearSavedGeneration };
 }

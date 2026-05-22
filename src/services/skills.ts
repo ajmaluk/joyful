@@ -89,6 +89,14 @@ export const defaultBuilderSkills: BuilderSkill[] = [
     keywords: ['design system', 'tokens', 'consistency', 'brand', 'components', 'spacing', 'typography', 'visual language', 'theme'],
     sourcePath: 'skills/design-system-consistency/SKILL.md',
   },
+  {
+    id: 'web-development-master',
+    name: 'Web Development Master',
+    description: 'Plan, build, check, repeat — full lifecycle web development with UI testing, task management, memory, and quality gates.',
+    instructions: 'Orchestrate end-to-end web development: plan architecture and component tree, build with React/Tailwind/shadcn, verify with build/lint/preview/UI checks, then iterate until all quality gates pass.',
+    keywords: ['website', 'webapp', 'app', 'web development', 'build', 'develop', 'create', 'complex', 'full stack', 'plan', 'architect', 'orchestrate', 'quality', 'test', 'verify', 'iterate', 'polish', 'fix', 'debug', 'pwa', 'dashboard', 'landing', 'ecommerce', 'saas', 'multi page', 'responsive', 'typescript', 'react', 'tailwind', 'component', 'page', 'route', 'feature', 'frontend', 'fullstack'],
+    sourcePath: 'skills/web-development-master/SKILL.md',
+  },
 ];
 
 export function getActiveUserSkills(): UserSkill[] {
@@ -136,6 +144,12 @@ function scoreSkill(skill: BuilderSkill | UserSkill, promptTokens: Set<string>, 
   if (/test|testing|qa|validate|verify|lint|preview|build/.test(lowerPrompt) && /test|testing|qa|validate|verify|lint|preview|build/.test(haystack)) score += 12;
   if (/performance|speed|bundle|rerender|lighthouse|optimize|lazy load/.test(lowerPrompt) && /performance|speed|bundle|rerender|lighthouse|optimize/.test(haystack)) score += 12;
   if (/design|system|brand|token|typography|visual|consistency/.test(lowerPrompt) && /design system|design|system|brand|token|typography|consistency/.test(haystack)) score += 10;
+
+  // Web Development Master — trigger on build/development requests
+  if (/build|develop|create|make|website|app|page|web|site|component|feature|dashboard|landing|ecommerce|saas|complex|full.?stack|frontend|ui|interface/.test(lowerPrompt) && /web.?development|build|develop|create|complex|full.?stack|orchestrat|plan|architect/.test(haystack)) score += 15;
+  if (/fix|bug|error|broken|issue|console|runtime|lint|type.?error|crash|not working/.test(lowerPrompt) && /fix|debug|verif|quality|test|check|iterate/.test(haystack)) score += 15;
+  if (/plan|architect|design|structure|organize|scaffold|organize/.test(lowerPrompt) && /plan|architect|structure|component.?tree/.test(haystack)) score += 18;
+  if (/test|verify|check|qa|quality|build|lint|validate|preview|ui.?test|responsive/.test(lowerPrompt) && /verif|check|quality|test|build|lint|preview/.test(haystack)) score += 18;
 
   return score;
 }

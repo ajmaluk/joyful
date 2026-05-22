@@ -1,3 +1,4 @@
+import { Helmet } from 'react-helmet-async';
 import {
   ArrowUp,
   BookOpen,
@@ -680,6 +681,24 @@ function DocsHeroVisual({ badge }: { badge: string }) {
 }
 
 export function DocsPage() {
+  return (
+    <>
+      <Helmet>
+        <title>Documentation - Joyful AI Website Builder</title>
+        <meta name="description" content="Learn how to use Joyful. Documentation covering prompts, templates, editing, preview, export, workspace, and integrations." />
+        <link rel="canonical" href="https://joyful.ai/docs" />
+        <meta property="og:title" content="Documentation - Joyful AI Website Builder" />
+        <meta property="og:url" content="https://joyful.ai/docs" />
+        <meta property="og:description" content="Learn how to use Joyful. Documentation covering prompts, templates, editing, preview, export, workspace, and integrations." />
+        <meta name="twitter:title" content="Documentation - Joyful AI Website Builder" />
+        <meta name="twitter:description" content="Learn how to use Joyful. Documentation covering prompts, templates, editing, preview, export, workspace, and integrations." />
+      </Helmet>
+      <DocsPageContent />
+    </>
+  );
+}
+
+function DocsPageContent() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<DocTab>('Introduction');
   const initialDocIdRef = useRef<string | null>(null);

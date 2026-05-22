@@ -9,11 +9,14 @@ interface VirtualFile {
   modified: number;
 }
 
-const ALLOWED_COMMANDS = new Set(['echo', 'ls', 'cat', 'pwd', 'node', 'npm']);
+const VFS_MAX_FILES = 100;
+const VFS_MAX_SIZE_BYTES = 5_000_000;
+const ALLOWED_COMMANDS = new Set(['echo', 'ls', 'cat', 'pwd', 'npm']);
 const FORBIDDEN_PATTERNS = ['rm ', 'rm-', 'mv ', 'shutdown', 'reboot', 'mkfs', 'dd ', '>:'];
 
 class VirtualFS {
   private files = new Map<string, VirtualFile>();
+  private totalSize = 0;
 
   constructor() {
     this.files.set('index.html', { content: '<!DOCTYPE html>\n<html>\n<head><title>Sandbox</title></head>\n<body>\n  <h1>Hello World</h1>\n</body>\n</html>', modified: Date.now() });
@@ -25,8 +28,25 @@ class VirtualFS {
     return file ? file.content : null;
   }
 
-  write(path: string, content: string): void {
-    this.files.set(normalizeSandboxPath(path), { content, modified: Date.now() });
+  write(path: string, content: string): boolean {
+    const normalizedPath = normalizeSandboxPath(path);
+    const existing = this.files.get(normalizedPath);
+    const oldSize = existing ? existing.content.length : 0;
+    const newSize = content.length;
+    const sizeDelta = newSize - oldSize;
+
+    if (this.totalSize + sizeDelta > VFS_MAX_SIZE_BYTES) {
+      console.warn(`VFS: write to ${path} exceeds size limit`);
+      return false;
+    }
+    if (!existing && this.files.size >= VFS_MAX_FILES) {
+      console.warn(`VFS: max files (${VFS_MAX_FILES}) reached`);
+      return false;
+    }
+
+    this.totalSize += sizeDelta;
+    this.files.set(normalizedPath, { content, modified: Date.now() });
+    return true;
   }
 
   list(dir = '.'): string[] {
@@ -44,11 +64,17 @@ class VirtualFS {
   }
 
   delete(path: string): boolean {
-    return this.files.delete(normalizeSandboxPath(path));
+    const normalizedPath = normalizeSandboxPath(path);
+    const existing = this.files.get(normalizedPath);
+    if (existing) {
+      this.totalSize -= existing.content.length;
+    }
+    return this.files.delete(normalizedPath);
   }
 
   reset(files: { path: string; content: string }[]): void {
     this.files.clear();
+    this.totalSize = 0;
     for (const file of files) {
       this.write(file.path, file.content);
     }
@@ -63,7 +89,18 @@ class VirtualFS {
   }
 }
 
-const vfs = new VirtualFS();
+const vfsMap = new Map<string, VirtualFS>();
+
+function getVFS(projectId = 'default'): VirtualFS {
+  if (!vfsMap.has(projectId)) {
+    vfsMap.set(projectId, new VirtualFS());
+  }
+  return vfsMap.get(projectId)!;
+}
+
+export function deleteVFS(projectId = 'default'): void {
+  vfsMap.delete(projectId);
+}
 
 function isForbidden(command: string): string | null {
   const lowered = command.toLowerCase();
@@ -84,21 +121,28 @@ function parseCommand(cmd: string): { command: string; args: string[] } {
 function normalizeSandboxPath(path: string): string {
   const clean = path.trim().replace(/^\.\/+/, '').replace(/\/+/g, '/');
   if (!clean || clean === '/') return '.';
-  return clean.replace(/^\/+/, '');
+  const segments = clean.replace(/^\/+/, '').split('/');
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === '..' || segment === '.' || segment === '') continue;
+    resolved.push(segment);
+  }
+  return resolved.join('/');
 }
 
 function hasProjectEntry(): boolean {
+  const v = getVFS();
   return Boolean(
-    vfs.read('index.html') ||
-    vfs.read('src/App.jsx') ||
-    vfs.read('src/App.tsx') ||
-    vfs.read('app/page.tsx') ||
-    vfs.read('pages/index.tsx')
+    v.read('index.html') ||
+    v.read('src/App.jsx') ||
+    v.read('src/App.tsx') ||
+    v.read('app/page.tsx') ||
+    v.read('pages/index.tsx')
   );
 }
 
 function validateJsonFile(path: string): string | null {
-  const content = vfs.read(path);
+  const content = getVFS().read(path);
   if (!content) return null;
   try {
     JSON.parse(content);
@@ -109,7 +153,7 @@ function validateJsonFile(path: string): string | null {
 }
 
 function validateBalancedSource(path: string): string | null {
-  const content = vfs.read(path);
+  const content = getVFS().read(path);
   if (!content) return null;
   const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
   const closers = new Set(Object.values(pairs));
@@ -147,8 +191,87 @@ function validateBalancedSource(path: string): string | null {
   return null;
 }
 
+function getPackageDependencies(): Set<string> {
+  const pkgContent = getVFS().read('package.json');
+  if (!pkgContent) return new Set();
+  try {
+    const pkg = JSON.parse(pkgContent);
+    return new Set([
+      ...Object.keys(pkg.dependencies || {}),
+      ...Object.keys(pkg.devDependencies || {}),
+    ]);
+  } catch {
+    return new Set();
+  }
+}
+
+function dirname(path: string): string {
+  const clean = normalizeSandboxPath(path);
+  const parts = clean.split('/');
+  parts.pop();
+  return parts.join('/');
+}
+
+function resolveImportPath(sourcePath: string, specifier: string): string | null {
+  const v = getVFS();
+  const base = specifier.startsWith('@/')
+    ? `src/${specifier.slice(2)}`
+    : specifier.startsWith('.')
+      ? normalizeSandboxPath(`${dirname(sourcePath)}/${specifier}`)
+      : specifier;
+  const candidates = [
+    base,
+    `${base}.js`,
+    `${base}.jsx`,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.css`,
+    `${base}.json`,
+    `${base}/index.js`,
+    `${base}/index.jsx`,
+    `${base}/index.ts`,
+    `${base}/index.tsx`,
+  ];
+  return candidates.find(candidate => v.read(candidate) !== null) || null;
+}
+
+function packageNameFromSpecifier(specifier: string): string {
+  if (specifier.startsWith('@')) {
+    return specifier.split('/').slice(0, 2).join('/');
+  }
+  return specifier.split('/')[0];
+}
+
+function validateSourceImports(path: string): string[] {
+  const content = getVFS().read(path);
+  if (!content || !/\.(jsx|tsx|js|ts)$/i.test(path)) return [];
+  const dependencies = getPackageDependencies();
+  const errors: string[] = [];
+  const importRegex = /(?:import\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?|export\s+[\s\S]*?\s+from\s+|import\s*\()\s*['"]([^'"]+)['"]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = importRegex.exec(content)) !== null) {
+    const specifier = match[1];
+    if (!specifier) continue;
+
+    if (specifier.startsWith('.') || specifier.startsWith('@/')) {
+      if (!resolveImportPath(path, specifier)) {
+        errors.push(`${path}: missing import "${specifier}"`);
+      }
+      continue;
+    }
+
+    const pkgName = packageNameFromSpecifier(specifier);
+    if (!dependencies.has(pkgName) && !['react', 'react-dom'].includes(pkgName)) {
+      errors.push(`${path}: package "${pkgName}" is imported but not listed in package.json`);
+    }
+  }
+
+  return errors;
+}
+
 function getPackageScript(scriptName: string): string | null {
-  const pkgContent = vfs.read('package.json');
+  const pkgContent = getVFS().read('package.json');
   if (!pkgContent) return null;
   try {
     const pkg = JSON.parse(pkgContent);
@@ -168,11 +291,14 @@ async function* validateProjectBuild(scriptName: string): AsyncGenerator<Sandbox
 
   yield { type: 'stdout', data: `> sandbox-project ${scriptName}\n> ${script}\n\n`, timestamp: Date.now() };
 
+  const v = getVFS();
   const errors = [
     validateJsonFile('package.json'),
-    ...vfs.all()
+    ...v.all()
       .filter(file => /\.(jsx|tsx|js|ts|css)$/i.test(file.path))
       .map(file => validateBalancedSource(file.path)),
+    ...v.all()
+      .flatMap(file => validateSourceImports(file.path)),
   ].filter(Boolean) as string[];
 
   if (!hasProjectEntry()) {
@@ -219,7 +345,7 @@ async function* executeCommand(cmd: string): AsyncGenerator<SandboxEvent> {
 
     case 'ls': {
       const dir = args[0] || '.';
-      const entries = vfs.list(dir);
+      const entries = getVFS().list(dir);
       yield { type: 'stdout', data: entries.join('  ') + '\n', timestamp: Date.now() };
       break;
     }
@@ -229,7 +355,7 @@ async function* executeCommand(cmd: string): AsyncGenerator<SandboxEvent> {
         yield { type: 'stderr', data: 'cat: missing operand\n', timestamp: Date.now() };
       } else {
         for (const file of args) {
-          const content = vfs.read(file);
+          const content = getVFS().read(file);
           if (content !== null) {
             yield { type: 'stdout', data: content + '\n', timestamp: Date.now() };
           } else {
@@ -243,7 +369,7 @@ async function* executeCommand(cmd: string): AsyncGenerator<SandboxEvent> {
     case 'npm':
       if (args[0] === 'install' || args[0] === 'i') {
         yield { type: 'stdout', data: 'Simulating npm install...\n', timestamp: Date.now() };
-        const pkgContent = vfs.read('package.json');
+        const pkgContent = getVFS().read('package.json');
         if (pkgContent) {
           try {
             const pkg = JSON.parse(pkgContent);
@@ -277,7 +403,7 @@ async function* executeCommand(cmd: string): AsyncGenerator<SandboxEvent> {
       if (args[0] === '-v' || args[0] === '--version') {
         yield { type: 'stdout', data: 'v22.14.0\n', timestamp: Date.now() };
       } else if (args[0] && args[0].endsWith('.js')) {
-        const scriptContent = vfs.read(args[0]);
+        const scriptContent = getVFS().read(args[0]);
         if (scriptContent === null) {
           yield { type: 'stderr', data: `node: ${args[0]}: No such file\n`, timestamp: Date.now() };
         } else {
@@ -298,6 +424,7 @@ async function* executeCommand(cmd: string): AsyncGenerator<SandboxEvent> {
 async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> {
   const logs: string[] = [];
   const errors: string[] = [];
+  const EXECUTION_TIMEOUT = 5000;
 
   const sandboxConsole = {
     log: (...args: unknown[]) => { logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); },
@@ -308,7 +435,9 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
 
   try {
     const wrappedScript = `
-      (function(require, console, restrictedGlobal, setTimeout, setInterval, clearTimeout, clearInterval) {
+      'use strict';
+      (function(require, console, restrictedGlobal, setTimeout, setInterval, clearTimeout, clearInterval, __timeout) {
+        var __checkTimeout = function() { if (Date.now() - __timeout.start > __timeout.max) throw new Error('Script execution timeout'); };
         ${script}
       })
     `;
@@ -331,7 +460,7 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
       return setInterval(cb, ms);
     };
 
-    const restrictedGlobal = {
+    const restrictedGlobal = Object.freeze({
       Math,
       JSON,
       Date,
@@ -357,7 +486,9 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
       Infinity,
       NaN,
       undefined,
-    };
+    });
+
+    const timeoutCtx = { start: Date.now(), max: EXECUTION_TIMEOUT };
 
     fn(
       mockRequire,
@@ -367,6 +498,7 @@ async function* executeNodeScript(script: string): AsyncGenerator<SandboxEvent> 
       cappedSetInterval,
       clearTimeout,
       clearInterval,
+      timeoutCtx,
     );
 
     for (const log of logs) {
@@ -395,22 +527,24 @@ export async function* streamSandboxCommand(command: string): AsyncGenerator<San
   }
 }
 
-export function loadVirtualFS(files: { path: string; content: string }[]): void {
-  vfs.reset(files);
+export function loadVirtualFS(files: { path: string; content: string }[], projectId = 'default'): void {
+  const v = getVFS(projectId);
+  v.reset(files);
 }
 
-export function getVirtualFS(): {
+export function getVirtualFS(projectId = 'default'): {
   read: (p: string) => string | null;
   write: (p: string, c: string) => void;
   list: (d?: string) => string[];
   delete: (p: string) => boolean;
   all: () => { path: string; content: string; modified: number }[];
 } {
+  const v = getVFS(projectId);
   return {
-    read: (p: string) => vfs.read(p),
-    write: (p: string, c: string) => vfs.write(p, c),
-    list: (d?: string) => vfs.list(d),
-    delete: (p: string) => vfs.delete(p),
-    all: () => vfs.all(),
+    read: (p: string) => v.read(p),
+    write: (p: string, c: string) => v.write(p, c),
+    list: (d?: string) => v.list(d),
+    delete: (p: string) => v.delete(p),
+    all: () => v.all(),
   };
 }

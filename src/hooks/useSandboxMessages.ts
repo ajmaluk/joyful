@@ -183,7 +183,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
   const sendToIframe = useCallback((type: string, data: unknown) => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) return;
-    iframe.contentWindow.postMessage({ __joyfulSandbox: true, type, data }, '*');
+    iframe.contentWindow.postMessage({ __joyfulSandbox: true, type, data }, iframe.src.startsWith('blob:') ? window.location.origin : '*');
   }, [iframeRef]);
 
   const toggleInspector = useCallback((enabled: boolean) => {
@@ -201,6 +201,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     setNetwork([]);
     pendingRequests.current.clear();
   }, []);
+  const clearInspectorSelection = useCallback(() => setInspectorSelection(null), []);
 
   const executeInSandbox = useCallback(async (command: string): Promise<void> => {
     try {
@@ -244,6 +245,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
     requestMetrics,
     clearLogs,
     clearNetwork,
+    clearInspectorSelection,
     executeInSandbox,
     sendToIframe,
   };

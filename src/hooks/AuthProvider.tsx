@@ -11,11 +11,17 @@ function hasDevAuthParam() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const hasLocalDevAuth = hasDevAuthParam();
   const [user, setUser] = useState<User | null>(null);
   const [localDemoAuthed, setLocalDemoAuthed] = useState(() => (
-    allowLocalDemoAuth ? storage.isAuthenticated() || hasDevAuthParam() : false
+    allowLocalDemoAuth ? storage.isAuthenticated() || hasLocalDevAuth : false
   ));
   const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    if (!allowLocalDemoAuth || !hasLocalDevAuth) return;
+    storage.setAuthenticated(true);
+  }, [hasLocalDevAuth]);
 
   useEffect(() => {
     return observeAuthState((nextUser) => {

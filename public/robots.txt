@@ -1,0 +1,15 @@
+# Joyful AI Website Builder
+# https://joyful.ai
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow private areas
+Disallow: /builder/
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /templates
+
+# Sitemap
+Sitemap: https://joyful.ai/sitemap.xml

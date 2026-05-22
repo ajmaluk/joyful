@@ -1,3 +1,4 @@
+import { Helmet } from 'react-helmet-async';
 import { useEffect, useState } from 'react';
 import {
   Settings, Palette, Code2, Brain, User, Gift,
@@ -470,7 +471,7 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-foreground">AI Runtime</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Joyful AI is your exclusive builder brain, powered by NVIDIA.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Joyful AI runs directly in the client using your local env settings.</p>
             </div>
 
             <div className="rounded-xl border border-border bg-card p-5">
@@ -746,7 +747,11 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full overflow-hidden bg-background">
+    <>
+      <Helmet>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+      <div className="flex h-full overflow-hidden bg-background">
       {/* Settings sidebar */}
       <div className="hidden w-64 border-r border-border bg-card/60 py-5 md:block">
         <div className="mb-5 px-4">
@@ -831,5 +836,6 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

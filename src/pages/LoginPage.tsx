@@ -1,4 +1,6 @@
+import { Helmet } from 'react-helmet-async';
 import { useState, type FormEvent } from 'react';
+import { routeMeta } from '@/lib/seo';
 import {
   AuthShell,
   GithubMarker,
@@ -6,10 +8,11 @@ import {
   ProviderButton,
   SubmitIcon,
 } from '@/components/auth/AuthShell';
-import { signInWithEmail, signInWithGithub, signInWithGoogle } from '@/services/firebase';
+import { getFriendlyFirebaseAuthError, signInWithEmail, signInWithGithub, signInWithGoogle } from '@/services/firebase';
 import { AlertCircle } from 'lucide-react';
 
 export function LoginPage() {
+  const meta = routeMeta['/login'];
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,7 +24,7 @@ export function LoginPage() {
     try {
       await action();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not log in. Please try again.');
+      setError(getFriendlyFirebaseAuthError(err));
     } finally {
       setIsLoading(false);
     }
@@ -33,6 +36,17 @@ export function LoginPage() {
   };
 
   return (
+    <>
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
     <AuthShell
       title="Log in"
       subtitle="Continue building your pages, templates, and exports from the same workspace."
@@ -113,5 +127,6 @@ export function LoginPage() {
         </button>
       </form>
     </AuthShell>
+    </>
   );
 }

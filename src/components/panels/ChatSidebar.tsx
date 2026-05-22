@@ -74,7 +74,7 @@ export function ChatSidebar({ messages, isGenerating, onClearHistory, onToggleSi
               {conversationStarters.map((item) => (
                 <div
                   key={item.label}
-                  className="flex cursor-pointer items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5 text-xs text-gray-300 transition-colors hover:border-white/[0.14] hover:bg-white/[0.06]"
+                  className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5 text-xs text-gray-300"
                 >
                   <span className="text-sm">{item.icon}</span>
                   <span className="flex-1 leading-tight">{item.label}</span>

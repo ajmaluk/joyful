@@ -11,6 +11,9 @@ const STORAGE_KEYS = {
   GENERATION_PREFIX: 'joyful_generation_',
 };
 
+const MAX_CHAT_MESSAGES = 50;
+const MAX_CHAT_SIZE_BYTES = 500_000;
+
 // Projects
 export function getProjects(): Project[] {
   try {
@@ -29,9 +32,45 @@ function safeSetItem(key: string, value: string): boolean {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
       console.warn(`localStorage quota exceeded for key: ${key}`);
       window.dispatchEvent(new CustomEvent('joyful_storage_quota', { detail: { key, size: value.length } }));
+      tryEvictOldest(key);
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch {
+        return false;
+      }
     }
     return false;
   }
+}
+
+function tryEvictOldest(excludeKey: string): void {
+  const chatKeys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(STORAGE_KEYS.CHAT_PREFIX) && key !== excludeKey) {
+      chatKeys.push(key);
+    }
+  }
+  if (chatKeys.length > 0) {
+    const oldest = chatKeys.sort()[0];
+    localStorage.removeItem(oldest);
+    console.warn(`Evicted oldest chat: ${oldest}`);
+  }
+}
+
+function truncateMessages(messages: ChatMessage[]): ChatMessage[] {
+  let truncated = messages.slice(-MAX_CHAT_MESSAGES);
+  let serialized = JSON.stringify(truncated);
+  while (serialized.length > MAX_CHAT_SIZE_BYTES && truncated.length > 5) {
+    const removeCount = Math.max(2, Math.floor(truncated.length * 0.2));
+    truncated = truncated.slice(removeCount);
+    serialized = JSON.stringify(truncated);
+  }
+  if (serialized.length > MAX_CHAT_SIZE_BYTES) {
+    truncated = truncated.slice(-5);
+  }
+  return truncated;
 }
 
 export function saveProject(project: Project): void {
@@ -74,7 +113,8 @@ export function getChatHistory(projectId: string): ChatMessage[] {
 }
 
 export function saveChatHistory(projectId: string, messages: ChatMessage[]): void {
-  safeSetItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`, JSON.stringify(messages));
+  const truncated = truncateMessages(messages);
+  safeSetItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`, JSON.stringify(truncated));
 }
 
 export function getSavedGenerationState(projectId: string): SavedGenerationState | null {

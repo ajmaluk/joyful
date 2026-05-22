@@ -1,4 +1,6 @@
+import { Helmet } from 'react-helmet-async';
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { routeMeta } from '@/lib/seo';
 import { ChevronDown, FolderOpen, ImagePlus, ListChecks, Plus, Send, Wand2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BrandLogo } from '@/components/brand/BrandLogo';
@@ -11,6 +13,7 @@ interface BuilderStartPageProps {
 }
 
 export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageProps) {
+  const meta = routeMeta['/builder'];
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +61,16 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
 
   return (
     <div className="h-full overflow-y-auto bg-[#0f100f] text-[#f6f2ea]">
+      <Helmet>
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <link rel="canonical" href={meta.canonical} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:url" content={meta.canonical} />
+        <meta property="og:description" content={meta.description} />
+        <meta name="twitter:title" content={meta.title} />
+        <meta name="twitter:description" content={meta.description} />
+      </Helmet>
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <section className="relative overflow-hidden rounded-lg border border-white/8 bg-[#171816] p-8 sm:p-10">
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(79,124,255,0.22),transparent_38%,rgba(255,122,61,0.18)_100%)]" />

@@ -35,6 +35,16 @@ export interface ChatAttachment {
   size: number;
 }
 
+export interface MediaAsset {
+  id: string;
+  url: string;
+  thumb: string;
+  alt: string;
+  author?: string;
+  authorUrl?: string;
+  query: string;
+}
+
 // Chat message
 export interface ChatMessage {
   id: string;
@@ -58,6 +68,12 @@ export interface ChatMessage {
     agentPlan?: AgentPlanStep[];
     sandboxCommands?: SandboxCommandRequest[];
     sandboxResults?: SandboxCommandResult[];
+    patchDetails?: FilePatchOperation[];
+    buildReport?: BuildReport;
+    applyReport?: ApplyReport;
+    toolTrace?: AgentToolTrace[];
+    memory?: ProjectMemorySnapshot;
+    mediaAssets?: MediaAsset[];
     previewIssues?: PreviewIssue[];
   };
 }
@@ -119,6 +135,10 @@ export interface AIGenerationResponse {
     sandboxResults?: SandboxCommandResult[];
     pendingFileOps?: PendingFileOperation[];
     toolResults?: unknown[];
+    toolTrace?: AgentToolTrace[];
+    memory?: ProjectMemorySnapshot;
+    mediaAssets?: MediaAsset[];
+    repaired?: boolean;
   };
 }
 
@@ -163,6 +183,47 @@ export interface FilePatchOperation {
   lineStart?: number;
   lineEnd?: number;
   reason?: string;
+}
+
+export interface BuildReport {
+  filesCreated: number;
+  filesModified: number;
+  filesDeleted: number;
+  patchesApplied: number;
+  validationPassed: number;
+  validationFailed: number;
+  repaired?: boolean;
+}
+
+export interface ApplyReport {
+  applied: number;
+  skipped: number;
+  appliedFiles: string[];
+  skippedOperations: {
+    path: string;
+    action: string;
+    reason: string;
+  }[];
+}
+
+export type AgentToolTraceStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
+
+export interface AgentToolTrace {
+  id: string;
+  tool: 'select_skills' | 'rank_context' | 'read_file' | 'plan' | 'apply_patch' | 'write_file' | 'delete_file' | 'run_command' | 'validate_preview' | 'repair';
+  label: string;
+  status: AgentToolTraceStatus;
+  target?: string;
+  detail?: string;
+  startedAt: string;
+  endedAt?: string;
+}
+
+export interface ProjectMemorySnapshot {
+  selectedSkills: string[];
+  contextFiles: string[];
+  recentDecisions: string[];
+  knownIssues: string[];
 }
 
 export interface PreviewIssue {

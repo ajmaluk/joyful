@@ -11,6 +11,8 @@ import { PricingPage } from '@/pages/PricingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { SignupPage } from '@/pages/SignupPage';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { NotFoundPage } from '@/pages/NotFoundPage';
 import { useProjects } from '@/hooks/useProjects';
 import { useToast } from '@/hooks/useToast';
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
@@ -18,6 +20,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { ChatAttachment, ChatMode, UserSettings } from '@/types';
 import * as storage from '@/services/storage';
 import { SitePage } from '@/pages/SitePage';
+import { BlogListPage } from '@/pages/BlogListPage';
+import { BlogPostPage } from '@/pages/BlogPostPage';
 import { marketingPaths } from '@/components/marketing/marketingRoutes';
 import { AuthProvider } from '@/hooks/AuthProvider';
 import { useAuth } from '@/hooks/useAuth';
@@ -86,9 +90,20 @@ function AppLayout() {
     };
   }, []);
 
+  // Cross-tab synchronization
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key?.startsWith('joyful_projects') || e.key?.startsWith('joyful_settings') || e.key?.startsWith('joyful_chat_')) {
+        window.dispatchEvent(new CustomEvent('joyful_crosstab_sync', { detail: { key: e.key } }));
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   // Pages without sidebar/topbar
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
-  const isMarketingPage = marketingPaths.has(location.pathname);
+  const isMarketingPage = marketingPaths.has(location.pathname) || location.pathname.startsWith('/blog/');
 
   // Show sidebar on all pages except auth and marketing surfaces
   const showSidebar = !isAuthPage && !isMarketingPage;
@@ -182,39 +197,85 @@ function AppLayout() {
                 <Route
                   path="/builder"
                   element={
-                    <AuthGate>
-                      <DashboardPage
-                        projects={projects}
-                        onCreateProject={handleCreateProject}
-                        onDeleteProject={removeProject}
-                        onStartProject={handleStartProject}
-                      />
-                    </AuthGate>
+                    <ErrorBoundary>
+                      <AuthGate>
+                        <DashboardPage
+                          projects={projects}
+                          onCreateProject={handleCreateProject}
+                          onDeleteProject={removeProject}
+                          onStartProject={handleStartProject}
+                        />
+                      </AuthGate>
+                    </ErrorBoundary>
                   }
                 />
                 <Route
                   path="/builder/:projectId"
                   element={
-                    <AuthGate>
-                      <BuilderPage
-                        projects={projects}
-                        onUpdateProject={updateProject}
-                      />
-                    </AuthGate>
+                    <ErrorBoundary>
+                      <AuthGate>
+                        <BuilderPage
+                          projects={projects}
+                          onUpdateProject={updateProject}
+                        />
+                      </AuthGate>
+                    </ErrorBoundary>
                   }
                 />
                 <Route
                   path="/templates"
                   element={
-                    <AuthGate>
-                      <TemplatesPage onCreateProject={handleCreateProject} onUpdateProject={updateProject} />
-                    </AuthGate>
+                    <ErrorBoundary>
+                      <AuthGate>
+                        <TemplatesPage onCreateProject={handleCreateProject} onUpdateProject={updateProject} />
+                      </AuthGate>
+                    </ErrorBoundary>
                   }
                 />
-                <Route path="/settings" element={<AuthGate><SettingsPage /></AuthGate>} />
-                <Route path="/docs" element={<DocsPage />} />
-                <Route path="/pricing" element={<PricingPage />} />
-                <Route path="/blog" element={<SitePage slug="blog" onStartProject={handleStartProject} />} />
+                <Route
+                  path="/settings"
+                  element={
+                    <ErrorBoundary>
+                      <AuthGate>
+                        <SettingsPage />
+                      </AuthGate>
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/docs"
+                  element={
+                    <ErrorBoundary>
+                      <DocsPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/pricing"
+                  element={
+                    <ErrorBoundary>
+                      <PricingPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/login"
+                  element={
+                    <ErrorBoundary>
+                      <LoginPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <ErrorBoundary>
+                      <SignupPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route path="/blog" element={<ErrorBoundary><BlogListPage onStartProject={handleStartProject} /></ErrorBoundary>} />
+                <Route path="/blog/:slug" element={<ErrorBoundary><BlogPostPage onStartProject={handleStartProject} /></ErrorBoundary>} />
                 <Route path="/guides" element={<SitePage slug="guides" onStartProject={handleStartProject} />} />
                 <Route path="/examples" element={<SitePage slug="examples" onStartProject={handleStartProject} />} />
                 <Route path="/support" element={<SitePage slug="support" onStartProject={handleStartProject} />} />
@@ -226,8 +287,7 @@ function AppLayout() {
                 <Route path="/terms" element={<SitePage slug="terms" onStartProject={handleStartProject} />} />
                 <Route path="/cookies" element={<SitePage slug="cookies" onStartProject={handleStartProject} />} />
                 <Route path="/licenses" element={<SitePage slug="licenses" onStartProject={handleStartProject} />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignupPage />} />
+                <Route path="*" element={<NotFoundPage />} />
               </Routes>
             </motion.div>
           </AnimatePresence>

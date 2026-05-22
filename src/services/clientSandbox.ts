@@ -4,6 +4,417 @@ export interface SandboxEvent {
   timestamp: number;
 }
 
+// ── Structured Validation Reporting ───────────────────────────────
+
+export interface ValidationIssue {
+  file: string;
+  line: number;
+  column: number;
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+  fix?: string;
+}
+
+export interface ValidationReport {
+  issues: ValidationIssue[];
+  passed: boolean;
+  errorCount: number;
+  warningCount: number;
+  summary: string;
+}
+
+export function generateValidationReport(
+  files: { path: string; content: string }[],
+): ValidationReport {
+  const issues: ValidationIssue[] = [];
+
+  for (const file of files) {
+    const content = file.content;
+    const lines = content.split('\n');
+
+    // Check for balanced brackets in code files
+    if (/\.(js|ts|jsx|tsx)$/i.test(file.path)) {
+      const brackets: Record<string, string> = { '{': '}', '[': ']', '(': ')' };
+      const stack: { char: string; line: number; column: number }[] = [];
+
+      for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        if (brackets[char]) {
+          const lineNum = content.slice(0, i).split('\n').length;
+          const colNum = i - content.slice(0, i).lastIndexOf('\n');
+          stack.push({ char: brackets[char], line: lineNum, column: colNum });
+        } else if (char === '}' || char === ']' || char === ')') {
+          const expected = stack.pop();
+          if (!expected || expected.char !== char) {
+            const lineNum = content.slice(0, i).split('\n').length;
+            const colNum = i - content.slice(0, i).lastIndexOf('\n');
+            issues.push({
+              file: file.path,
+              line: lineNum,
+              column: colNum,
+              severity: 'error',
+              code: 'BRACKET_MISMATCH',
+              message: `Unmatched closing bracket '${char}'. Expected '${expected?.char || 'nothing'}'.`,
+              fix: expected ? `Replace '${char}' with '${expected.char}' or check nesting.` : `Remove extra '${char}'.`,
+            });
+          }
+        }
+      }
+
+      // Unterminated brackets
+      while (stack.length > 0) {
+        const unclosed = stack.pop()!;
+        issues.push({
+          file: file.path,
+          line: unclosed.line,
+          column: unclosed.column,
+          severity: 'error',
+          code: 'UNCLOSED_BRACKET',
+          message: `Unclosed bracket: expected '${unclosed.char}'.`,
+          fix: `Add '${unclosed.char}' at the appropriate location.`,
+        });
+      }
+
+      // Check for debugging statements
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (/console\.log\(/.test(trimmed) && !/\/\/\s*console/.test(trimmed)) {
+          issues.push({
+            file: file.path,
+            line: i + 1,
+            column: 0,
+            severity: 'warning',
+            code: 'DEBUG_STATEMENT',
+            message: 'Debugging statement left in code.',
+            fix: 'Remove the console.log statement before committing.',
+          });
+        }
+        if (/debugger;?/.test(trimmed)) {
+          issues.push({
+            file: file.path,
+            line: i + 1,
+            column: 0,
+            severity: 'error',
+            code: 'DEBUGGER',
+            message: 'debugger statement found in code.',
+            fix: 'Remove the debugger statement.',
+          });
+        }
+        if (/TODO/i.test(trimmed) && /\/\//.test(trimmed)) {
+          issues.push({
+            file: file.path,
+            line: i + 1,
+            column: 0,
+            severity: 'warning',
+            code: 'TODO_LEFT',
+            message: 'TODO comment left in code.',
+            fix: 'Complete the TODO task or remove the comment.',
+          });
+        }
+      }
+    }
+
+    // Check HTML files for structure
+    if (/\.html$/i.test(file.path)) {
+      for (let i = 0; i < lines.length; i++) {
+        const trimmed = lines[i].trim();
+        if (/<img[^>]*src\s*=\s*['"][^'"]*['"]/.test(trimmed) && !/alt\s*=/.test(trimmed)) {
+          issues.push({
+            file: file.path,
+            line: i + 1,
+            column: 0,
+            severity: 'warning',
+            code: 'MISSING_ALT',
+            message: 'Image missing alt text for accessibility.',
+            fix: 'Add an alt attribute to the img tag.',
+          });
+        }
+        if (/<button[^>]*>/.test(trimmed) && !/type\s*=/.test(trimmed)) {
+          issues.push({
+            file: file.path,
+            line: i + 1,
+            column: 0,
+            severity: 'warning',
+            code: 'BUTTON_NO_TYPE',
+            message: 'Button missing type attribute.',
+            fix: 'Add type="button" or type="submit".',
+          });
+        }
+      }
+    }
+  }
+
+  const errorCount = issues.filter(i => i.severity === 'error').length;
+  const warningCount = issues.filter(i => i.severity === 'warning').length;
+
+  return {
+    issues,
+    passed: errorCount === 0,
+    errorCount,
+    warningCount,
+    summary: errorCount > 0
+      ? `Found ${errorCount} error(s) and ${warningCount} warning(s).`
+      : warningCount > 0
+        ? `No errors, ${warningCount} warning(s).`
+        : 'All validations passed.',
+  };
+}
+
+// ── Performance Metrics ───────────────────────────────────────────
+
+export interface PerformanceMetrics {
+  totalFiles: number;
+  totalSizeBytes: number;
+  totalSizeHuman: string;
+  largestFile: { path: string; size: number } | null;
+  estimatedLoadTime: string;
+  imageCount: number;
+  externalScripts: number;
+  externalStyles: number;
+  domComplexity: { elements: number; depth: number };
+}
+
+export function analyzeFilePerformance(
+  files: { path: string; content: string }[],
+): PerformanceMetrics {
+  let totalSizeBytes = 0;
+  let largestFile: { path: string; size: number } | null = null;
+  let imageCount = 0;
+  let externalScripts = 0;
+  let externalStyles = 0;
+
+  for (const file of files) {
+    const size = new TextEncoder().encode(file.content).length;
+    totalSizeBytes += size;
+
+    if (!largestFile || size > largestFile.size) {
+      largestFile = { path: file.path, size };
+    }
+
+    if (/\.(png|jpg|jpeg|gif|svg|webp|avif)$/i.test(file.path)) imageCount++;
+    if (/\.(js|ts|jsx|tsx)$/i.test(file.path) && /import\s+['"]https?:/.test(file.content)) {
+      const matches = file.content.match(/import\s+['"]https?:[^'"]+['"]/g);
+      externalScripts += matches?.length || 0;
+    }
+    if (/\.html$/i.test(file.path)) {
+      const scriptTags = file.content.match(/<script[^>]*src=['"](https?:[^'"]+)['"]/gi);
+      externalScripts += scriptTags?.length || 0;
+      const styleTags = file.content.match(/<link[^>]*href=['"](https?:[^'"]+\.css)['"]/gi);
+      externalStyles += styleTags?.length || 0;
+      const htmlImages = file.content.match(/<img[^>]*src=['"]/gi);
+      imageCount += htmlImages?.length || 0;
+    }
+  }
+
+  // Estimate DOM complexity from HTML files
+  let domElements = 0;
+  let maxDepth = 0;
+  for (const file of files) {
+    if (/\.html$/i.test(file.path)) {
+      // Simple tag counting
+      const tagMatches = file.content.match(/<\w+[^>]*>/g);
+      domElements += tagMatches?.length || 0;
+      // Estimate depth
+      let depth = 0;
+      for (const char of file.content) {
+        if (char === '<' && file.content[file.content.indexOf(char) + 1] !== '/') depth++;
+        else if (char === '<' && file.content[file.content.indexOf(char) + 1] === '/') depth--;
+        maxDepth = Math.max(maxDepth, depth);
+      }
+    } else if (/\.(tsx|jsx)$/i.test(file.path)) {
+      const tagMatches = file.content.match(/<\w+[^>]*>/g);
+      domElements += tagMatches?.length || 0;
+    }
+  }
+
+  const sizeKB = totalSizeBytes / 1024;
+  const totalSizeHuman = sizeKB >= 1024
+    ? `${(sizeKB / 1024).toFixed(1)} MB`
+    : `${sizeKB.toFixed(0)} KB`;
+
+  // Rough load time estimation
+  const baseTime = 200; // ms baseline
+  const sizeMs = totalSizeBytes / 10000; // ~10KB per 100ms
+  const scriptMs = externalScripts * 100;
+  const domMs = Math.min(domElements * 0.5, 500);
+  const estimatedMs = baseTime + sizeMs + scriptMs + domMs;
+  const estimatedLoadTime = estimatedMs < 1000
+    ? `${Math.round(estimatedMs)}ms`
+    : `${(estimatedMs / 1000).toFixed(1)}s`;
+
+  return {
+    totalFiles: files.length,
+    totalSizeBytes,
+    totalSizeHuman,
+    largestFile,
+    estimatedLoadTime,
+    imageCount,
+    externalScripts,
+    externalStyles,
+    domComplexity: { elements: domElements, depth: maxDepth },
+  };
+}
+
+// ── Bundle Size Budget Check ──────────────────────────────────────
+
+export interface BudgetCheck {
+  passed: boolean;
+  metric: string;
+  limit: string;
+  actual: string;
+  detail: string;
+}
+
+export function checkSizeBudget(files: { path: string; content: string }[]): BudgetCheck[] {
+  const checks: BudgetCheck[] = [];
+  let totalSize = 0;
+
+  for (const file of files) {
+    const size = new TextEncoder().encode(file.content).length;
+    totalSize += size;
+  }
+
+  const totalKB = totalSize / 1024;
+  checks.push({
+    passed: totalKB <= 500,
+    metric: 'Total project size',
+    limit: '500 KB',
+    actual: totalKB >= 1024 ? `${(totalKB / 1024).toFixed(1)} MB` : `${totalKB.toFixed(0)} KB`,
+    detail: totalKB <= 500 ? 'Within budget' : `Exceeds budget by ${(totalKB - 500).toFixed(0)} KB`,
+  });
+
+  // Check individual files
+  for (const file of files) {
+    const size = new TextEncoder().encode(file.content).length;
+    const sizeKB = size / 1024;
+    if (sizeKB > 100) {
+      checks.push({
+        passed: false,
+        metric: `File size: ${file.path}`,
+        limit: '100 KB',
+        actual: `${sizeKB.toFixed(0)} KB`,
+        detail: `Consider splitting into smaller files.`,
+      });
+    }
+  }
+
+  return checks;
+}
+
+// ── DOM Validation ────────────────────────────────────────────────
+
+export interface DOMValidationResult {
+  hasDoctype: boolean;
+  hasTitle: boolean;
+  hasViewport: boolean;
+  hasCharset: boolean;
+  hasLang: boolean;
+  semanticElements: string[];
+  missingSemanticElements: string[];
+  headingOrder: number[];
+  headingIssues: string[];
+  hasMain: boolean;
+  hasNavigation: boolean;
+  hasFooter: boolean;
+  formIssues: string[];
+  linkIssues: string[];
+  score: number; // 0-100
+}
+
+export function validateDOM(html: string): DOMValidationResult {
+  const result: DOMValidationResult = {
+    hasDoctype: /^<!DOCTYPE html>/i.test(html.trim()),
+    hasTitle: /<title>/i.test(html),
+    hasViewport: /name="viewport"/i.test(html),
+    hasCharset: /charset=/i.test(html),
+    hasLang: /<html[^>]*lang=/i.test(html),
+    semanticElements: [],
+    missingSemanticElements: [],
+    headingOrder: [],
+    headingIssues: [],
+    hasMain: /<main[>\s]/i.test(html),
+    hasNavigation: /<nav[>\s]/i.test(html),
+    hasFooter: /<footer[>\s]/i.test(html),
+    formIssues: [],
+    linkIssues: [],
+    score: 100,
+  };
+
+  // Detect semantic elements used
+  const semanticTags = ['header', 'nav', 'main', 'article', 'section', 'aside', 'footer', 'figure', 'figcaption', 'details', 'summary'];
+  for (const tag of semanticTags) {
+    const regex = new RegExp(`<${tag}[>\\s]`, 'i');
+    if (regex.test(html)) {
+      result.semanticElements.push(tag);
+    }
+  }
+
+  // Check for missing semantic elements
+  const recommended = ['header', 'nav', 'main', 'footer'];
+  for (const tag of recommended) {
+    if (!result.semanticElements.includes(tag)) {
+      result.missingSemanticElements.push(tag);
+    }
+  }
+
+  // Check heading order
+  const headingRegex = /<h([1-6])[>\s]/gi;
+  let hMatch: RegExpExecArray | null;
+  while ((hMatch = headingRegex.exec(html)) !== null) {
+    result.headingOrder.push(parseInt(hMatch[1]));
+  }
+
+  // Check heading order skips
+  for (let i = 1; i < result.headingOrder.length; i++) {
+    if (result.headingOrder[i] > result.headingOrder[i - 1] + 1) {
+      result.headingIssues.push(
+        `Heading order jumps from h${result.headingOrder[i - 1]} to h${result.headingOrder[i]}.`
+      );
+    }
+  }
+
+  // Check for form issues
+  const formFields = html.match(/<input[>\s]/gi);
+  if (formFields && formFields.length > 0) {
+    const labeledInputs = html.match(/<label[^>]*>/gi);
+    if (!labeledInputs || labeledInputs.length < Math.ceil(formFields.length * 0.5)) {
+      result.formIssues.push('Many inputs are missing associated label elements.');
+    }
+  }
+
+  // Check links
+  const linkMatches = html.match(/<a[^>]*href=['"]([^'"]+)['"][^>]*>/gi);
+  if (linkMatches) {
+    for (const link of linkMatches) {
+      if (/href=['"]\s*['"]/.test(link)) {
+        result.linkIssues.push('Empty href attribute found on anchor tag.');
+        break;
+      }
+    }
+    const textLinks = linkMatches.filter(link => !/<a[^>]*>[\s\S]*?<\/a>/.test(link + '</a>'));
+  }
+
+  // Calculate score
+  let deductions = 0;
+  if (!result.hasDoctype) deductions += 10;
+  if (!result.hasTitle) deductions += 10;
+  if (!result.hasViewport) deductions += 10;
+  if (!result.hasCharset) deductions += 5;
+  if (!result.hasLang) deductions += 5;
+  if (!result.hasMain) deductions += 8;
+  if (!result.hasNavigation) deductions += 5;
+  if (!result.hasFooter) deductions += 5;
+  deductions += result.missingSemanticElements.length * 3;
+  deductions += result.headingIssues.length * 3;
+  deductions += result.formIssues.length * 5;
+  deductions += result.linkIssues.length * 3;
+
+  result.score = Math.max(0, 100 - deductions);
+
+  return result;
+}
+
 interface VirtualFile {
   content: string;
   modified: number;

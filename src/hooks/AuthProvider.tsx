@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { User } from 'firebase/auth';
-import { observeAuthState } from '@/services/firebase';
+import type { User, UserCredential } from 'firebase/auth';
+import { handleRedirectResult, observeAuthState } from '@/services/firebase';
 import { AuthContext, type AuthContextValue } from '@/hooks/authContext';
 import * as storage from '@/services/storage';
 
@@ -17,6 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     allowLocalDemoAuth ? storage.isAuthenticated() || hasLocalDevAuth : false
   ));
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     if (!allowLocalDemoAuth || !hasLocalDevAuth) return;
@@ -28,6 +29,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextUser);
       setIsAuthReady(true);
     });
+  }, []);
+
+  // Process any pending redirect result (e.g. from a previous redirect-based sign-in)
+  useEffect(() => {
+    let isCancelled = false;
+
+    handleRedirectResult().then((result: UserCredential | null) => {
+      if (isCancelled) return;
+      if (result?.user) {
+        // Redirect completed successfully — onAuthStateChanged will also fire
+        setUser(result.user);
+        setIsAuthReady(true);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -48,7 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthed: Boolean(user) || localDemoAuthed,
     isAuthReady,
-  }), [isAuthReady, localDemoAuthed, user]);
+    authError,
+  }), [authError, isAuthReady, localDemoAuthed, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

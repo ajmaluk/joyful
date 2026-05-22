@@ -1932,22 +1932,34 @@ ${usage}
 }
 
 function contactContent(_brand: string): string {
-  return `export default function ContactPage() {
-  const [formData, setFormData] = React.useState({ name: '', email: '', message: '' });
+  return `import { useState } from 'react';
+import { toast } from 'sonner';
+
+export default function ContactPage() {
+  const [formData, setFormData] = useState({ name: '', email: '', message: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted:', formData);
+    setIsSubmitting(true);
+    // Simulate form submission — replace with actual API call
+    setTimeout(() => {
+      toast.success('Message sent! We\'ll get back to you soon.');
+      setFormData({ name: '', email: '', message: '' });
+      setIsSubmitting(false);
+    }, 800);
   };
 
   return (
     <div className="container py-16 md:py-24">
       <div className="mx-auto max-w-2xl">
-        <h1 className="text-4xl font-bold tracking-tight">Contact us</h1>
-        <p className="mt-4 text-lg text-muted-foreground">
-          Have a question or want to work together? Send us a message.
-        </p>
-        <form onSubmit={handleSubmit} className="mt-10 space-y-6">
+        <div className="mb-10">
+          <h1 className="text-4xl font-bold tracking-tight">Contact us</h1>
+          <p className="mt-4 text-lg text-muted-foreground">
+            Have a question or want to work together? Send us a message and we&apos;ll get back to you shortly.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium mb-2">Name</label>
             <input
@@ -1955,7 +1967,8 @@ function contactContent(_brand: string): string {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm"
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Your name"
               required
             />
           </div>
@@ -1966,7 +1979,8 @@ function contactContent(_brand: string): string {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm"
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="you@example.com"
               required
             />
           </div>
@@ -1977,12 +1991,17 @@ function contactContent(_brand: string): string {
               rows={5}
               value={formData.message}
               onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
-              className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm"
+              className="flex min-h-[120px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="How can we help?"
               required
             />
           </div>
-          <button type="submit" className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors">
-            Send message
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Sending...' : 'Send message'}
           </button>
         </form>
       </div>

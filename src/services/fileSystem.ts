@@ -294,6 +294,374 @@ export function buildFileTree(files: ProjectFile[]): FileTreeNode[] {
   return root;
 }
 
+// ── Conflict Detection ────────────────────────────────────────────
+
+export interface ConflictInfo {
+  path: string;
+  type: 'concurrent_modify' | 'delete_modify_conflict' | 'create_exists';
+  description: string;
+  suggestAction: 'skip' | 'overwrite' | 'merge';
+}
+
+export function detectConflicts(
+  operations: FileOperation[],
+  currentFiles: ProjectFile[],
+): ConflictInfo[] {
+  const conflicts: ConflictInfo[] = [];
+  const opMap = new Map<string, FileOperation[]>();
+
+  for (const op of operations) {
+    const path = normalizeProjectPath(op.path);
+    if (!opMap.has(path)) opMap.set(path, []);
+    opMap.get(path)!.push({ ...op, path });
+  }
+
+  for (const [path, ops] of opMap) {
+    // Detect creates on existing files
+    const creates = ops.filter(o => o.action === 'create' || !o.action);
+    if (creates.length > 0 && currentFiles.some(f => f.path === path)) {
+      conflicts.push({
+        path,
+        type: 'create_exists',
+        description: `Cannot create ${path} — a file with this path already exists. Using modify action instead.`,
+        suggestAction: 'overwrite',
+      });
+    }
+
+    // Detect delete + modify on same file
+    const hasDelete = ops.some(o => o.action === 'delete');
+    const hasModify = ops.some(o => o.action === 'modify' || !o.action);
+    if (hasDelete && hasModify) {
+      conflicts.push({
+        path,
+        type: 'delete_modify_conflict',
+        description: `Both delete and modify operations for ${path}.`,
+        suggestAction: 'skip',
+      });
+    }
+
+    // Detect concurrent modifies
+    const modifies = ops.filter(o => o.action === 'modify' || !o.action);
+    if (modifies.length > 1) {
+      conflicts.push({
+        path,
+        type: 'concurrent_modify',
+        description: `Multiple concurrent modifications to ${path}. Will merge changes.`,
+        suggestAction: 'merge',
+      });
+    }
+  }
+
+  return conflicts;
+}
+
+// ── Smart File Merge ──────────────────────────────────────────────
+
+export interface MergeResult {
+  content: string;
+  merged: boolean;
+  conflicts: { line: number; ours: string; theirs: string }[];
+}
+
+export function smartMerge(
+  originalContent: string,
+  ourChanges: string[],
+  theirChanges: string[],
+): MergeResult {
+  const result: MergeResult = {
+    content: originalContent,
+    merged: false,
+    conflicts: [],
+  };
+
+  if (ourChanges.length === 0 && theirChanges.length === 0) return result;
+  if (ourChanges.length === 0) {
+    result.content = theirChanges.join('\n');
+    result.merged = true;
+    return result;
+  }
+  if (theirChanges.length === 0) {
+    result.content = ourChanges.join('\n');
+    result.merged = true;
+    return result;
+  }
+
+  if (ourChanges.join('\n') === theirChanges.join('\n')) {
+    result.content = ourChanges.join('\n');
+    result.merged = true;
+    return result;
+  }
+
+  // Try line-by-line merge
+  const mergedLines: string[] = [];
+  const maxLines = Math.max(ourChanges.length, theirChanges.length);
+  for (let i = 0; i < maxLines; i++) {
+    const ourLine = i < ourChanges.length ? ourChanges[i] : '';
+    const theirLine = i < theirChanges.length ? theirChanges[i] : '';
+
+    if (ourLine === theirLine) {
+      mergedLines.push(ourLine);
+    } else if (ourLine === '' || ourLine === undefined) {
+      mergedLines.push(theirLine);
+    } else if (theirLine === '' || theirLine === undefined) {
+      mergedLines.push(ourLine);
+    } else {
+      result.conflicts.push({ line: i + 1, ours: ourLine, theirs: theirLine });
+      mergedLines.push(theirLine); // Default: accept their version (AI's version)
+    }
+  }
+
+  result.content = mergedLines.join('\n');
+  result.merged = result.conflicts.length === 0;
+  return result;
+}
+
+// ── Dependency Analysis ───────────────────────────────────────────
+
+export interface DependencyIssue {
+  path: string;
+  type: 'missing_import' | 'broken_reference' | 'missing_export' | 'circular_dependency';
+  specifier: string;
+  line: number;
+  severity: 'error' | 'warning';
+}
+
+export function analyzeDependencies(
+  files: ProjectFile[],
+): { issues: DependencyIssue[]; depGraph: Map<string, Set<string>> } {
+  const issues: DependencyIssue[] = [];
+  const depGraph = new Map<string, Set<string>>();
+  const filePaths = new Set(files.map(f => f.path));
+
+  function dirname(p: string): string {
+    const parts = p.split('/');
+    parts.pop();
+    return parts.join('/');
+  }
+
+  function resolveImport(sourcePath: string, specifier: string): string | null {
+    const base = specifier.startsWith('@/')
+      ? `src/${specifier.slice(2)}`
+      : specifier.startsWith('.')
+        ? resolveRelative(sourcePath, specifier)
+        : null;
+    if (!base) return null;
+
+    const extensions = ['.tsx', '.ts', '.jsx', '.js', '.css', '.json', ''];
+
+    for (const ext of extensions) {
+      const candidate = ext ? `${base}${ext}` : base;
+      if (filePaths.has(candidate)) return candidate;
+      // Alternative: try path/index.ext
+      const pathAlt = `${base}/index${ext}`;
+      if (filePaths.has(pathAlt)) return pathAlt;
+    }
+    return null;
+  }
+
+  function resolveRelative(source: string, relative: string): string {
+    const dirParts = dirname(source).split('/');
+    const relParts = relative.split('/');
+    for (const part of relParts) {
+      if (part === '..') dirParts.pop();
+      else if (part !== '.') dirParts.push(part);
+    }
+    return dirParts.join('/');
+  }
+
+  for (const file of files) {
+    if (!/\.(tsx?|jsx?)$/i.test(file.path)) continue;
+
+    const deps = new Set<string>();
+    depGraph.set(file.path, deps);
+
+    let lineNum = 0;
+    const lines = file.content.split('\n');
+
+    for (const line of lines) {
+      lineNum++;
+
+      // Check CSS imports
+      const cssImport = line.match(/@import\s+['"]([^'"]+)['"]/);
+      if (cssImport) {
+        const resolved = resolveImport(file.path, cssImport[1]);
+        if (!resolved && !cssImport[1].startsWith('http')) {
+          issues.push({
+            path: file.path,
+            type: 'missing_import',
+            specifier: cssImport[1],
+            line: lineNum,
+            severity: 'warning',
+          });
+        }
+        continue;
+      }
+
+      // Check JS/TS imports
+      const importMatch = line.match(/(?:from|import)\s+['"]([^'"]+)['"]/);
+      if (importMatch) {
+        const specifier = importMatch[1];
+        if (specifier.startsWith('.') || specifier.startsWith('@/')) {
+          deps.add(specifier);
+          const resolved = resolveImport(file.path, specifier);
+          if (!resolved) {
+            issues.push({
+              path: file.path,
+              type: 'missing_import',
+              specifier,
+              line: lineNum,
+              severity: 'error',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Detect circular dependencies
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+  const path: string[] = [];
+
+  function dfs(current: string) {
+    if (inStack.has(current)) {
+      // Found a cycle: report it
+      const cycleStart = path.indexOf(current);
+      if (cycleStart >= 0) {
+        const cycle = path.slice(cycleStart).concat(current);
+        issues.push({
+          path: current,
+          type: 'circular_dependency',
+          specifier: cycle.join(' -> '),
+          line: 0,
+          severity: 'warning',
+        });
+      }
+      return;
+    }
+    if (visited.has(current)) return;
+
+    visited.add(current);
+    inStack.add(current);
+    path.push(current);
+
+    const deps = depGraph.get(current);
+    if (deps) {
+      for (const dep of deps) {
+        // Resolve dep to a file path
+        for (const fp of filePaths) {
+          if (fp.endsWith(dep.replace('@/', 'src/')) || dep.includes(fp.split('/').pop()?.replace(/\.[^.]+$/, '') || '')) {
+            dfs(fp);
+            break;
+          }
+        }
+      }
+    }
+
+    path.pop();
+    inStack.delete(current);
+  }
+
+  for (const [filePath] of depGraph) {
+    dfs(filePath);
+  }
+
+  return { issues, depGraph };
+}
+
+// ── Change Tracking ───────────────────────────────────────────────
+
+export interface FileChangeRecord {
+  path: string;
+  action: 'create' | 'modify' | 'delete';
+  previousContent?: string;
+  newContent?: string;
+  timestamp: number;
+  summary: string;
+}
+
+export class ChangeTracker {
+  private changes: Map<string, FileChangeRecord[]> = new Map();
+
+  recordAction(action: Omit<FileChangeRecord, 'timestamp'>): void {
+    const record: FileChangeRecord = {
+      ...action,
+      timestamp: Date.now(),
+    };
+    if (!this.changes.has(action.path)) {
+      this.changes.set(action.path, []);
+    }
+    this.changes.get(action.path)!.push(record);
+
+    // Keep only last 50 changes per file
+    const fileChanges = this.changes.get(action.path)!;
+    if (fileChanges.length > 50) {
+      this.changes.set(action.path, fileChanges.slice(-50));
+    }
+  }
+
+  getChanges(path?: string): FileChangeRecord[] {
+    if (path) return this.changes.get(path) || [];
+    const all: FileChangeRecord[] = [];
+    for (const records of this.changes.values()) {
+      all.push(...records);
+    }
+    return all.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  getLatestChange(path: string): FileChangeRecord | null {
+    const records = this.changes.get(path);
+    if (!records || records.length === 0) return null;
+    return records[records.length - 1];
+  }
+
+  getModifiedFiles(): string[] {
+    return Array.from(this.changes.keys());
+  }
+
+  clear(): void {
+    this.changes.clear();
+  }
+}
+
+export const changeTracker = new ChangeTracker();
+
+// ── Orphan File Detection ─────────────────────────────────────────
+
+export function findOrphanFiles(files: ProjectFile[]): ProjectFile[] {
+  const referencedPaths = new Set<string>();
+  const referencedNames = new Set<string>();
+
+  for (const file of files) {
+    const content = file.content;
+    // Check for direct references
+    const refRegex = /(?:from|import|require|href|src)\s*['"]([^'"]+)['"]/g;
+    let m: RegExpExecArray | null;
+    while ((m = refRegex.exec(content)) !== null) {
+      referencedPaths.add(m[1]);
+    }
+
+    // Extract component/function names for cross-referencing
+    const exportRegex = /export\s+(?:default\s+)?(?:function|const|class)\s+([A-Za-z_$][\w$]*)/g;
+    while ((m = exportRegex.exec(content)) !== null) {
+      referencedNames.add(m[1]);
+    }
+  }
+
+  return files.filter(file => {
+    const baseName = file.path.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+    const isEntryPoint = /^(index|main|app|package\.json|index\.html|vite\.config|\.env)/i.test(baseName);
+    const isReferenced = Array.from(referencedPaths).some(ref => ref.includes(baseName));
+    const isNameReferenced = referencedNames.has(baseName);
+    const isCss = file.type === 'css';
+    const isConfig = /^\.\w+|(ts|js)config\.json$/.test(file.path);
+
+    return !isEntryPoint && !isReferenced && !isNameReferenced && !isCss && !isConfig;
+  });
+}
+
+// ── Original functions below ───────────────────────────────────────
+
 function escapeClosingScript(content: string): string {
   return content.replace(/<\/script/gi, '<\\/script');
 }
@@ -328,6 +696,57 @@ function stripModuleSyntax(content: string): string {
     .replace(/\bexport\s+default\s+class\s+([A-Za-z0-9_$]+)/, 'class $1')
     .replace(/\bexport\s+default\s+([A-Za-z0-9_$]+);?/g, 'window.__JoyfulApp = $1;')
     .replace(/\bexport\s+(const|let|var|function|class)\s+/g, '$1 ');
+}
+
+function dirname(path: string): string {
+  const parts = path.split('/');
+  parts.pop();
+  return parts.join('/');
+}
+
+function resolvePreviewImportPath(sourcePath: string, specifier: string): string | null {
+  if (specifier.startsWith('@/')) {
+    return normalizeProjectPath(`src/${specifier.slice(2)}`);
+  }
+
+  if (specifier.startsWith('.')) {
+    const resolvedParts: string[] = [];
+    for (const part of `${dirname(sourcePath)}/${specifier}`.split('/')) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        resolvedParts.pop();
+        continue;
+      }
+      resolvedParts.push(part);
+    }
+    return normalizeProjectPath(resolvedParts.join('/'));
+  }
+
+  return null;
+}
+
+function inlineJsonImports(content: string, sourcePath: string, files: ProjectFile[]): string {
+  return content.replace(
+    /^\s*import\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+\.json)['"];?\s*$/gm,
+    (_match, bindingName: string, specifier: string) => {
+      const resolvedPath = resolvePreviewImportPath(sourcePath, specifier);
+      if (!resolvedPath) {
+        return `const ${bindingName} = {};`;
+      }
+
+      const jsonFile = files.find(file => file.path === resolvedPath);
+      if (!jsonFile) {
+        return `const ${bindingName} = {};`;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonFile.content);
+        return `const ${bindingName} = ${JSON.stringify(parsed, null, 2)};`;
+      } catch {
+        return `const ${bindingName} = {};`;
+      }
+    },
+  );
 }
 
 function routePathToFilePath(routePath: string): string {
@@ -409,7 +828,7 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
     return '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0A0A0F;color:#8A8AA0;font-family:sans-serif;"><div>No React entry found. Create src/App.jsx or app/page.tsx to preview.</div></body></html>';
   }
 
-  const componentSource = stripModuleSyntax(appFile.content);
+  const componentSource = stripModuleSyntax(inlineJsonImports(appFile.content, appFile.path, files));
   const needsRouter = /react-router-dom/.test(appFile.content);
   const importFallbacks = buildPreviewFallbacks(extractImportedNames(appFile.content));
   const hasNamedApp = /function\s+(App|Page)\s*\(|const\s+(App|Page)\s*=|class\s+(App|Page)\s+/.test(componentSource);
@@ -422,7 +841,7 @@ function generateReactPreview(files: ProjectFile[], routePath = '/'): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; img-src 'self' data: https:; connect-src 'self' https:; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' data: https:; object-src 'none'; frame-ancestors 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https:; object-src 'none'; frame-ancestors 'self';">
   <title>Joyful React Preview</title>
   <style>${css}</style>
 </head>

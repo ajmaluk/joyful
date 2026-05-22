@@ -3,8 +3,8 @@ import type { ApplyReport, ChatAttachment, ChatMessage, ProjectFile, AIGeneratio
 import { generateWithAI } from '@/services/aiService';
 import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
-import { buildFileContextGraph, getSkillBrief, getSkillManifest, selectSkillsForPrompt } from '@/services/skills';
-import { buildAgentPlanFromContext, buildAgentToolTrace, buildProjectMemorySnapshot } from '@/services/agentRuntime';
+import { buildFileContextGraph, getSkillManifest, selectSkillsWithConfidence, composeSkills, mergeSkillBriefs, buildQualityGatesForPrompt, type BuilderSkill } from '@/services/skills';
+import { buildAgentPlanFromContext, buildAgentToolTrace, buildProjectMemorySnapshot, sessionMemory, taskDecomposition, MultiStepPipelineExecutor, type PipelinePhase } from '@/services/agentRuntime';
 
 const MIN_REQUEST_INTERVAL = 3000;
 const lastRequestTimeRef = { current: 0 };
@@ -272,13 +272,37 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
 
     setIsGenerating(true);
     const contextGraph = buildFileContextGraph(content, existingFiles);
-    const selectedSkills = selectSkillsForPrompt(content, existingFiles, attachments).map(skill => skill.name);
+
+    // Use advanced confidence-based skill selection
+    const { selected: skillObjs, confidences } = selectSkillsWithConfidence(content, existingFiles, attachments);
+    const selectedSkills = skillObjs.map(skill => skill.name);
+
+    // Compose skills into orchestrated groups
+    const composedSkills = composeSkills(
+      skillObjs.filter((s): s is BuilderSkill => 'keywords' in s),
+      content
+    );
+
+    // Use session memory from previous turns
+    const memoryNotes = buildMemoryNotes(currentMessages);
+
+    // Build quality gates for validation
+    const gates = buildQualityGatesForPrompt(content, existingFiles);
+
+    // Task decomposition
+    const plans = taskDecomposition.decompose(content, contextGraph, existingFiles.length > 0);
+
+    // Add memory entry for this request
+    sessionMemory.addEntry('decision', `Processing: ${content.slice(0, 100)}`, contextGraph.map(n => n.path));
+
     setBuildTodos(buildInitialWorkflowTodos(existingFiles.length > 0));
     setBuildTodos(prev => prev.map(todo =>
       todo.label.includes('Analyzing')
-        ? { ...todo, status: 'done' as const, detail: contextGraph.length ? `Selected ${contextGraph.length} context file(s)` : 'No existing files to inspect' }
+        ? { ...todo, status: 'done' as const, detail: confidences.length > 0
+            ? `Selected ${contextGraph.length} context file(s), top skill confidence: ${(confidences[0]?.normalizedConfidence * 100).toFixed(0)}%`
+            : `Selected ${contextGraph.length} context file(s)` }
         : todo.label.includes('Planning')
-          ? { ...todo, status: 'active' as const, detail: contextGraph.slice(0, 3).map(node => node.path).join(', ') }
+          ? { ...todo, status: 'active' as const, detail: `${plans.length} task plan(s), ${gates.length} quality gate(s)` }
           : todo
     ));
     const checkpoint: SavedGenerationState = {
@@ -306,6 +330,16 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
         const agentPlan = buildAgentPlanFromContext(content, contextGraph, selectedSkills, hasFiles);
         const planSteps = agentPlan.map(step => step.title);
 
+        // Show quality gates in plan
+        const gateSummary = gates
+          .filter(g => g.status !== 'skipped')
+          .map(g => `- ${g.name}: ${g.description}`)
+          .join('\n');
+
+        const composedSkillNote = composedSkills.length > 0
+          ? `\n\nComposed skill groups:\n${composedSkills.map(c => `- ${c.id}: ${c.skills.map(s => s.name).join(', ')}`).join('\n')}`
+          : '';
+
         const assistantMsg: ChatMessage = {
           id: `msg_${Date.now() + 1}`,
           role: 'assistant',
@@ -313,7 +347,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
           actionType: 'plan',
           sourcePrompt: content,
           timestamp: new Date().toISOString(),
-          content: `Here's my plan:\n\n${agentPlan.map((step, i) => `${i + 1}. ${step.title}${step.detail ? ` — ${step.detail}` : ''}`).join('\n')}\n\n${selectedSkills.length > 0 ? `Using skills: ${selectedSkills.join(', ')}.` : ''}\n\nReady to build when you are.`,
+          content: `Here's my plan:\n\n${agentPlan.map((step, i) => `${i + 1}. ${step.title}${step.detail ? ` — ${step.detail}` : ''}`).join('\n')}\n\n${selectedSkills.length > 0 ? `Using skills: ${selectedSkills.join(', ')}.` : ''}${composedSkillNote}\n\nQuality gates to validate:\n${gateSummary || 'No active quality gates.'}\n\nReady to build when you are.`,
           metadata: {
             contextFiles: contextGraph.map(node => node.path),
             planSteps,
@@ -340,22 +374,267 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
 
       setBuildTodos(prev => prev.map(t =>
         t.label.includes('Planning') ? { ...t, status: 'done' as const }
-          : t.label.includes('Generating') ? { ...t, status: 'active' as const, detail: 'Request sent with ranked context and active skills' }
+          : t.label.includes('Generating') ? { ...t, status: 'active' as const, detail: `Quality gates: ${gates.filter(g => g.status === 'passed').length}/${gates.length}` }
           : t
       ));
 
-      abortControllerRef.current = new AbortController();
-      const response = await generateWithAI(content, existingFiles, history, {
-        skillBrief: getSkillBrief(content, existingFiles, attachments),
-        skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
-        contextFiles: contextGraph.map(node => node.path),
-        memoryNotes: buildMemoryNotes(currentMessages),
-        attachments,
-        signal: abortControllerRef.current.signal,
-      });
+      // Use composed skill briefs
+      const skillBrief = mergeSkillBriefs(composedSkills, content);
 
-      if (abortRef.current) {
-        return null;
+      abortControllerRef.current = new AbortController();
+
+      // Determine whether to use multi-step pipeline based on task complexity
+      const estimatedFileCount = Math.max(1, plans.reduce((sum, p) => sum + p.subtasks.filter(s => s.type === 'create' || s.type === 'modify').length, 0));
+      const isMultiStep = plans.length > 1 || estimatedFileCount > 3 || existingFiles.length > 0;
+
+      let response: AIGenerationResponse | null = null;
+      let multiStepFailed = false;
+
+      if (isMultiStep && !abortRef.current) {
+        try {
+          // ── Multi-step pipeline: Plan → Execute files → Validate ──
+        const pipelineExec = new MultiStepPipelineExecutor((phase: PipelinePhase) => {
+          if (phase.type === 'planning') {
+            setBuildTodos(prev => prev.map(todo =>
+              todo.label.includes('Generating')
+                ? { ...todo, status: 'active' as const, detail: 'Planning file structure and dependencies' }
+                : todo
+            ));
+          } else if (phase.type === 'executing_file') {
+            setBuildTodos(prev => prev.map(todo =>
+              todo.label.includes('Generating')
+                ? { ...todo, detail: `Generating ${phase.path} (${pipelineExec.getProgress().filesGenerated + 1}/${pipelineExec.getProgress().totalFiles})` }
+                : todo
+            ));
+          } else if (phase.type === 'validating') {
+            setBuildTodos(prev => prev.map(todo =>
+              todo.label.includes('Generating') ? { ...todo, status: 'done' as const }
+                : todo.label.includes('Validating') ? { ...todo, status: 'active' as const, detail: phase.detail }
+                : todo
+            ));
+          }
+        });
+
+        const contextPaths = contextGraph.map(n => n.path);
+        const projectConfigContext = pipelineExec.buildProjectContext(existingFiles);
+
+        // Phase 1: Generate plan
+        const planPrompt = pipelineExec.buildPlanPrompt(
+          content, contextPaths, existingFiles,
+          skillBrief, [...memoryNotes, ...sessionMemory.buildMemoryNotes()]
+        );
+
+        abortControllerRef.current = new AbortController();
+        const planResponse = await generateWithAI(planPrompt, existingFiles, history, {
+          skillBrief: [],
+          skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
+          contextFiles: contextPaths,
+          memoryNotes: [...memoryNotes, ...sessionMemory.buildMemoryNotes()],
+          attachments,
+          signal: abortControllerRef.current.signal,
+        });
+
+        if (abortRef.current) return null;
+
+        const planFiles = planResponse.files.map(f => ({ path: f.path, action: f.action || ('create' as const) }));
+        const parsedPlan = {
+          files: planFiles,
+          title: planResponse.summary?.slice(0, 80) || 'Build plan',
+          summary: planResponse.summary,
+        };
+        const executionOrder = parsedPlan.files.length > 1
+          ? pipelineExec.determineExecutionOrder(parsedPlan.files)
+          : parsedPlan.files.map(f => f.path);
+
+        if (executionOrder.length === 0 && planResponse.files.length === 0) {
+          throw new Error('Multi-step pipeline: plan produced no files to generate');
+        }
+
+        // Phase 2: Generate files one-by-one in dependency order
+        const order = executionOrder.length > 0 ? executionOrder : planResponse.files.map(f => f.path);
+        const planSummary = parsedPlan?.summary || planResponse.summary;
+        const accumulatedFiles: { path: string; content: string; action: 'create' | 'modify' | 'delete' }[] = [];
+
+        setBuildTodos(prev => prev.map(todo =>
+          todo.label.includes('Generating')
+            ? { ...todo, detail: `Generating ${order.length} file(s) sequentially` }
+            : todo
+        ));
+
+        for (let fileIdx = 0; fileIdx < order.length; fileIdx++) {
+          if (abortRef.current) break;
+
+          const filePath = order[fileIdx];
+          const fileInfo = planFiles.find(f => f.path === filePath) || { path: filePath, action: 'create' as const };
+          const action = (fileInfo.action === 'delete' ? 'delete' : 'create') as 'create' | 'modify' | 'delete';
+          const existingContent = existingFiles.find(f => f.path === filePath)?.content;
+
+          // Update todos to show current file
+          setBuildTodos(prev => prev.map(todo =>
+            todo.label.includes('Generating')
+              ? { ...todo, detail: `Generating file ${fileIdx + 1}/${order.length}: ${filePath}` }
+              : todo
+          ));
+
+          // Skip deletes for single-file generation
+          if (action === 'delete') {
+            accumulatedFiles.push({ path: filePath, content: '', action: 'delete' });
+            continue;
+          }
+
+          // If file already exists and is not being modified, treat as modify
+          const effectiveAction = existingContent !== undefined && action === 'create' ? 'modify' : action;
+
+          const filePrompt = pipelineExec.buildFileGenerationPrompt(
+            filePath,
+            effectiveAction,
+            `Implementation of ${filePath}`,
+            planSummary || content.slice(0, 500),
+            projectConfigContext,
+            existingContent,
+            accumulatedFiles.map(f => ({ path: f.path, content: f.content }))
+          );
+
+          const fileResponse = await generateWithAI(filePrompt, existingFiles, history, {
+            skillBrief: [],
+            skillManifest: [],
+            contextFiles: contextPaths,
+            memoryNotes: [...memoryNotes, ...sessionMemory.buildMemoryNotes()],
+            attachments,
+            signal: abortControllerRef.current!.signal,
+          });
+
+          if (abortRef.current) return null;
+
+          const generatedContent = fileResponse.files.find(f => f.path === filePath)?.content;
+          if (generatedContent) {
+            accumulatedFiles.push({ path: filePath, content: generatedContent, action: effectiveAction });
+          } else if (fileResponse.files.length > 0) {
+            accumulatedFiles.push({
+              path: filePath,
+              content: fileResponse.files[0].content || '',
+              action: effectiveAction,
+            });
+          }
+
+          // Brief delay between file generations
+          await new Promise(r => setTimeout(r, 300));
+        }
+
+        if (abortRef.current) return null;
+
+        // Convert accumulated files to match AIGenerationResponse format
+        const mergedFiles = accumulatedFiles.map(f => ({
+          path: f.path,
+          action: f.action as 'create' | 'modify' | 'delete',
+          content: f.content,
+        }));
+
+        // Phase 3: Validation (optional - only if we have enough files)
+        if (mergedFiles.length >= 3 && !abortRef.current) {
+          setBuildTodos(prev => prev.map(todo =>
+            todo.label.includes('Validating')
+              ? { ...todo, status: 'active' as const, detail: 'Checking imports and references' }
+              : todo
+          ));
+
+          const validationPrompt = pipelineExec.buildValidationPrompt(
+            planSummary || content.slice(0, 500),
+            mergedFiles
+          );
+
+          try {
+            const validationResponse = await generateWithAI(validationPrompt, existingFiles, history, {
+              skillBrief: [],
+              skillManifest: [],
+              contextFiles: contextPaths,
+              memoryNotes: [...memoryNotes, ...sessionMemory.buildMemoryNotes()],
+              attachments,
+              signal: abortControllerRef.current!.signal,
+            });
+
+            if (!abortRef.current && validationResponse.files.length > 0) {
+              // Merge validation fixes into accumulated files
+              for (const fix of validationResponse.files) {
+                const existingIdx = mergedFiles.findIndex(f => f.path === fix.path);
+                if (existingIdx >= 0 && fix.content) {
+                  mergedFiles[existingIdx] = { ...mergedFiles[existingIdx], content: fix.content };
+                } else if (fix.content) {
+                  mergedFiles.push({
+                    path: fix.path,
+                    action: fix.action || 'modify',
+                    content: fix.content,
+                  });
+                }
+              }
+            }
+          } catch (validationErr) {
+            console.error('Validation phase encountered an error (continuing with generated files):', validationErr);
+          }
+
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        if (abortRef.current) return null;
+
+        setBuildTodos(prev => prev.map(todo =>
+          todo.label.includes('Validating') ? { ...todo, status: 'done' as const }
+            : todo.label.includes('Applying') ? { ...todo, status: 'active' as const }
+            : todo
+        ));
+
+        // Build the final response from accumulated files
+        response = {
+          files: mergedFiles,
+          patches: [],
+          summary: `Generated ${mergedFiles.filter(f => f.action !== 'delete').length} file(s) across ${order.length} planned operations. ${planSummary || ''}`.trim(),
+          nextSteps: [
+            'Review the generated files for correctness',
+            'Customize content and styling as needed',
+            'Add any additional features or pages',
+          ],
+          metadata: {
+            estimatedComplexity: plans[0]?.complexity || 'medium',
+            agentPlan: plans.flatMap(p => [
+              { id: p.id, title: p.title, status: 'done' as const, detail: p.description.slice(0, 100) },
+              ...p.subtasks.map(s => ({ id: s.id, title: s.label, status: 'done' as const, detail: s.detail })),
+            ]),
+            sandboxCommands: [],
+            sandboxResults: [],
+          },
+        };
+      } catch (pipelineErr) {
+          console.error('Multi-step pipeline failed, falling back to single-step:', pipelineErr);
+          multiStepFailed = true;
+        }
+      }
+
+      // Fall back to single-step if multi-step failed or skipped
+      if (!isMultiStep || multiStepFailed) {
+        if (multiStepFailed) {
+          setBuildTodos(prev => prev.map(t =>
+            t.label.includes('Generating')
+              ? { ...t, status: 'active' as const, detail: 'Falling back to single-step generation' }
+              : t
+          ));
+        }
+
+        response = await generateWithAI(content, existingFiles, history, {
+          skillBrief,
+          skillManifest: getSkillManifest().map(skill => `${skill.name}: ${skill.description}`),
+          contextFiles: contextGraph.map(node => node.path),
+          memoryNotes: [...memoryNotes, ...sessionMemory.buildMemoryNotes()],
+          attachments,
+          signal: abortControllerRef.current.signal,
+        });
+
+        if (abortRef.current) {
+          return null;
+        }
+      }
+
+      if (!response) {
+        throw new Error('Generation did not produce a response');
       }
 
       setBuildTodos(prev =>
@@ -447,7 +726,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
         optionsRef.current?.onToast?.('error', `${failedPatches.length} patch(es) failed to apply to ${failedPatches.map(p => p.path).join(', ')}`);
       }
 
-      setTimeout(() => setBuildTodos([]), 12000);
+      setTimeout(() => buildTodos.length > 0 ? setBuildTodos([]) : null, 12000);
 
       return response;
     } catch (error) {

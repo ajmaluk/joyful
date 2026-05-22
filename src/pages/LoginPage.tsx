@@ -10,13 +10,16 @@ import {
 } from '@/components/auth/AuthShell';
 import { getFriendlyFirebaseAuthError, signInWithEmail, signInWithGithub, signInWithGoogle } from '@/services/firebase';
 import { AlertCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export function LoginPage() {
   const meta = routeMeta['/login'];
+  const { authError: redirectAuthError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const activeError = error || redirectAuthError;
 
   const handleAuth = async (action: () => Promise<unknown>) => {
     setError('');
@@ -66,10 +69,10 @@ export function LoginPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {error && (
+        {activeError && (
           <div className="flex items-start gap-2 rounded-md border border-red-400/30 bg-red-500/10 px-2.5 py-2 text-xs font-medium text-red-500">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
-            <span>{error}</span>
+            <span>{activeError}</span>
           </div>
         )}
         <div>

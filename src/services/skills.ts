@@ -1,5 +1,6 @@
 import type { ChatAttachment, ProjectFile, UserSkill } from '@/types';
 import * as storage from '@/services/storage';
+import { QualityGateOrchestrator, qualityGates } from '@/services/agentRuntime';
 
 const skillDocModules = import.meta.glob('/skills/**/SKILL.md', {
   eager: true,
@@ -233,6 +234,238 @@ function dependencyReason(file: ProjectFile, allFiles: ProjectFile[]) {
   if (importsThisFile) reasons.push('referenced by another file');
 
   return reasons;
+}
+
+// ── Skill Composition Engine ──────────────────────────────────────
+
+export interface ComposedSkill {
+  id: string;
+  skills: BuilderSkill[];
+  priority: number;
+  conflictActions: ('override' | 'merge' | 'skip')[];
+}
+
+/**
+ * Compose multiple skills together, detecting conflicts and resolving them.
+ */
+export function composeSkills(
+  selectedSkills: BuilderSkill[],
+  prompt: string,
+): ComposedSkill[] {
+  const composed: ComposedSkill[] = [];
+  const usedIds = new Set<string>();
+
+  // Group related skills
+  const groups: Record<string, string[]> = {
+    frontend: ['web-development-master', 'react-product-architecture', 'responsive-ui-polish', 'design-system-consistency'],
+    validation: ['code-review-pass', 'testing-workflow', 'accessibility-audit', 'performance-budget'],
+    context: ['file-context-graph', 'vision-reference'],
+  };
+
+  const assigned = new Set<string>();
+
+  // Assign skills to groups
+  for (const [groupName, skillIds] of Object.entries(groups)) {
+    const groupSkills = skillIds
+      .map(id => selectedSkills.find(s => s.id === id))
+      .filter(Boolean) as BuilderSkill[];
+
+    if (groupSkills.length > 0) {
+      composed.push({
+        id: `composed_${groupName}`,
+        skills: groupSkills,
+        priority: groupName === 'frontend' ? 1 : groupName === 'validation' ? 2 : 3,
+        conflictActions: groupSkills.map(s => s.id === 'web-development-master' ? 'override' : 'merge'),
+      });
+      groupSkills.forEach(s => assigned.add(s.id));
+    }
+  }
+
+  // Any remaining skills not in groups
+  const remaining = selectedSkills.filter(s => !assigned.has(s.id));
+  if (remaining.length > 0) {
+    composed.push({
+      id: `composed_remaining`,
+      skills: remaining,
+      priority: 4,
+      conflictActions: remaining.map(() => 'merge' as const),
+    });
+  }
+
+  return composed.sort((a, b) => a.priority - b.priority);
+}
+
+/**
+ * Merge skill instructions into a cohesive brief.
+ */
+export function mergeSkillBriefs(
+  composedSkills: ComposedSkill[],
+  prompt: string,
+): string[] {
+  const merged: string[] = [];
+
+  for (const group of composedSkills) {
+    if (group.skills.length === 0) continue;
+
+    // The highest-priority skill in the group provides the main instruction
+    const primary = group.skills[0];
+    const doc = 'sourcePath' in primary ? getSkillDoc(primary.sourcePath) : '';
+    const mainContent = doc || primary.instructions;
+
+    // Secondary skills provide supplementary constraints
+    const supplements = group.skills.slice(1).map(s => {
+      const doc2 = 'sourcePath' in s ? getSkillDoc(s.sourcePath) : '';
+      return doc2 || s.instructions;
+    });
+
+    merged.push(`## ${primary.name} (Group: ${group.id})\n${mainContent}`);
+
+    for (const sup of supplements) {
+      merged.push(`## Supplementary Constraint\n${sup}`);
+    }
+  }
+
+  return merged;
+}
+
+// ── Confidence Scoring ────────────────────────────────────────────
+
+export interface SkillConfidence {
+  skill: BuilderSkill | UserSkill;
+  rawScore: number;
+  normalizedConfidence: number; // 0-1
+  matchedKeywords: string[];
+  signals: string[];
+}
+
+/**
+ * Score a skill with detailed confidence breakdown.
+ */
+export function scoreSkillWithConfidence(
+  skill: BuilderSkill | UserSkill,
+  prompt: string,
+  attachments: ChatAttachment[],
+  files: ProjectFile[],
+): SkillConfidence {
+  const promptTokens = tokenize(prompt);
+  const lowerPrompt = prompt.toLowerCase();
+  const keywords = 'keywords' in skill ? skill.keywords : [];
+  const haystack = `${skill.name} ${skill.description} ${keywords.join(' ')}`.toLowerCase();
+
+  let rawScore = 0;
+  const matchedKeywords: string[] = [];
+  const signals: string[] = [];
+
+  // Direct keyword matches
+  for (const keyword of keywords) {
+    if (lowerPrompt.includes(keyword)) {
+      rawScore += 3;
+      matchedKeywords.push(keyword);
+    }
+  }
+
+  // Token-level matches
+  for (const token of promptTokens) {
+    if (haystack.includes(token)) {
+      rawScore += 2;
+    }
+  }
+
+  // Specific signal detection
+  if (attachments.length > 0 && /vision|image|screenshot|mockup|visual|reference/.test(haystack)) {
+    rawScore += 50;
+    signals.push('attachments present and skill supports vision');
+  }
+
+  if (files.length > 0 && /file|context|review|fix|modify|existing/.test(haystack)) {
+    rawScore += 8;
+    signals.push('existing files and skill handles modifications');
+  }
+
+  if (/build|create|website|app|page|dashboard|react|vite/.test(lowerPrompt) && /react|architecture|ui|responsive/.test(haystack)) {
+    rawScore += 8;
+    signals.push('build request matches frontend skill');
+  }
+
+  if (/fix|bug|error|broken|issue/.test(lowerPrompt) && /review|context|fix|validate/.test(haystack)) {
+    rawScore += 12;
+    signals.push('fix/issue request matches validation skill');
+  }
+
+  if (/test|verify|check|qa|build|lint/.test(lowerPrompt) && /test|verify|check|qa|build|lint/.test(haystack)) {
+    rawScore += 12;
+    signals.push('test/verify request matches QA skill');
+  }
+
+  // Normalize to 0-1
+  const maxPossibleScore = 100;
+  const normalizedConfidence = Math.min(1, rawScore / maxPossibleScore);
+
+  return {
+    skill,
+    rawScore,
+    normalizedConfidence,
+    matchedKeywords: [...new Set(matchedKeywords)],
+    signals: [...new Set(signals)],
+  };
+}
+
+/**
+ * Select skills with confidence thresholds.
+ */
+export function selectSkillsWithConfidence(
+  prompt: string,
+  files: ProjectFile[] = [],
+  attachments: ChatAttachment[] = [],
+  minConfidence = 0.1,
+  maxSkills = 4,
+): { selected: (BuilderSkill | UserSkill)[]; confidences: SkillConfidence[] } {
+  const userSkills = getActiveUserSkills();
+  const allSkills = [...defaultBuilderSkills, ...userSkills];
+
+  const scored = allSkills
+    .map(skill => scoreSkillWithConfidence(skill, prompt, attachments, files))
+    .filter(score => score.normalizedConfidence >= minConfidence)
+    .sort((a, b) => b.normalizedConfidence - a.normalizedConfidence);
+
+  const selected = scored
+    .slice(0, maxSkills)
+    .map(s => s.skill);
+
+  if (selected.length === 0) {
+    return {
+      selected: defaultBuilderSkills.slice(0, 2),
+      confidences: defaultBuilderSkills.slice(0, 2).map(s => ({
+        skill: s,
+        rawScore: 1,
+        normalizedConfidence: 0.5,
+        matchedKeywords: [],
+        signals: ['fallback selection'],
+      })),
+    };
+  }
+
+  return { selected, confidences: scored.slice(0, maxSkills) };
+}
+
+// ── Quality Gate Integration ──────────────────────────────────────
+
+export function buildQualityGatesForPrompt(
+  prompt: string,
+  files: ProjectFile[],
+): ReturnType<QualityGateOrchestrator['buildGates']> {
+  const lower = prompt.toLowerCase();
+  const hasPackageJson = files.some(f => f.path === 'package.json');
+  const hasTsConfig = files.some(f => /tsconfig/.test(f.path));
+
+  const complexity =
+    /complex|dashboard|app|auth|database|workflow|kanban|crm|commerce|multi.?page/i.test(lower)
+      ? 'complex'
+      : /form|component|section|page.?with|route/i.test(lower)
+        ? 'medium'
+        : 'simple';
+
+  return qualityGates.buildGates(hasPackageJson, hasTsConfig, complexity);
 }
 
 export function buildFileContextGraph(prompt: string, files: ProjectFile[], limit = 8): ContextFileNode[] {

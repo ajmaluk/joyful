@@ -5,6 +5,7 @@ export type AuthContextValue = {
   user: User | null;
   isAuthed: boolean;
   isAuthReady: boolean;
+  authError: string;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

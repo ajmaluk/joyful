@@ -4,15 +4,18 @@ import { routeMeta } from '@/lib/seo';
 import { AlertCircle } from 'lucide-react';
 import { AuthShell, GithubMarker, GoogleMarker, ProviderButton } from '@/components/auth/AuthShell';
 import { createAccountWithEmail, getFriendlyFirebaseAuthError, isGmailAddress, signInWithGithub, signInWithGoogle } from '@/services/firebase';
+import { useAuth } from '@/hooks/useAuth';
 
 export function SignupPage() {
   const meta = routeMeta['/signup'];
+  const { authError: redirectAuthError } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const activeAuthError = authError || redirectAuthError;
 
   const validateForm = () => {
     const newErrors: typeof errors = {};
@@ -84,10 +87,10 @@ export function SignupPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {authError && (
+        {activeAuthError && (
           <div className="flex items-start gap-2 rounded-md border border-red-400/30 bg-red-500/10 px-2.5 py-2 text-xs font-medium text-red-500">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-none" />
-            <span>{authError}</span>
+            <span>{activeAuthError}</span>
           </div>
         )}
         <div>

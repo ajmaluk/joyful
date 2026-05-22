@@ -228,14 +228,15 @@ export interface ProjectMemorySnapshot {
 
 export interface PreviewIssue {
   id: string;
-  severity: 'error' | 'warning';
+  severity: 'error' | 'warning' | 'info';
   message: string;
-  source?: 'console' | 'network' | 'sandbox';
+  source?: 'console' | 'network' | 'sandbox' | 'dom' | 'accessibility' | 'performance';
   path?: string;
   line?: number;
   column?: number;
   selector?: string;
   timestamp: number;
+  code?: string;
 }
 
 // Streaming chunk from AI

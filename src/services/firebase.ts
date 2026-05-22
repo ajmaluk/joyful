@@ -7,11 +7,12 @@ import {
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
-  signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signOut,
   updateProfile,
   type User,
+  type UserCredential,
 } from 'firebase/auth';
 import { getAuth } from 'firebase/auth';
 
@@ -77,11 +78,19 @@ export function getFriendlyFirebaseAuthError(error: unknown) {
     case 'auth/popup-blocked':
       return 'Your browser blocked the sign-in popup. Try using the provider redirect or enable popups for this site.';
     case 'auth/popup-closed-by-user':
-      return 'The sign-in popup was closed before authentication completed. Try the provider redirect if this keeps happening.';
+      return 'The sign-in popup was closed before authentication completed. Please try again.';
     case 'auth/account-exists-with-different-credential':
-      return 'An account already exists with a different sign-in method. Use the matching provider or email sign-in.';
+      return 'An account already exists with a different sign-in method. Sign in with your existing provider first, then link accounts in settings.';
+    case 'auth/cancelled-popup-request':
+      return 'A sign-in request is already in progress. Close any other popup tabs and try again.';
+    case 'auth/redirect-cancelled-by-user':
+      return 'The sign-in redirect was cancelled. Try again.';
+    case 'auth/redirect-operation-pending':
+      return 'A redirect sign-in is already in progress. Wait for it to complete.';
+    case 'auth/web-context-cancelled':
+      return 'The sign-in request was cancelled. Try again.';
     case 'auth/internal-error':
-      return 'Firebase could not complete sign-in. Check that Auth is enabled, the provider is configured, and the redirect domains are authorized.';
+      return 'Firebase could not complete sign-in. Check that Auth is enabled and the authentication provider is configured.';
     default:
       return error instanceof Error && error.message
         ? error.message
@@ -99,20 +108,21 @@ void setPersistence(auth, browserLocalPersistence).catch((err) => {
 });
 
 /**
- * After a redirect sign-in (signInWithRedirect) this returns the redirect result
- * or null when there was no redirect to process. Call this once on app startup
- * (for example from `AuthProvider`) to surface redirect errors if needed.
+ * After a redirect sign-in this returns the redirect result or null.
+ * Kept for backward compatibility — new sign-ins use popup.
  */
-export async function handleRedirectResult() {
+export async function handleRedirectResult(): Promise<UserCredential | null> {
   try {
     const result = await getRedirectResult(auth);
-    return result || null;
+    return result;
   } catch (err) {
-    // Re-throw with a friendly message where possible
     const code = getAuthErrorCode(err);
-    const friendly = getFriendlyFirebaseAuthError(err);
+    if (code === 'auth/redirect-cancelled-by-user' || code === 'auth/redirect-operation-pending') {
+      // These are non-fatal — user wasn't mid-redirect or cancelled it
+      return null;
+    }
     console.warn('Firebase redirect result error', code, err);
-    throw new Error(friendly || String(err));
+    return null;
   }
 }
 
@@ -150,20 +160,22 @@ export async function createAccountWithEmail(name: string, email: string, passwo
   return credential;
 }
 
-export function signInWithGoogle() {
+export async function signInWithGoogle() {
   if (!isFirebaseConfigReady()) {
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
-  return signInWithRedirect(auth, googleProvider);
+  const result = await signInWithPopup(auth, googleProvider);
+  return result;
 }
 
-export function signInWithGithub() {
+export async function signInWithGithub() {
   if (!isFirebaseConfigReady()) {
     throw new Error(getFirebaseConfigErrorMessage());
   }
 
-  return signInWithRedirect(auth, githubProvider);
+  const result = await signInWithPopup(auth, githubProvider);
+  return result;
 }
 
 export function signOutUser() {

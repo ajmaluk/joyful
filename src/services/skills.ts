@@ -252,8 +252,8 @@ export function composeSkills(
   selectedSkills: BuilderSkill[],
   prompt: string,
 ): ComposedSkill[] {
+  void prompt;
   const composed: ComposedSkill[] = [];
-  const usedIds = new Set<string>();
 
   // Group related skills
   const groups: Record<string, string[]> = {
@@ -302,6 +302,7 @@ export function mergeSkillBriefs(
   composedSkills: ComposedSkill[],
   prompt: string,
 ): string[] {
+  void prompt;
   const merged: string[] = [];
 
   for (const group of composedSkills) {

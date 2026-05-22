@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   composeSkills,
   mergeSkillBriefs,
   scoreSkillWithConfidence,
   selectSkillsWithConfidence,
   defaultBuilderSkills,
-  type BuilderSkill,
 } from '@/services/skills';
 
 // ─── Skill Composition ────────────────────────────────────────────

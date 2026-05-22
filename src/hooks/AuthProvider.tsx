@@ -17,7 +17,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     allowLocalDemoAuth ? storage.isAuthenticated() || hasLocalDevAuth : false
   ));
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     if (!allowLocalDemoAuth || !hasLocalDevAuth) return;
@@ -67,8 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthed: Boolean(user) || localDemoAuthed,
     isAuthReady,
-    authError,
-  }), [authError, isAuthReady, localDemoAuthed, user]);
+    authError: '',
+  }), [isAuthReady, localDemoAuthed, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

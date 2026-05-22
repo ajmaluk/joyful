@@ -169,7 +169,7 @@ export class TaskDecompositionEngine {
       return [this.buildSingleTask(prompt, hasExistingFiles)];
     }
 
-    return this.buildMultiStepPlan(prompt, contextGraph, hasExistingFiles, complexity);
+    return this.buildMultiStepPlan(prompt, contextGraph, complexity);
   }
 
   private classifyComplexity(
@@ -243,7 +243,6 @@ export class TaskDecompositionEngine {
   private buildMultiStepPlan(
     prompt: string,
     contextGraph: ContextFileNode[],
-    hasExistingFiles: boolean,
     complexity: 'medium' | 'complex',
   ): TaskPlan[] {
     const lower = prompt.toLowerCase();
@@ -843,17 +842,17 @@ export function buildAgentPlanFromContext(
 
   // Convert TaskPlans to AgentPlanSteps
   if (plans.length > 1) {
-    return plans.flatMap((plan, idx) => [
+    return plans.flatMap((plan, idx): AgentPlanStep[] => [
       {
         id: plan.id,
         title: plan.title,
-        status: idx === 0 ? 'done' : 'pending',
+        status: idx === 0 ? 'done' as const : 'pending' as const,
         detail: plan.description.slice(0, 100),
       },
-      ...plan.subtasks.map((sub, subIdx) => ({
+      ...plan.subtasks.map((sub, subIdx): AgentPlanStep => ({
         id: sub.id,
         title: sub.label,
-        status: idx === 0 && subIdx === 0 ? 'done' : ('pending' as const),
+        status: idx === 0 && subIdx === 0 ? 'done' as const : 'pending' as const,
         detail: sub.detail,
       })),
     ]);
@@ -968,7 +967,6 @@ export type PipelinePhase =
  */
 export class MultiStepPipelineExecutor {
   private onPhaseChange?: (phase: PipelinePhase) => void;
-  private planGenerated: boolean = false;
   private filesGenerated: number = 0;
   private totalFiles: number = 0;
 
@@ -1209,16 +1207,6 @@ If no issues found, return empty arrays.`;
   }
 
   /**
-   * Report phase change
-   */
-  private report(phase: PipelinePhase): void {
-    this.onPhaseChange?.(phase);
-    if (phase.type === 'executing_file') {
-      this.filesGenerated++;
-    }
-  }
-
-  /**
    * Build a project context string for file generation prompts
    */
   buildProjectContext(existingFiles: { path: string; content: string }[]): string {
@@ -1239,6 +1227,7 @@ If no issues found, return empty arrays.`;
   createProjectPlan(
     parsed: NonNullable<ReturnType<MultiStepPipelineExecutor['parsePlanResponse']>>,
   ): import('@/types/buildSteps').ProjectPlan {
+    this.onPhaseChange?.({ type: 'planning', status: 'active', detail: 'Creating project plan' });
     const planId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const files = parsed.files.map(f => ({
       path: f.path,

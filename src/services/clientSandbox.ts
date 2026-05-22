@@ -392,7 +392,6 @@ export function validateDOM(html: string): DOMValidationResult {
         break;
       }
     }
-    const textLinks = linkMatches.filter(link => !/<a[^>]*>[\s\S]*?<\/a>/.test(link + '</a>'));
   }
 
   // Calculate score

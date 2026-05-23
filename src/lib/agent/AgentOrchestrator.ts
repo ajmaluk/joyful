@@ -1,4 +1,4 @@
-import { ToolExecutor, type ToolResult } from './ToolExecutor';
+import { ToolExecutor, type ToolResult, TOOL_ALIASES } from './ToolExecutor';
 import { TodoManager, todoManager, type TodoItem } from './TodoManager';
 import { memoryManager, type MemoryManager } from './MemoryManager';
 import { SelfRepairLoop } from './SelfRepairLoop';
@@ -15,8 +15,10 @@ import {
   buildReviewerPrompt,
   buildMemoryPrompt,
 } from './Prompts';
+import { classifyTask, type TaskClassification, type AgentCallBudget } from './AgentRunPolicy';
 import { snapshotManager } from './SnapshotManager';
 import { uniqueId } from '@/utils/ids';
+import { ContextCache } from './ContextCache';
 
 export type OrchestratorPhase =
   | 'planning'
@@ -52,15 +54,28 @@ export class AgentOrchestrator {
   private repairLoop: SelfRepairLoop;
   private options: OrchestratorOptions;
 
-  private plan: any = null;
+  private plan: any = null; // eslint-disable-line @typescript-eslint/no-explicit-any
   private userRequest: string = '';
   private recentOperations: string[] = [];
   private compileErrors: BuildError[] = [];
-  private changedFiles: string[] = [];
+  private changedFiles: Set<string> = new Set();
   private iterationCount = 0;
   private maxIterations = 50;
   private cancelled = false;
   private messages: Message[] = [];
+
+  // Budget / doom-loop tracking
+  private taskClassification!: TaskClassification;
+  private budget!: AgentCallBudget;
+  private apiCallCount = 0;
+  private noOpResponseCount = 0;
+  private maxNoOpRetries = 1;
+  private contextCache = new ContextCache();
+  private lastContextHash = '';
+  private sameContextCallCount = 0;
+  private lastErrorSignature = '';
+  private sameErrorCount = 0;
+  private abortController = new AbortController();
 
   onStatusChange?: (status: string, message: string) => void;
   onTodoUpdate?: (todos: TodoItem[]) => void;
@@ -87,6 +102,27 @@ export class AgentOrchestrator {
     this.cancelled = false;
     this.iterationCount = 0;
     this.messages = [{ role: 'user', content: userRequest }];
+    this.apiCallCount = 0;
+    this.noOpResponseCount = 0;
+    this.compileErrors = [];
+    this.changedFiles = new Set();
+    this.recentOperations = [];
+    this.lastErrorSignature = '';
+    this.sameErrorCount = 0;
+    this.abortController = new AbortController();
+
+    // Clear cross-run state
+    this.todoManager.clear();
+
+    // Classify task and set budget
+    this.taskClassification = classifyTask(userRequest);
+    this.budget = { ...this.taskClassification.budget };
+
+    agentEventBus.emit({
+      type: 'agent:status',
+      status: 'understanding',
+      message: `Classified as: ${this.taskClassification.taskClass} (budget: ${this.budget.maxTotalCalls} AI calls)`,
+    });
 
     agentEventBus.emit({ type: 'agent:start', runId, userRequest });
 
@@ -99,10 +135,11 @@ export class AgentOrchestrator {
       if (this.cancelled) return this.cancelResult();
 
       const planData = this.plan?.plan || [];
-      const needsExplore = this.plan?.explorationNeeded !== false;
+      const needsExplorerAI = this.taskClassification.needsExplorerAI;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const needsBuilding = planData.some((s: any) => s.mode === 'builder' || s.mode === 'debugger');
 
-      if (needsExplore) {
+      if (needsExplorerAI && needsBuilding) {
         await this.phaseExploring();
         if (this.cancelled) return this.cancelResult();
       }
@@ -116,20 +153,34 @@ export class AgentOrchestrator {
           if (this.cancelled) return this.cancelResult();
         }
 
-        await this.phaseReviewing();
-        if (this.cancelled) return this.cancelResult();
+        if (this.taskClassification.needsReviewerAI) {
+          await this.phaseReviewing();
+          if (this.cancelled) return this.cancelResult();
+        }
       }
 
-      await this.phaseSaving();
+      if (this.taskClassification.needsMemoryAI) {
+        await this.phaseSaving();
+      } else {
+        await this.localSaveMemory();
+      }
 
       const durationMs = Date.now() - startTime;
       const allCompleted = this.todoManager.isAllCompleted();
+      const blockedTodos = this.todoManager.getTodos().filter(t => t.status === 'blocked');
+
+      let summaryText: string;
+      if (blockedTodos.length > 0) {
+        summaryText = `Finished with ${blockedTodos.length} blocked todo(s) — ${blockedTodos.map(t => t.blockedReason || t.title).join('; ')}`;
+      } else if (allCompleted) {
+        summaryText = `Task completed in ${(durationMs / 1000).toFixed(1)}s (${this.apiCallCount} AI calls used of ${this.budget.maxTotalCalls})`;
+      } else {
+        summaryText = `Task finished with ${this.todoManager.estimateRemaining()} remaining todo(s) in ${(durationMs / 1000).toFixed(1)}s`;
+      }
 
       const summary = {
-        summary: allCompleted
-          ? `Task completed in ${(durationMs / 1000).toFixed(1)}s`
-          : `Task finished with ${this.todoManager.estimateRemaining()} remaining todo(s) in ${(durationMs / 1000).toFixed(1)}s`,
-        changedFiles: this.changedFiles.map(p => ({
+        summary: summaryText,
+        changedFiles: Array.from(this.changedFiles).map(p => ({
           path: p,
           action: 'updated' as const,
         })),
@@ -152,6 +203,7 @@ export class AgentOrchestrator {
   }
 
   private emitStatus(status: string, message: string): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     agentEventBus.emit({ type: 'agent:status', status: status as any, message });
     this.onStatusChange?.(status, message);
   }
@@ -172,6 +224,30 @@ export class AgentOrchestrator {
 
     const projectContext = `Framework: ${this.options.framework}\nEntry point: ${this.options.entryPoint}`;
 
+    if (!this.taskClassification.needsPlannerAI) {
+      // Local plan — no AI call
+      const planData = this.createLocalPlan();
+      agentEventBus.emit({
+        type: 'agent:plan_created',
+        plan: planData.map((s: Record<string, unknown>, i: number) => ({
+          id: `step_${i + 1}`,
+          title: (s.title as string) || `Step ${i + 1}`,
+          description: s.description as string,
+          status: 'pending' as const,
+        })),
+      });
+      for (const step of planData) {
+        this.todoManager.createTodo(
+          step.title || 'Untitled step',
+          (step.mode as TodoItem['mode']) || 'builder',
+          step.files,
+          step.description,
+        );
+      }
+      this.plan = { plan: planData, explorationNeeded: false };
+      return;
+    }
+
     const systemPrompt = buildPlannerPrompt(
       this.userRequest,
       repoMapStr,
@@ -179,7 +255,11 @@ export class AgentOrchestrator {
       memoryContext,
     );
 
-    const response = await this.aiClient.sendMessageJSON(systemPrompt, this.messages);
+    const response = await this.guardedModelCall(
+      'planning',
+      systemPrompt,
+      this.messages,
+    );
 
     if (response.needsMoreContext && response.text) {
       this.messages.push({ role: 'assistant', content: response.text });
@@ -193,8 +273,8 @@ export class AgentOrchestrator {
       acceptanceCriteria: [],
       explorationNeeded: true,
       plan: [],
-      ...(response.operations.length > 0
-        ? response.operations[0].input || {}
+      ...(response.toolCalls.length > 0
+        ? response.toolCalls[0].input || {}
         : {}),
     };
 
@@ -210,10 +290,10 @@ export class AgentOrchestrator {
     const planSteps = this.plan.plan || [];
     agentEventBus.emit({
       type: 'agent:plan_created',
-      plan: planSteps.map((s: any, i: number) => ({
+      plan: planSteps.map((s: Record<string, unknown>, i: number) => ({
         id: `step_${i + 1}`,
-        title: s.step || s.title || `Step ${i + 1}`,
-        description: s.description,
+        title: (s.step as string) || (s.title as string) || `Step ${i + 1}`,
+        description: s.description as string,
         status: 'pending' as const,
       })),
     });
@@ -240,7 +320,7 @@ export class AgentOrchestrator {
     const repoMapStr = this.repoMap.formatCompact();
     const systemPrompt = buildExplorerPrompt(this.userRequest, repoMapStr);
 
-    const response = await this.aiClient.sendMessage(systemPrompt, this.messages);
+    const response = await this.guardedModelCall('exploring', systemPrompt, this.messages);
 
     if (response.text) {
       this.messages.push({ role: 'assistant', content: response.text });
@@ -274,6 +354,16 @@ export class AgentOrchestrator {
     }
 
     while (this.iterationCount < this.maxIterations && !this.cancelled) {
+      // Check budget before each iteration
+      if (this.apiCallCount >= this.budget.maxTotalCalls) {
+        agentEventBus.emit({
+          type: 'agent:status',
+          status: 'completed',
+          message: `AI call budget reached (${this.apiCallCount}/${this.budget.maxTotalCalls}). Stopping builder loop.`,
+        });
+        break;
+      }
+
       this.iterationCount++;
 
       const activeTodo = this.todoManager.getActiveTodo();
@@ -293,10 +383,10 @@ export class AgentOrchestrator {
 
       this.messages = this.contextManager.compressHistory(this.messages);
 
-      const response = await this.aiClient.sendMessage(
+      const response = await this.guardedModelCall(
+        'building',
         systemPrompt,
         this.messages,
-        undefined,
         (token: string) => {
           agentEventBus.emit({ type: 'agent:thinking', text: token });
         },
@@ -312,20 +402,54 @@ export class AgentOrchestrator {
         }
       }
 
+      let meaningfulChanges = false;
+      const perToolResults: string[] = [];
       for (const tc of response.toolCalls) {
         const result = await this.executeAgentTool(tc.name, tc.input);
         this.recordOperation(tc.name, result);
+        const normalizedName = TOOL_ALIASES[tc.name] || tc.name;
+        if (result.success && ['writeFile', 'createFile', 'patchFile', 'multiPatchFile', 'deleteFile', 'renameFile'].includes(normalizedName)) {
+          meaningfulChanges = true;
+        }
+        perToolResults.push(result.summary || result.error || 'OK');
       }
 
-      const toolResults = response.toolCalls
-        .map(tc => {
-          const r = this.recentOperations[this.recentOperations.length - 1] || '';
-          return `[${tc.name}] ${r}`;
-        })
+      // --- No-op detection ---
+      if (!meaningfulChanges && response.toolCalls.length > 0) {
+        this.noOpResponseCount++;
+        if (this.noOpResponseCount > this.maxNoOpRetries) {
+          const reason = `No meaningful file changes after ${this.noOpResponseCount} consecutive builder calls for "${activeTodo.title}". Blocking todo.`;
+          agentEventBus.emit({
+            type: 'agent:status',
+            status: 'completed' as const,
+            message: reason,
+          });
+          this.todoManager.blockTodo(activeTodo.id, reason);
+          this.todoManager.advanceToNext();
+          continue;
+        }
+        // Retry with correction message
+        this.messages.push({
+          role: 'user',
+          content: 'Your previous response made no file changes. Please provide actual file operations this time.',
+        });
+        // Don't advance; let the loop retry
+        continue;
+      }
+      this.noOpResponseCount = 0;
+
+      const toolSummary = response.toolCalls
+        .map((tc, i) => `[${tc.name}] ${perToolResults[i] || ''}`)
         .join('\n');
 
-      if (toolResults) {
-        this.messages.push({ role: 'user', content: toolResults });
+      // Limit tool result context to avoid wasting tokens
+      const maxChars = 1000;
+      const truncated = toolSummary.length > maxChars
+        ? toolSummary.slice(0, maxChars) + `\n... (${toolSummary.length - maxChars} more chars truncated)`
+        : toolSummary;
+
+      if (truncated) {
+        this.messages.push({ role: 'user', content: truncated });
       }
 
       if (response.toolCalls.length === 0) {
@@ -336,8 +460,17 @@ export class AgentOrchestrator {
         tc => tc.name === 'compile_and_preview' || tc.name === 'compileProject',
       );
 
-      if (hasCompileCall || this.iterationCount % 5 === 0) {
+      // Compile after meaningful changes or every 3 iterations
+      if (meaningfulChanges || hasCompileCall || this.iterationCount % 3 === 0) {
         await this.checkCompileErrors();
+        if (this.compileErrors.length > 0 && this.taskClassification.taskClass !== 'bugfix') {
+          // Add a debug step for the current todo
+          agentEventBus.emit({
+            type: 'agent:status',
+            status: 'debugging' as const,
+            message: `Found ${this.compileErrors.length} error(s) after build step for "${activeTodo.title}"`,
+          });
+        }
       }
     }
   }
@@ -364,6 +497,20 @@ export class AgentOrchestrator {
 
     agentEventBus.emit({ type: 'agent:mode', mode: 'debugger' });
 
+    const budgetedAICall = async (systemPrompt: string, msgs: Message[]) => {
+      if (this.apiCallCount >= this.budget.maxTotalCalls) {
+        return { text: '', operations: [], needsMoreContext: false, contextRequests: [] };
+      }
+      this.apiCallCount++;
+      const result = await this.aiClient.sendMessageJSON(systemPrompt, msgs);
+      return {
+        text: result.text,
+        operations: result.operations,
+        needsMoreContext: result.needsMoreContext,
+        contextRequests: result.contextRequests,
+      };
+    };
+
     const repairResult = await this.repairLoop.repair(
       this.compileErrors,
       this.options.entryPoint,
@@ -372,7 +519,8 @@ export class AgentOrchestrator {
       async (tool: string, input: Record<string, unknown>) => {
         return this.toolExecutor.execute(tool, input);
       },
-      this.aiClient,
+      budgetedAICall,
+      this.taskClassification.maxRepairAttempts,
     );
 
     if (repairResult.fixed) {
@@ -386,6 +534,27 @@ export class AgentOrchestrator {
       this.compileErrors = repairResult.remainingErrors;
 
       if (this.compileErrors.length > 0) {
+        // Doom-loop detection: check if errors match previous signature
+        const errorSignature = this.compileErrors
+          .map(e => `${e.file}:${e.line}:${e.message}`)
+          .join('|');
+
+        if (errorSignature === this.lastErrorSignature) {
+          this.sameErrorCount++;
+        } else {
+          this.sameErrorCount = 0;
+        }
+        this.lastErrorSignature = errorSignature;
+
+        if (this.sameErrorCount >= 3) {
+          agentEventBus.emit({
+            type: 'agent:status',
+            status: 'completed' as const,
+            message: `Same compile error repeated ${this.sameErrorCount} times. Stopping repair loop.`,
+          });
+          return;
+        }
+
         const systemPrompt = buildDebuggerPrompt(
           this.compileErrors.map(e => `${e.file}:${e.line} — ${e.message}`).join('\n'),
           this.recentOperations.slice(-10).join('\n'),
@@ -394,7 +563,8 @@ export class AgentOrchestrator {
           '',
         );
 
-        const response = await this.aiClient.sendMessage(
+        const response = await this.guardedModelCall(
+          'debugging',
           systemPrompt,
           [],
         );
@@ -421,11 +591,11 @@ export class AgentOrchestrator {
     const compileResult = this.compileErrors.length === 0 ? 'Compilation succeeded' : 'Compilation failed';
 
     const systemPrompt = buildReviewerPrompt(
-      this.changedFiles.join('\n'),
+      Array.from(this.changedFiles).join('\n'),
       compileResult,
     );
 
-    const response = await this.aiClient.sendMessage(systemPrompt, this.messages.slice(-5));
+    const response = await this.guardedModelCall('reviewing', systemPrompt, this.messages.slice(-5));
 
     if (response.text) {
       this.messages.push({ role: 'assistant', content: response.text });
@@ -451,7 +621,7 @@ export class AgentOrchestrator {
       this.recentOperations.join('\n'),
     );
 
-    const response = await this.aiClient.sendMessage(systemPrompt, this.messages.slice(-3));
+    const response = await this.guardedModelCall('saving', systemPrompt, this.messages.slice(-3));
 
     if (response.text) {
       this.messages.push({ role: 'assistant', content: response.text });
@@ -465,10 +635,10 @@ export class AgentOrchestrator {
       await this.memoryManager.saveNote(this.options.projectId, todoSummary);
     }
 
-    if (this.changedFiles.length > 0) {
+    if (this.changedFiles.size > 0) {
       await this.memoryManager.saveNote(
         this.options.projectId,
-        `Changed files: ${this.changedFiles.join(', ')}`,
+        `Changed files: ${Array.from(this.changedFiles).join(', ')}`,
       );
 
       await snapshotManager.createSnapshot(
@@ -547,7 +717,7 @@ export class AgentOrchestrator {
   }
 
   private async checkCompileErrors(): Promise<void> {
-    const result = await this.executeAgentTool('compileProject', {
+    const result = await this.executeAgentTool('compileAndPreview', {
       entryPoint: this.options.entryPoint,
     });
 
@@ -566,9 +736,7 @@ export class AgentOrchestrator {
     const result = await this.toolExecutor.execute(name, input);
 
     if (result.path && result.success) {
-      if (!this.changedFiles.includes(result.path)) {
-        this.changedFiles.push(result.path);
-      }
+      this.changedFiles.add(result.path);
     }
 
     return result;
@@ -587,6 +755,7 @@ export class AgentOrchestrator {
   cancel(): void {
     this.cancelled = true;
     this.phase = 'cancelled';
+    this.abortController.abort();
     agentEventBus.emit({ type: 'agent:cancelled' });
   }
 
@@ -603,5 +772,179 @@ export class AgentOrchestrator {
       success: false,
       summary: 'Task was cancelled by the user.',
     };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private createLocalPlan(): any[] {
+    // Generate a basic plan from the user request using heuristics
+    const steps: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    // Check for common patterns
+    const request = this.userRequest.toLowerCase();
+
+    const hasComponentCreate = /create|add|new|build|make/.test(request);
+    const hasComponentModify = /change|update|modify|edit|fix|refactor/.test(request);
+    const hasStyleChange = /style|css|color|layout|responsive|dark mode|theme/.test(request);
+    const hasFeatureAdd = /feature|page|route|section|dashboard|component/.test(request);
+
+    if (hasComponentCreate || hasFeatureAdd) {
+      steps.push({
+        title: 'Create the requested files',
+        description: 'Generate and write the new files needed.',
+        mode: 'builder',
+        files: [],
+      });
+    }
+
+    if (hasComponentModify || hasStyleChange) {
+      steps.push({
+        title: hasStyleChange ? 'Apply style/theme changes' : 'Modify existing files',
+        description: 'Edit the existing files to match the request.',
+        mode: 'builder',
+        files: [],
+      });
+    }
+
+    // Default: one generic build step
+    if (steps.length === 0) {
+      steps.push({
+        title: 'Implement requested changes',
+        description: this.userRequest.slice(0, 200),
+        mode: 'builder',
+        files: [],
+      });
+    }
+
+    // Note: compile is automatic after each todo (in builder loop),
+    // so we don't add a separate compile step here.
+
+    return steps;
+  }
+
+  private async localSaveMemory() {
+    const memoryContent = this.changedFiles.size > 0
+      ? `Modified files: ${Array.from(this.changedFiles).join(', ')}`
+      : 'No files were modified.';
+    await this.memoryManager.saveNote(this.options.projectId, memoryContent);
+
+    // Save a snapshot
+    if (this.changedFiles.size > 0) {
+      await snapshotManager.createSnapshot(
+        this.options.projectId,
+        `After: ${this.userRequest.slice(0, 50)}`,
+        'Automatic snapshot after task completion',
+      ).catch(() => {});
+    }
+  }
+
+  private cachedResponseToModelResponse(cached: { text: string; operations: { tool: string; input: Record<string, unknown> }[]; cachedAt: number }) {
+    return {
+      text: cached.text,
+      needsMoreContext: false,
+      contextRequests: [] as string[],
+      toolCalls: cached.operations.map(op => ({ name: op.tool, input: op.input })),
+    };
+  }
+
+  private async guardedModelCall(phase: string, systemPrompt: string, messages: Message[], onStreamToken?: (token: string) => void) {
+    // Check context hash to prevent duplicate calls with same context
+    const contextHash = this.contextCache.hashPrompt(systemPrompt, messages.map(m => m.content).join('|'));
+
+    if (contextHash === this.lastContextHash) {
+      this.sameContextCallCount++;
+    } else {
+      this.sameContextCallCount = 0;
+    }
+
+    if (this.sameContextCallCount >= 1) {
+      // Same context repeated - use cached response or return empty
+      const cached = this.contextCache.get(contextHash);
+      if (cached) {
+        agentEventBus.emit({
+          type: 'context:selected',
+          files: [],
+          chunks: [],
+          memoryUsed: true,
+          repoMapUsed: true,
+          estimatedTokens: 0,
+        });
+        return this.cachedResponseToModelResponse(cached);
+      }
+      agentEventBus.emit({
+        type: 'agent:status',
+        status: 'completed' as const,
+        message: `Duplicate AI call detected in ${phase}: context did not change. Stopping.`,
+      });
+      return {
+        text: '',
+        needsMoreContext: false,
+        contextRequests: [],
+        toolCalls: [],
+      };
+    }
+
+    this.lastContextHash = contextHash;
+
+    // Check cache first
+    const cached = this.contextCache.get(contextHash);
+    if (cached) {
+      agentEventBus.emit({
+        type: 'context:selected',
+        files: [],
+        chunks: [],
+        memoryUsed: true,
+        repoMapUsed: true,
+        estimatedTokens: 0,
+      });
+      return this.cachedResponseToModelResponse(cached);
+    }
+
+    // Check budget
+    if (this.apiCallCount >= this.budget.maxTotalCalls) {
+      // Graceful budget exhaustion: return an empty response that signals stop
+      agentEventBus.emit({
+        type: 'agent:status',
+        status: 'completed' as const,
+        message: `AI call budget reached (${this.apiCallCount}/${this.budget.maxTotalCalls}) in ${phase}. Stopping.`,
+      });
+      return {
+        text: '',
+        needsMoreContext: false,
+        contextRequests: [],
+        toolCalls: [],
+      };
+    }
+
+    this.apiCallCount++;
+
+    agentEventBus.emit({
+      type: 'context:selected',
+      files: [],
+      chunks: [],
+      memoryUsed: true,
+      repoMapUsed: true,
+      estimatedTokens: systemPrompt.length + messages.reduce((sum, m) => sum + m.content.length, 0),
+    });
+
+    const result = await this.aiClient.sendMessageJSON(systemPrompt, messages, onStreamToken, this.abortController.signal);
+
+    const response = {
+      text: result.text,
+      needsMoreContext: result.needsMoreContext,
+      contextRequests: result.contextRequests,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      toolCalls: result.operations.map((op: any) => ({
+        name: op.tool,
+        input: op.input,
+      })),
+    };
+
+    // Cache the response for potential reuse
+    this.contextCache.set(contextHash, {
+      text: response.text,
+      operations: response.toolCalls.map(tc => ({ tool: tc.name, input: tc.input })),
+    });
+
+    return response;
   }
 }

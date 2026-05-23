@@ -146,7 +146,7 @@ export function StorageCard() {
               a.download = `joyful-export-${Date.now()}.zip`;
               a.click();
               URL.revokeObjectURL(url);
-            } catch {}
+            } catch { /* ignore export errors */ }
           }}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-2.5 py-1.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/25 hover:text-foreground"
         >
@@ -159,7 +159,7 @@ export function StorageCard() {
               try {
                 const granted = await navigator.storage!.persist();
                 setStats(prev => prev ? { ...prev, persistenceStatus: granted ? 'granted' : 'denied' } : prev);
-              } catch {}
+              } catch { /* ignore persist errors */ }
             }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/60 px-2.5 py-1.5 text-[10px] text-muted-foreground transition-colors hover:border-primary/25 hover:text-foreground"
           >

@@ -31,14 +31,6 @@ const statusColor: Record<string, string> = {
   pending: 'text-muted-foreground/40',
 };
 
-const statusBg: Record<string, string> = {
-  completed: 'bg-emerald-500/10',
-  in_progress: 'bg-sky-500/10',
-  blocked: 'bg-amber-500/10',
-  failed: 'bg-red-500/10',
-  pending: 'bg-transparent',
-};
-
 function formatElapsed(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const min = Math.floor(totalSec / 60);
@@ -49,10 +41,10 @@ function formatElapsed(ms: number): string {
 export function TodoAccordion({
   todos,
   currentTodoId,
-  currentFile,
+  currentFile: _currentFile,
   elapsedMs = 0,
   isRunning,
-  isPaused,
+  isPaused: _isPaused,
 }: TodoAccordionProps) {
   const [isOpen, setIsOpen] = useState(true);
   const completedCount = todos.filter(t => t.status === 'completed').length;
@@ -68,7 +60,6 @@ export function TodoAccordion({
 
   if (todos.length === 0 && !isRunning) return null;
 
-  const sectionInProgress = todos.filter(t => t.status === 'in_progress');
   const sectionPending = todos.filter(t => t.status === 'pending');
   const sectionCompleted = todos.filter(t => t.status === 'completed');
   const sectionBlocked = todos.filter(t => t.status === 'blocked');

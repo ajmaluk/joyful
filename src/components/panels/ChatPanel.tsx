@@ -4,7 +4,6 @@ import { ChatToolbar } from '@/components/chat/ChatToolbar';
 import { exportChatAsMarkdown } from '@/components/chat/chatExport';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { PromptInput } from '@/components/chat/PromptInput';
-import { TodoAccordion } from '@/components/chat/TodoAccordion';
 import { WorkingProcess, type BuildTodo } from '@/components/chat/WorkingProcess';
 import { TodoList, type TodoItem } from '@/components/chat/TodoList';
 import { TemplateSelector, type Template } from '@/components/chat/TemplateSelector';
@@ -216,21 +215,6 @@ export function ChatPanel({
             onRemove={handleRemoveTodo}
           />
         </div>
-      )}
-
-      {/* Todo accordion - above input */}
-      {(buildTodos.length > 0 || isGenerating) && (
-        <TodoAccordion
-          todos={buildTodos.map(t => ({
-            id: t.id,
-            title: t.label,
-            description: t.detail,
-            status: t.status === 'active' ? 'in_progress' : t.status === 'done' ? 'completed' : t.status === 'error' ? 'failed' : 'pending',
-            mode: 'builder' as const,
-            relatedFiles: [],
-          }))}
-          isRunning={isGenerating}
-        />
       )}
 
       {/* Input area */}

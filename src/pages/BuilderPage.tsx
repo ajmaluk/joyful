@@ -2,34 +2,23 @@ import { Helmet } from 'react-helmet-async';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { routeMeta } from '@/lib/seo';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChatPanel } from '@/components/panels/ChatPanel';
 import { ChatContainer } from '@/components/chat/ChatContainer';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { uniqueId } from '@/utils/ids';
 import { CodeEditor } from '@/components/panels/CodeEditor';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { useChat } from '@/hooks/useChat';
+
 import { useAgent } from '@/hooks/useAgent';
 import { useVFSBridge } from '@/hooks/useVFSBridge';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { ApplyReport, ChatAttachment, FileOperation, PendingFileOperation, Project, ProjectFile, ChatMode } from '@/types';
-import { applyFileOperations, applyPatchOperations, exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
+import type { ChatAttachment, Project, ProjectFile, ChatMode } from '@/types';
+import { exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
-import { generateWithAI } from '@/services/aiService';
-import type { Template } from '@/components/chat/TemplateSelector';
 import {
-  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles, Files
+  ChevronDown, ChevronLeft, ChevronRight, Download, X, Menu, Settings, LogOut, MessageSquare, Sparkles,
 } from 'lucide-react';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
@@ -46,8 +35,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const { toasts, addToast, removeToast } = useToast();
   const { user } = useAuth();
   const initialPromptRef = useRef<string | null>((location.state as { initialPrompt?: string } | null)?.initialPrompt?.trim() || null);
-  const initialModeRef = useRef<ChatMode>((location.state as { initialMode?: ChatMode } | null)?.initialMode || 'build');
-  const initialAttachmentsRef = useRef<ChatAttachment[]>((location.state as { initialAttachments?: ChatAttachment[] } | null)?.initialAttachments || []);
+  const _initialModeRef = useRef<ChatMode>((location.state as { initialMode?: ChatMode } | null)?.initialMode || 'build');
+  const _initialAttachmentsRef = useRef<ChatAttachment[]>((location.state as { initialAttachments?: ChatAttachment[] } | null)?.initialAttachments || []);
   const hasSubmittedInitialPrompt = useRef(false);
   // refs for accessing latest files/messages inside callbacks
 
@@ -61,26 +50,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showChatSidebar, setShowChatSidebar] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [pendingChatContext, setPendingChatContext] = useState('');
-  const [agentViewActive, setAgentViewActive] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [pendingOperationReview, setPendingOperationReview] = useState<PendingFileOperation[] | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const pendingOperationReviewResolver = useRef<((approved: boolean) => void) | null>(null);
 
   useClickOutside(profileMenuRef, () => setProfileOpen(false), profileOpen);
-
-  const {
-    messages,
-    isGenerating,
-    buildTodos,
-    savedGeneration,
-    sendMessage,
-    recordApplyResult,
-    clearMessages,
-    abortGeneration,
-    clearSavedGeneration,
-  } = useChat(projectId || 'default');
 
   const {
     setPreviewIframe,
@@ -96,22 +69,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   const filesRef = useRef<ProjectFile[]>(files);
   useEffect(() => { filesRef.current = files; }, [files]);
-
-  const messagesRef = useRef(messages);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-
-  const resolvePendingOperationReview = useCallback((approved: boolean) => {
-    pendingOperationReviewResolver.current?.(approved);
-    pendingOperationReviewResolver.current = null;
-    setPendingOperationReview(null);
-  }, []);
-
-  const requestPendingOperationReview = useCallback((operations: PendingFileOperation[]) => {
-    return new Promise<boolean>((resolve) => {
-      pendingOperationReviewResolver.current = resolve;
-      setPendingOperationReview(operations);
-    });
-  }, []);
 
   const createUniquePath = useCallback((basePath: string) => {
     if (!files.some(file => file.path === basePath)) return basePath;
@@ -172,118 +129,15 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     }
   }, [project, onUpdateProject]);
 
-  // Handle AI message
-  const handleSendMessage = useCallback(async (content: string, mode: ChatMode = 'build', attachments: ChatAttachment[] = []) => {
-    setPendingChatContext('');
-    const currentFiles = filesRef.current;
-    const response = await sendMessage(content, currentFiles, mode, attachments);
-    if (response) {
-      const commitAppliedFiles = async (newFiles: ProjectFile[], appliedCount: number, skippedCount: number) => {
-        setFiles(newFiles);
-        setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
-        if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
-          setSelectedFile(newFiles.find(file => file.path === 'index.html') || newFiles[0] || null);
-        }
-        persistFiles(newFiles);
-        for (const file of newFiles) {
-          await writeToVFS(file.path, file.content).catch(() => {});
-        }
-        const nextActiveFile = newFiles.find(file => file.path === 'index.html') || newFiles[0] || null;
-        if (nextActiveFile) {
-          setSelectedFile(nextActiveFile);
-          setOpenFiles(prev => {
-            if (prev.find(file => file.path === nextActiveFile.path)) return prev;
-            return [...prev, nextActiveFile];
-          });
-        }
-        const skippedText = skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
-        addToast('success', `Applied ${appliedCount} operation${appliedCount > 1 ? 's' : ''}${skippedText}`);
-        setViewMode('preview');
-      };
-
-      let workingFiles = currentFiles;
-      let appliedCount = 0;
-      let skippedCount = 0;
-      let firstSkipReason = '';
-      const appliedFiles: string[] = [];
-      const skippedOperations: ApplyReport['skippedOperations'] = [];
-
-      if (response.patches?.length) {
-        const patchResult = applyPatchOperations(workingFiles, response.patches);
-        workingFiles = patchResult.files;
-        appliedCount += patchResult.applied.length;
-        skippedCount += patchResult.skipped.length;
-        firstSkipReason ||= patchResult.skipped[0]?.reason || '';
-        appliedFiles.push(...patchResult.applied.map(operation => operation.path));
-        skippedOperations.push(...patchResult.skipped.map(item => ({
-          path: item.operation.path,
-          action: item.operation.action,
-          reason: item.reason,
-        })));
-      }
-
-      const applyOperations = (operations: FileOperation[]) => {
-        const result = applyFileOperations(workingFiles, operations);
-        workingFiles = result.files;
-        appliedCount += result.applied.length;
-        skippedCount += result.skipped.length;
-        firstSkipReason ||= result.skipped[0]?.reason || '';
-        appliedFiles.push(...result.applied.map(operation => operation.path));
-        skippedOperations.push(...result.skipped.map(item => ({
-          path: item.operation.path,
-          action: item.operation.action,
-          reason: item.reason,
-        })));
-      };
-
-      // If AI suggested pending file operations, prompt the user before applying
-      const pending = response.metadata?.pendingFileOps;
-      if (Array.isArray(pending) && pending.length > 0) {
-        const ok = await requestPendingOperationReview(pending);
-        if (ok) {
-          applyOperations(pending
-            .filter(op => op.args?.path)
-            .map(op => ({
-              path: op.args.path || '',
-              action: op.name === 'delete_file' ? 'delete' : op.name === 'modify_file' ? 'modify' : 'create',
-              content: op.args.content,
-            })));
-        } else {
-          addToast('info', 'Skipped AI-proposed file operations');
-        }
-      } else {
-        applyOperations(response.files.map(file => ({
-          path: file.path,
-          action: file.action || (currentFiles.some(existing => existing.path === file.path) ? 'modify' : 'create'),
-          content: file.content,
-        })));
-      }
-
-      if (appliedCount > 0) {
-        await commitAppliedFiles(workingFiles, appliedCount, skippedCount);
-      } else {
-        addToast('info', firstSkipReason || 'No file operations to apply');
-      }
-
-      recordApplyResult({
-        applied: appliedCount,
-        skipped: skippedCount,
-        appliedFiles: Array.from(new Set(appliedFiles)),
-        skippedOperations,
-      });
-    }
-  }, [selectedFile, sendMessage, requestPendingOperationReview, recordApplyResult, persistFiles, addToast]);
-
   const handleRequestFix = useCallback((prompt: string) => {
     setShowChatSidebar(true);
     setMobileChatOpen(true);
-    handleSendMessage(prompt, 'build').catch(() => {});
-  }, [handleSendMessage]);
+    runAgent(prompt).catch(() => {});
+  }, [runAgent]);
 
-  const handleUseInspectorSelection = useCallback((context: string) => {
+  const handleUseInspectorSelection = useCallback((_context: string) => {
     setShowChatSidebar(true);
     setMobileChatOpen(true);
-    setPendingChatContext(context);
   }, []);
 
   useEffect(() => {
@@ -292,12 +146,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     const prompt = initialPromptRef.current;
     initialPromptRef.current = null;
     navigate(location.pathname, { replace: true, state: null });
-    const mode = initialModeRef.current;
-    const attachments = initialAttachmentsRef.current;
-    initialModeRef.current = 'build';
-    initialAttachmentsRef.current = [];
-    handleSendMessage(prompt, mode, attachments).catch(() => {});
-  }, [project, handleSendMessage, navigate, location.pathname]);
+    _initialModeRef.current = 'build';
+    _initialAttachmentsRef.current = [];
+    runAgent(prompt);
+  }, [project, runAgent, navigate, location.pathname]);
 
   // Open file in editor
   const handleSelectFile = useCallback((file: ProjectFile) => {
@@ -447,26 +299,6 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     if (file) handleSelectFile(file);
   }, [files, handleSelectFile]);
 
-  // Regenerate message
-  const handleRegenerateMessage = useCallback((messageId: string) => {
-    const currentMessages = messagesRef.current;
-    const messageIndex = currentMessages.findIndex(m => m.id === messageId);
-    if (messageIndex >= 0 && messageIndex > 0) {
-      // Find the user message before this assistant message
-      for (let i = messageIndex - 1; i >= 0; i--) {
-        if (currentMessages[i].role === 'user') {
-          handleSendMessage(currentMessages[i].content, 'build', currentMessages[i].attachments || []);
-          break;
-        }
-      }
-    }
-  }, [handleSendMessage]);
-
-  const handleRetrySavedGeneration = useCallback(() => {
-    if (!savedGeneration || isGenerating) return;
-    handleSendMessage(savedGeneration.prompt, savedGeneration.mode, savedGeneration.attachments || []).catch(() => {});
-  }, [handleSendMessage, isGenerating, savedGeneration]);
-
   // Handle export
   const handleExport = useCallback(async () => {
     if (!project) return;
@@ -479,7 +311,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   }, [project, addToast]);
 
   // Handle template selection
-  const handleSelectTemplate = useCallback(async (template: Template) => {
+  // kept for future use - commented until template selector re-enabled
+  /* const handleSelectTemplate = useCallback(async (template: Template) => {
     if (!project || isGenerating) return;
     
     addToast('info', `Building ${template.name} template...`);
@@ -488,7 +321,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       const response = await generateWithAI(template.prompt, []);
       const newFiles: ProjectFile[] = response.files
         .filter((file) => file.action !== 'delete' && file.content !== undefined)
-        .map((file, index) => ({
+        .map((file) => ({
           id: uniqueId('file'),
           path: file.path,
           content: file.content || '',
@@ -514,6 +347,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       addToast('error', 'Failed to load template. Please try again.');
     }
   }, [project, isGenerating, addToast, persistFiles]);
+  */
 
   if (!project) {
     return (
@@ -721,64 +555,11 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         </section>
 
         <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-gray-200/70 bg-white/72 backdrop-blur-xl dark:border-border/60 dark:bg-card/80 xl:w-[400px]`}>
-          <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5">
-            <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/50 p-0.5">
-              <button
-                onClick={() => setAgentViewActive(false)}
-                className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-                  !agentViewActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Chat
-              </button>
-              <button
-                onClick={() => setAgentViewActive(true)}
-                className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-                  agentViewActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Agent
-              </button>
-            </div>
-            <button
-              onClick={() => setShowChatSidebar(false)}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {agentViewActive ? (
-              <ChatContainer
-                onOpenFile={handleOpenFileFromChat}
-                onCloseSidebar={() => setShowChatSidebar(false)}
-                onSendMessage={(prompt) => runAgent(prompt)}
-              />
-            ) : (
-              <ChatPanel
-                messages={messages}
-                isGenerating={isGenerating}
-                buildTodos={buildTodos}
-                files={files}
-                activeFile={selectedFile}
-                onSendMessage={handleSendMessage}
-                onOpenFile={handleOpenFileFromChat}
-                onRegenerateMessage={handleRegenerateMessage}
-                onClearMessages={clearMessages}
-                onAbortGeneration={abortGeneration}
-                savedGeneration={savedGeneration}
-                onRetrySavedGeneration={handleRetrySavedGeneration}
-                onDismissSavedGeneration={clearSavedGeneration}
-                onSelectTemplate={handleSelectTemplate}
-                onCloseSidebar={() => setShowChatSidebar(false)}
-                pendingContext={pendingChatContext}
-              />
-            )}
-          </div>
+          <ChatContainer
+            onOpenFile={handleOpenFileFromChat}
+            onCloseSidebar={() => setShowChatSidebar(false)}
+            onSendMessage={(prompt) => runAgent(prompt)}
+          />
         </aside>
 
         {!showChatSidebar && (
@@ -792,130 +573,49 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
           </button>
         )}
 
-        <div className="fixed inset-x-2 bottom-2 z-50 lg:hidden">
-          {!mobileChatOpen ? (
-            <button
-              onClick={() => setMobileChatOpen(true)}
-              className="ml-auto flex items-center gap-2 rounded-full border border-border/60 bg-card/90 px-4 py-2.5 text-sm font-semibold text-foreground shadow-xl backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-2xl"
-              title="Open AI chat"
-            >
-              <Sparkles className="h-4 w-4 text-indigo-500" />
-              AI Chat
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <div className="overflow-hidden rounded-t-3xl border border-border/60 bg-card/95 shadow-2xl shadow-black/50 backdrop-blur-xl">
-              <div className="flex h-12 items-center justify-between border-b border-border/60 bg-card/50 backdrop-blur-sm px-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 shadow-md shadow-pink-500/20">
-                    <Sparkles className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="text-sm font-semibold text-foreground">AI Chat</span>
-                  <span className="rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">Overlay</span>
+        {!mobileChatOpen ? (
+          <button
+            onClick={() => setMobileChatOpen(true)}
+            className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] right-3 z-40 flex items-center gap-2 rounded-full border border-border/60 bg-card/90 px-4 py-2.5 text-sm font-semibold text-foreground shadow-xl backdrop-blur-sm transition-all duration-200 hover:border-primary/50 hover:shadow-2xl lg:hidden"
+            title="Open AI chat"
+          >
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            AI Chat
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <div className="fixed inset-0 z-[100] flex flex-col bg-background lg:hidden">
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 shadow-md">
+                  <Sparkles className="h-3.5 w-3.5 text-white" />
                 </div>
-                <button
-                  onClick={() => setMobileChatOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground"
-                  title="Close AI chat"
-                  aria-label="Close AI chat"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+                <span className="text-sm font-semibold text-foreground">Joyful Agent</span>
               </div>
-              <div className="h-[min(72dvh,calc(100dvh-4.5rem))] max-h-[calc(100dvh-4.5rem)] overflow-hidden">
-                <ChatPanel
-                  messages={messages}
-                  isGenerating={isGenerating}
-                  buildTodos={buildTodos}
-                  files={files}
-                  activeFile={selectedFile}
-                  onSendMessage={handleSendMessage}
-                  onOpenFile={handleOpenFileFromChat}
-                  onRegenerateMessage={handleRegenerateMessage}
-                  onClearMessages={clearMessages}
-                  onAbortGeneration={abortGeneration}
-                  savedGeneration={savedGeneration}
-                  onRetrySavedGeneration={handleRetrySavedGeneration}
-                  onDismissSavedGeneration={clearSavedGeneration}
-                  onSelectTemplate={handleSelectTemplate}
-                  pendingContext={pendingChatContext}
-                />
-              </div>
+              <button
+                onClick={() => setMobileChatOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground"
+                title="Close chat"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
             </div>
-          )}
-        </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ChatContainer
+                onOpenFile={(path) => {
+                  handleOpenFileFromChat(path);
+                  setMobileChatOpen(false);
+                  setViewMode('code');
+                }}
+                onCloseSidebar={() => setMobileChatOpen(false)}
+                onSendMessage={(prompt) => runAgent(prompt)}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <Dialog
-        open={Boolean(pendingOperationReview)}
-        onOpenChange={(open) => {
-          if (!open) resolvePendingOperationReview(false);
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          className="max-w-2xl gap-0 overflow-hidden rounded-xl border border-white/10 bg-[#171816] p-0 text-[#f6f2ea] shadow-2xl shadow-black/45"
-        >
-          <DialogHeader className="border-b border-white/8 px-5 py-4 text-left">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
-                <Files className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <DialogTitle className="text-base font-bold text-white">Review AI file operations</DialogTitle>
-                <DialogDescription className="mt-1 text-sm leading-5 text-[#aaa69d]">
-                  Joyful used file tools during planning. Approve these operations before they are applied to the workspace.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          <div className="max-h-[52vh] overflow-auto px-5 py-4">
-            <div className="space-y-2">
-              {(pendingOperationReview || []).map((operation, index) => {
-                const actionLabel = operation.name.replace(/_/g, ' ');
-                const contentLength = operation.args.content?.length || 0;
-                return (
-                  <div
-                    key={`${operation.name}-${operation.args.path || 'unknown'}-${index}`}
-                    className="rounded-lg border border-white/10 bg-white/[0.03] p-3"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-white/[0.08] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-indigo-200">
-                        {actionLabel}
-                      </span>
-                      <span className="min-w-0 flex-1 break-all font-mono text-xs text-white">
-                        {operation.args.path || 'Missing path'}
-                      </span>
-                    </div>
-                    {operation.name !== 'delete_file' && (
-                      <p className="mt-2 text-xs text-[#aaa69d]">
-                        {contentLength > 0 ? `${contentLength.toLocaleString()} characters ready to apply` : 'No content supplied'}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <DialogFooter className="gap-2 border-t border-white/8 px-5 py-4 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={() => resolvePendingOperationReview(false)}
-              className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] px-4 text-sm font-semibold text-[#aaa69d] transition-colors hover:bg-white/[0.06] hover:text-white"
-            >
-              Skip
-            </button>
-            <button
-              type="button"
-              onClick={() => resolvePendingOperationReview(true)}
-              className="inline-flex h-9 items-center justify-center rounded-md bg-[#f5f2ea] px-4 text-sm font-bold text-[#171816] transition-colors hover:bg-white"
-            >
-              Apply operations
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

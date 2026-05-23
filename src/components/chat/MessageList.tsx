@@ -68,11 +68,11 @@ function AssistantText({ content, isLatest, isGenerating }: { content: string; i
   );
 }
 
-function ThinkingMessage() {
+function ThinkingMessage({ content }: { content: string }) {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <Loader2 className="h-3 w-3 animate-spin" />
-      <span>Thinking...</span>
+      <span>{content || 'Working...'}</span>
     </div>
   );
 }
@@ -128,23 +128,15 @@ export function MessageList({ messages, onOpenFile, onRetry, isGenerating }: Mes
         const isLatest = index === messages.length - 1;
         const metadata = msg.metadata;
 
+        // User messages go first regardless of type
         if (msg.role === 'user') {
           return <UserMessage key={msg.id} content={msg.content} />;
         }
 
-        if (msg.role === 'system') {
-          const isError = msg.content.includes('Error') || msg.type === 'warning';
-          return <SystemMessage key={msg.id} content={msg.content} isError={isError} />;
-        }
-
-        if (msg.role === 'error') {
-          return <WarningMessage key={msg.id} content={msg.content} />;
-        }
-
-        // Role-based rendering by type
+        // Then switch on type first, falling back to role
         switch (msg.type) {
           case 'thinking':
-            return <ThinkingMessage key={msg.id} />;
+            return <ThinkingMessage key={msg.id} content={msg.content} />;
 
           case 'plan':
             return (
@@ -190,20 +182,20 @@ export function MessageList({ messages, onOpenFile, onRetry, isGenerating }: Mes
             let change: FileChange;
             try {
               change = metadata ? {
-                path: metadata.path as string,
-                action: metadata.action as 'created' | 'updated' | 'deleted' | 'renamed',
+                path: String(metadata.path || ''),
+                action: (metadata.action as FileChange['action']) || 'updated',
                 oldPath: metadata.oldPath as string | undefined,
-                summary: (metadata.summary as string) || msg.content,
+                summary: String(metadata.summary || msg.content),
                 timestamp: msg.timestamp,
-                status: 'success' as const
+                status: 'success' as const,
               } : JSON.parse(msg.content);
             } catch {
               change = {
-                path: (metadata?.path as string) || msg.content,
-                action: (metadata?.action as 'created' | 'updated' | 'deleted' | 'renamed') || 'updated',
+                path: String(metadata?.path || msg.content),
+                action: (metadata?.action as FileChange['action']) || 'updated',
                 summary: msg.content,
                 timestamp: msg.timestamp,
-                status: 'success' as const
+                status: 'success' as const,
               };
             }
             return (
@@ -220,7 +212,7 @@ export function MessageList({ messages, onOpenFile, onRetry, isGenerating }: Mes
             return (
               <CompileResultCard
                 key={msg.id}
-                success={metadata?.success as boolean || false}
+                success={Boolean(metadata?.success)}
                 errors={(metadata?.errors as CompileError[]) || []}
                 durationMs={metadata?.durationMs as number | undefined}
               />
@@ -240,6 +232,20 @@ export function MessageList({ messages, onOpenFile, onRetry, isGenerating }: Mes
           case 'memory_update':
             return <MemoryCard key={msg.id} summary={msg.content} />;
 
+          case 'context_update':
+            return (
+              <div key={msg.id} className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
+                {msg.content}
+              </div>
+            );
+
+          case 'storage_update':
+            return (
+              <div key={msg.id} className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
+                {msg.content}
+              </div>
+            );
+
           case 'final_summary':
             return (
               <FinalSummaryCard
@@ -258,21 +264,33 @@ export function MessageList({ messages, onOpenFile, onRetry, isGenerating }: Mes
             return <WarningMessage key={msg.id} content={msg.content} />;
 
           default:
-            return (
-              <div key={msg.id}>
-                <AssistantText
-                  content={msg.content}
-                  isLatest={isLatest}
-                  isGenerating={isGenerating && isLatest}
-                />
-                {Array.isArray(metadata?.steps) && (metadata.steps as unknown[]).length > 0 ? (
-                  <div className="mt-2">
-                    <PlanCard steps={metadata.steps as AgentPlanStep[]} />
-                  </div>
-                ) : null}
-              </div>
-            );
+            break;
         }
+
+        // Fallback by role for untyped messages
+        if (msg.role === 'system') {
+          return <SystemMessage key={msg.id} content={msg.content} isError={msg.content.toLowerCase().includes('error')} />;
+        }
+
+        if (msg.role === 'error') {
+          return <WarningMessage key={msg.id} content={msg.content} />;
+        }
+
+        // Default assistant text fallback
+        return (
+          <div key={msg.id}>
+            <AssistantText
+              content={msg.content}
+              isLatest={isLatest}
+              isGenerating={isGenerating && isLatest}
+            />
+            {Array.isArray(metadata?.steps) && (metadata.steps as unknown[]).length > 0 ? (
+              <div className="mt-2">
+                <PlanCard steps={metadata.steps as AgentPlanStep[]} />
+              </div>
+            ) : null}
+          </div>
+        );
       })}
     </div>
   );

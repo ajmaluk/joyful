@@ -2,7 +2,6 @@ import { AgentOrchestrator } from './AgentOrchestrator';
 import { agentEventBus } from './eventBus';
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import { type ToolResult } from './ToolExecutor';
-import { uniqueId } from '@/utils/ids';
 
 export interface AgentObserver {
   onToken?: (token: string) => void;
@@ -12,6 +11,44 @@ export interface AgentObserver {
   onStatusChange?: (status: string, message: string) => void;
   onError?: (error: string) => void;
   onCompileRequest?: (entryPoint: string) => Promise<ToolResult>;
+}
+
+const POSSIBLE_ENTRIES = [
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/index.html',
+];
+
+async function detectEntryAndFramework(): Promise<{ entryPoint: string; framework: string }> {
+  let framework = 'react';
+  let entryPoint = '/src/main.tsx';
+
+  try {
+    const pkg = await virtualFS.readFile('/package.json');
+    const parsed = JSON.parse(pkg);
+    if (parsed.dependencies) {
+      const deps = Object.keys(parsed.dependencies);
+      if (deps.includes('next')) { framework = 'next'; }
+      else if (deps.includes('vue')) { framework = 'vue'; }
+      else if (deps.includes('svelte')) { framework = 'svelte'; }
+    }
+  } catch {
+    // default react
+  }
+
+  for (const candidate of POSSIBLE_ENTRIES) {
+    try {
+      await virtualFS.readFile(candidate);
+      entryPoint = candidate;
+      break;
+    } catch {
+      // try next
+    }
+  }
+
+  return { entryPoint, framework };
 }
 
 export class JoyfulAgentV2 {
@@ -42,26 +79,10 @@ export class JoyfulAgentV2 {
       return;
     }
 
-    agentEventBus.emit({
-      type: 'agent:start',
-      runId: uniqueId('run'),
-      userRequest,
-    });
+    await virtualFS.init();
+    virtualFS.setProjectId(this.projectId);
 
-    let framework = 'react';
-    let entryPoint = '/src/App.tsx';
-    try {
-      const pkg = await virtualFS.readFile('/package.json');
-      const parsed = JSON.parse(pkg);
-      if (parsed.dependencies) {
-        const deps = Object.keys(parsed.dependencies);
-        if (deps.includes('next')) { framework = 'next'; entryPoint = '/src/App.tsx'; }
-        else if (deps.includes('vue')) { framework = 'vue'; }
-        else if (deps.includes('svelte')) { framework = 'svelte'; }
-      }
-    } catch {
-      // default react
-    }
+    const { entryPoint, framework } = await detectEntryAndFramework();
 
     try {
       this.orchestrator = new AgentOrchestrator({
@@ -80,9 +101,6 @@ export class JoyfulAgentV2 {
       const unsub = agentEventBus.subscribe((event) => {
         if (event.type === 'agent:status') {
           this.observer.onStatusChange?.(event.status, event.message);
-        }
-        if (event.type === 'todo:created' || event.type === 'todo:updated') {
-          this.observer.onTodoUpdate?.(event.todos);
         }
       });
 

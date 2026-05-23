@@ -2,7 +2,6 @@ import { agentEventBus } from './eventBus';
 import { enhancedErrorCollector, type BuildError } from './ErrorCollector';
 import type { Reflection } from './MemoryManager';
 import type { ToolResult } from './ToolExecutor';
-import type { AIClient } from './AIClient';
 
 export interface RepairAttempt {
   attempt: number;
@@ -11,12 +10,23 @@ export interface RepairAttempt {
   result: 'fixed' | 'failed' | 'retrying';
 }
 
+import type { Message } from './AIClient';
+
+export type BudgetedAICall = (
+  systemPrompt: string,
+  messages: Message[],
+) => Promise<{
+  text: string;
+  operations: { tool: string; input: Record<string, unknown> }[];
+  needsMoreContext: boolean;
+  contextRequests: string[];
+}>;
+
 function generateId(): string {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 }
 
 export class SelfRepairLoop {
-  private maxAttempts = 3;
   private alreadyAttempted = new Set<string>();
 
   async repair(
@@ -25,7 +35,8 @@ export class SelfRepairLoop {
     _repoMap: any,
     memoryManager: any,
     executeTool: (tool: string, input: Record<string, unknown>) => Promise<ToolResult>,
-    aiClient: AIClient,
+    aiCallFn: BudgetedAICall,
+    maxAttempts = 3,
   ): Promise<{
     fixed: boolean;
     attempts: RepairAttempt[];
@@ -56,7 +67,7 @@ export class SelfRepairLoop {
 
       this.alreadyAttempted.add(this.errorSignature(primaryError));
 
-      for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         agentEventBus.emit({
           type: 'repair:attempt',
           attempt,
@@ -77,11 +88,11 @@ export class SelfRepairLoop {
           repairPrompt,
           primaryError,
           executeTool,
-          aiClient,
+          aiCallFn,
         );
 
         if (!patchResult.success) {
-          const result: 'retrying' | 'failed' = attempt < this.maxAttempts ? 'retrying' : 'failed';
+          const result: 'retrying' | 'failed' = attempt < maxAttempts ? 'retrying' : 'failed';
           attempts.push({
             attempt,
             error: primaryError,
@@ -126,7 +137,7 @@ export class SelfRepairLoop {
           break;
         }
 
-        const retryResult: 'retrying' | 'failed' = attempt < this.maxAttempts ? 'retrying' : 'failed';
+        const retryResult: 'retrying' | 'failed' = attempt < maxAttempts ? 'retrying' : 'failed';
         attempts.push({
           attempt,
           error: primaryError,
@@ -245,12 +256,12 @@ export class SelfRepairLoop {
     repairPrompt: string,
     error: BuildError,
     executeTool: (tool: string, input: Record<string, unknown>) => Promise<ToolResult>,
-    aiClient: AIClient,
+    aiCallFn: BudgetedAICall,
   ): Promise<{ success: boolean; action: string }> {
     try {
       await executeTool('readFile', { path: error.file });
 
-      const response = await aiClient.sendMessageJSON(repairPrompt, [
+      const response = await aiCallFn(repairPrompt, [
         { role: 'user', content: `Fix the error in ${error.file}:${error.line}` },
       ]);
 

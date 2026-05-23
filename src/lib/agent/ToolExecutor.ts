@@ -25,29 +25,151 @@ function contentHash(content: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+export const TOOL_ALIASES: Record<string, string> = {
+  read_file: 'readFile',
+  readFile: 'readFile',
+
+  read_file_chunk: 'readFileChunk',
+  readFileChunk: 'readFileChunk',
+
+  read_file_around: 'readFileAround',
+  readFileAround: 'readFileAround',
+
+  read_symbol: 'readSymbol',
+  readSymbol: 'readSymbol',
+
+  list_directory: 'listDirectory',
+  listDirectory: 'listDirectory',
+
+  get_project_tree: 'getProjectTree',
+  getProjectTree: 'getProjectTree',
+
+  search_files: 'searchFiles',
+  searchFiles: 'searchFiles',
+
+  search_content: 'searchContent',
+  searchContent: 'searchContent',
+
+  get_repo_map: 'getRepoMap',
+  getRepoMap: 'getRepoMap',
+
+  get_file_summary: 'getFileSummary',
+  getFileSummary: 'getFileSummary',
+
+  write_file: 'writeFile',
+  writeFile: 'writeFile',
+
+  create_file: 'createFile',
+  createFile: 'createFile',
+
+  edit_file: 'patchFile',
+  patch_file: 'patchFile',
+  patchFile: 'patchFile',
+
+  multi_patch_file: 'multiPatchFile',
+  multiPatchFile: 'multiPatchFile',
+
+  create_directory: 'createFolder',
+  create_folder: 'createFolder',
+  createFolder: 'createFolder',
+
+  delete_file: 'deleteFile',
+  deleteFile: 'deleteFile',
+
+  rename_file: 'renameFile',
+  renameFile: 'renameFile',
+
+  compile_and_preview: 'compileAndPreview',
+  compileAndPreview: 'compileAndPreview',
+
+  compile_project: 'compileProject',
+  compileProject: 'compileProject',
+
+  preview_project: 'previewProject',
+  previewProject: 'previewProject',
+
+  collect_build_errors: 'collectBuildErrors',
+  collectBuildErrors: 'collectBuildErrors',
+
+  save_memory: 'saveMemoryNote',
+  save_memory_note: 'saveMemoryNote',
+  saveMemoryNote: 'saveMemoryNote',
+
+  write_message: 'writeMessage',
+  writeMessage: 'writeMessage',
+};
+
+function normalizeToolInput(input: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...input };
+
+  if ('old_text' in normalized && !('oldText' in normalized)) {
+    normalized.oldText = normalized.old_text;
+  }
+
+  if ('new_text' in normalized && !('newText' in normalized)) {
+    normalized.newText = normalized.new_text;
+  }
+
+  if ('start_line' in normalized && !('startLine' in normalized)) {
+    normalized.startLine = normalized.start_line;
+  }
+
+  if ('end_line' in normalized && !('endLine' in normalized)) {
+    normalized.endLine = normalized.end_line;
+  }
+
+  if ('entry_point' in normalized && !('entryPoint' in normalized)) {
+    normalized.entryPoint = normalized.entry_point;
+  }
+
+  if ('file_pattern' in normalized && !('filePattern' in normalized)) {
+    normalized.filePattern = normalized.file_pattern;
+  }
+
+  if ('old_path' in normalized && !('oldPath' in normalized)) {
+    normalized.oldPath = normalized.old_path;
+  }
+
+  if ('new_path' in normalized && !('newPath' in normalized)) {
+    normalized.newPath = normalized.new_path;
+  }
+
+  if ('symbol_name' in normalized && !('symbolName' in normalized)) {
+    normalized.symbolName = normalized.symbol_name;
+  }
+
+  return normalized;
+}
+
 export class ToolExecutor {
   async execute(toolName: string, input: Record<string, unknown>): Promise<ToolResult> {
-    const display = this.buildDisplay(toolName, input);
+    const methodName = TOOL_ALIASES[toolName] || toolName;
+    const normalizedInput = normalizeToolInput(input || {});
+    const display = this.buildDisplay(toolName, normalizedInput);
+
     agentEventBus.emit({
       type: 'tool:started',
       tool: toolName,
-      input,
+      input: normalizedInput,
       display,
     });
 
     try {
-      const handler = (this as unknown as Record<string, (input: Record<string, unknown>) => Promise<ToolResult>>)[`${toolName}`];
-      if (typeof handler === 'function') {
-        const result = await handler.call(this, input);
-        agentEventBus.emit({
-          type: 'tool:completed',
-          tool: toolName,
-          result: result.data,
-          display,
-        });
-        return result;
+      const handler = (this as unknown as Record<string, (input: Record<string, unknown>) => Promise<ToolResult>>)[methodName];
+      if (typeof handler !== 'function') {
+        throw new Error(`Unknown tool: ${toolName}. Normalized method: ${methodName}`);
       }
-      throw new Error(`Unknown tool: ${toolName}`);
+
+      const result = await handler.call(this, normalizedInput);
+
+      agentEventBus.emit({
+        type: 'tool:completed',
+        tool: toolName,
+        result: result.data,
+        display: result.summary || display,
+      });
+
+      return result;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       agentEventBus.emit({
@@ -615,6 +737,91 @@ export class ToolExecutor {
       success: true,
       tool: 'saveMemoryNote',
       summary: `Saved note: ${content.slice(0, 80)}`,
+    };
+  }
+
+  // Write file (create or overwrite)
+
+  async writeFile(input: Record<string, unknown>): Promise<ToolResult> {
+    const path = input.path as string;
+    const content = input.content as string;
+
+    if (!path || typeof content !== 'string') {
+      throw new Error('write_file requires path and content.');
+    }
+
+    const existed = await virtualFS.fileExists(path).catch(() => false);
+    await virtualFS.writeFile(path, content);
+
+    if (existed) {
+      agentEventBus.emit({
+        type: 'file:updated',
+        path,
+        summary: `Updated ${path}`,
+      });
+    } else {
+      agentEventBus.emit({
+        type: 'file:created',
+        path,
+        size: content.length,
+      });
+    }
+
+    return {
+      success: true,
+      tool: 'writeFile',
+      path,
+      data: { size: content.length, action: existed ? 'updated' : 'created' },
+      summary: `${existed ? 'Updated' : 'Created'} ${path}`,
+    };
+  }
+
+  // Compile and update preview
+
+  async compileAndPreview(input: Record<string, unknown>): Promise<ToolResult> {
+    const entryPoint = (input.entryPoint as string) || '/src/main.tsx';
+
+    agentEventBus.emit({ type: 'compile:started' });
+
+    const start = Date.now();
+    const result = await browserSandbox.compileAndPreview(entryPoint);
+
+    if (result.success) {
+      agentEventBus.emit({
+        type: 'compile:succeeded',
+        durationMs: Date.now() - start,
+      });
+
+      agentEventBus.emit({
+        type: 'preview:updated',
+        url: 'preview',
+      });
+
+      return {
+        success: true,
+        tool: 'compileAndPreview',
+        data: result,
+        summary: 'Preview compiled and updated successfully.',
+      };
+    }
+
+    const buildErrors = enhancedErrorCollector.collectFromCompileResult(result);
+
+    agentEventBus.emit({
+      type: 'compile:failed',
+      errors: buildErrors.map(e => ({
+        file: e.file,
+        line: e.line,
+        column: e.column,
+        message: e.message,
+      })),
+    });
+
+    return {
+      success: false,
+      tool: 'compileAndPreview',
+      data: { errors: buildErrors },
+      error: `Preview compile failed with ${buildErrors.length} error(s).`,
     };
   }
 

@@ -14,6 +14,8 @@ export interface ToolCall {
 export interface AIClientResponse {
   text: string;
   toolCalls: ToolCall[];
+  provider?: string;
+  fallbackUsed?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
 
@@ -28,26 +30,30 @@ function openAiToolFromDef(t: ToolDefinition): Record<string, unknown> {
   };
 }
 
-let _lastAICallTime = 0;
-
 export class AIClient {
   private apiKey: string;
   private model: string;
   private baseUrl: string;
+  private lastCallTime = 0;
+  private readonly minInterval = 50;
+  private timeoutMs: number;
+  private usage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 };
+  public cachedComponents: string[] = [];
 
-  constructor(config: { apiKey: string; model?: string; baseUrl?: string }) {
-    this.apiKey = config.apiKey;
+  constructor(config: { apiKey: string; model?: string; baseUrl?: string; timeoutMs?: number }) {
+    this.apiKey = config.apiKey || '';
     this.model = config.model || 'qwen/qwen3-coder-480b-a35b-instruct';
-    this.baseUrl = config.baseUrl || 'https://integrate.api.nvidia.com/v1';
+    this.baseUrl = (config.baseUrl || '/api/ai').replace(/\/+$/, '');
+    this.timeoutMs = config.timeoutMs || 60_000;
   }
 
   private async throttle(): Promise<void> {
     const now = Date.now();
-    const elapsed = now - _lastAICallTime;
-    if (elapsed < 300) {
-      await new Promise(r => setTimeout(r, 300 - elapsed));
+    const elapsed = now - this.lastCallTime;
+    if (elapsed < this.minInterval) {
+      await new Promise(resolve => setTimeout(resolve, this.minInterval - elapsed));
     }
-    _lastAICallTime = Date.now();
+    this.lastCallTime = Date.now();
   }
 
   async sendMessage(
@@ -55,11 +61,8 @@ export class AIClient {
     messages: Message[],
     tools?: ToolDefinition[],
     onStreamToken?: (token: string) => void,
+    signal?: AbortSignal,
   ): Promise<AIClientResponse> {
-    if (!this.apiKey) {
-      return this.fallbackResponse('No API key configured. Please add your NVidia NIM API key in Settings.');
-    }
-
     const openAiMessages: Record<string, unknown>[] = [
       { role: 'system', content: systemPrompt },
       ...messages.map(m => ({
@@ -79,46 +82,68 @@ export class AIClient {
       body.tool_choice = 'auto';
     }
 
-    if (onStreamToken) {
-      body.stream = true;
-    }
-
     try {
       await this.throttle();
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (this.apiKey) {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        let errorMsg: string;
-        try {
-          const err = JSON.parse(errorBody);
-          errorMsg = err.error?.message || err.error?.type || response.statusText;
-        } catch {
-          errorMsg = errorBody || response.statusText;
+      // Combine provided signal with timeout if not already set
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(new DOMException('AI request timed out', 'TimeoutError')), this.timeoutMs);
+
+      // Link external signal if provided
+      if (signal) {
+        signal.addEventListener('abort', () => abortController.abort(signal.reason), { once: true });
+      }
+
+      try {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: abortController.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          let errorBody = '';
+          try { errorBody = await response.text(); } catch { errorBody = 'Unknown error'; }
+          let errorMsg = '';
+          try {
+            const err = JSON.parse(errorBody);
+            errorMsg = err.error?.message || err.error?.type || response.statusText;
+          } catch {
+            errorMsg = errorBody || response.statusText;
+          }
+          throw new Error(`AI API error (${response.status}): ${errorMsg}`);
         }
-        throw new Error(`AI API error (${response.status}): ${errorMsg}`);
+
+        const provider = response.headers.get('X-Joyful-Provider') || undefined;
+        const fallbackUsed = response.headers.get('X-Joyful-Fallback-Used') === 'true';
+
+        if (onStreamToken) {
+          const streamResult = await this.handleStream(response, onStreamToken);
+          return { ...streamResult, provider, fallbackUsed };
+        }
+
+        const data = await response.json();
+        return { ...this.parseResponse(data), provider, fallbackUsed };
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      if (onStreamToken) {
-        return this.handleStream(response, onStreamToken);
-      }
-
-      const data = await response.json();
-      return this.parseResponse(data);
-
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
-        return this.fallbackResponse('Network error: Unable to reach the AI API. Check your internet connection and API endpoint.');
+      if (err instanceof DOMException && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+        throw err;
       }
-      return this.fallbackResponse(`API error: ${message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(message.includes('Failed to fetch') || message.includes('NetworkError')
+        ? 'Network error: Unable to reach the AI API.'
+        : `API error: ${message}`);
     }
   }
 
@@ -128,116 +153,116 @@ export class AIClient {
   ): Promise<AIClientResponse> {
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
-    let text = '';
+
+    let fullContent = '';
+    let buffer = '';
     const toolCalls: ToolCall[] = [];
     const toolInputBuffers = new Map<number, string>();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') continue;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') break;
 
-        try {
-          const data = JSON.parse(payload);
-          const delta = data.choices?.[0]?.delta;
-          if (!delta) continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta;
+            if (!delta) continue;
 
-          if (delta.content) {
-            text += delta.content;
-            onToken(delta.content);
-          }
+            if (delta.content) {
+              fullContent += delta.content;
+              onToken(delta.content);
+            }
 
-          if (delta.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index ?? 0;
-              if (tc.function?.name) {
-                toolCalls[idx] = {
-                  id: tc.id || `call_${idx}`,
-                  name: tc.function.name,
-                  input: {},
-                };
-                toolInputBuffers.set(idx, '');
-              }
-              if (tc.function?.arguments) {
-                const buf = toolInputBuffers.get(idx) || '';
-                toolInputBuffers.set(idx, buf + tc.function.arguments);
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const index = tc.index ?? toolCalls.length;
+                if (!toolCalls[index]) {
+                  toolCalls[index] = { id: '', name: tc.function?.name || '', input: {} as Record<string, unknown> };
+                  toolInputBuffers.set(index, tc.function?.arguments || '');
+                } else {
+                  if (tc.function?.name) toolCalls[index].name += tc.function.name;
+                  const existing = toolInputBuffers.get(index) || '';
+                  toolInputBuffers.set(index, existing + (tc.function?.arguments || ''));
+                }
               }
             }
+          } catch {
+            // skip unparseable lines
           }
-        } catch {
-          // skip parse errors
         }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Parse accumulated tool call inputs as JSON
+    for (const [index, bufferContent] of toolInputBuffers) {
+      try {
+        toolCalls[index].input = JSON.parse(bufferContent) as Record<string, unknown>;
+      } catch {
+        toolCalls[index].input = {};
       }
     }
 
-    // Finalize tool inputs from accumulated buffers
-    for (const [idx, buf] of toolInputBuffers) {
-      if (toolCalls[idx] && buf) {
-        try {
-          toolCalls[idx].input = JSON.parse(buf);
-        } catch {
-          toolCalls[idx].input = {};
-        }
-      }
-    }
-
-    return { text, toolCalls };
+    return {
+      text: fullContent,
+      toolCalls,
+    };
   }
 
   private parseResponse(data: Record<string, unknown>): AIClientResponse {
-    const choice = (data.choices as Array<Record<string, unknown>>)?.[0];
-    const message = choice?.message as Record<string, unknown> | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const choice = (data.choices as any[])?.[0];
+    const text: string = choice?.message?.content || choice?.delta?.content || '';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawToolCalls: any[] = choice?.message?.tool_calls || [];
 
-    let text = '';
-    const toolCalls: ToolCall[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toolCalls: ToolCall[] = rawToolCalls.map((tc: any) => ({
+      id: tc.id || '',
+      name: tc.function?.name || '',
+      input: (() => {
+        try {
+          return JSON.parse(tc.function?.arguments || '{}');
+        } catch {
+          return {};
+        }
+      })(),
+    }));
 
-    if (message?.content) {
-      text = message.content as string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usage = (data as any).usage;
+    if (usage) {
+      this.usage = {
+        inputTokens: usage.prompt_tokens || 0,
+        outputTokens: usage.completion_tokens || 0,
+      };
     }
 
-    if (message?.tool_calls) {
-      const calls = message.tool_calls as Array<Record<string, unknown>>;
-      for (const tc of calls) {
-        toolCalls.push({
-          id: tc.id as string,
-          name: (tc.function as Record<string, unknown>)?.name as string,
-          input: JSON.parse((tc.function as Record<string, unknown>)?.arguments as string || '{}'),
-        });
-      }
-    }
-
-    const usage = data.usage as Record<string, number> | undefined;
-
-    return {
-      text,
-      toolCalls,
-      usage: usage
-        ? { inputTokens: usage.prompt_tokens || 0, outputTokens: usage.completion_tokens || 0 }
-        : undefined,
-    };
+    return { text, toolCalls, usage: this.usage };
   }
 
-  private fallbackResponse(errorMsg: string): AIClientResponse {
-    return {
-      text: '',
-      toolCalls: [{
-        id: 'fallback',
-        name: 'write_message',
-        input: { message: errorMsg },
-      }],
-    };
+  getUsage(): { inputTokens: number; outputTokens: number } {
+    return { ...this.usage };
   }
 
   async sendMessageJSON(
     systemPrompt: string,
     messages: Message[],
     onStreamToken?: (token: string) => void,
+    signal?: AbortSignal,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<{ text: string; operations: any[]; needsMoreContext: boolean; contextRequests: string[] }> {
     const jsonInstruction = `\n\nYou must respond in strict JSON format only. No markdown, no code fences, no explanatory text — just valid JSON.
 
@@ -256,13 +281,13 @@ If you need more information before proceeding, set needsMoreContext to true and
     const enhancedSystemPrompt = systemPrompt + jsonInstruction;
 
     try {
-      const response = await this.sendMessage(enhancedSystemPrompt, messages, undefined, onStreamToken);
+      const response = await this.sendMessage(enhancedSystemPrompt, messages, undefined, onStreamToken, signal);
       const raw = response.text;
       const parsed = AIClient.repairJSON(raw);
 
       if (parsed && typeof parsed === 'object') {
         return {
-          text: parsed.message || raw,
+          text: (typeof parsed.message === 'string' ? parsed.message : raw),
           operations: Array.isArray(parsed.operations) ? parsed.operations : [],
           needsMoreContext: !!parsed.needsMoreContext,
           contextRequests: Array.isArray(parsed.contextRequests) ? parsed.contextRequests : [],
@@ -271,69 +296,55 @@ If you need more information before proceeding, set needsMoreContext to true and
 
       return {
         text: raw,
-        operations: [],
-        needsMoreContext: true,
-        contextRequests: ['Failed to parse AI response as JSON. Please try again with a clearer response format.'],
+        operations: response.toolCalls.map(tc => ({
+          tool: tc.name,
+          input: tc.input,
+        })),
+        needsMoreContext: false,
+        contextRequests: [],
       };
     } catch (err) {
+      // Propagate abort/timeout errors so the orchestrator stops processing
+      if (err instanceof DOMException && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+        throw err;
+      }
       const message = err instanceof Error ? err.message : String(err);
       return {
         text: '',
         operations: [],
-        needsMoreContext: true,
-        contextRequests: [`API error: ${message}`],
+        needsMoreContext: false,
+        contextRequests: [message],
       };
     }
   }
 
-  static repairJSON(text: string): any | null {
+  static repairJSON(text: string): Record<string, unknown> | null {
     if (!text || typeof text !== 'string') return null;
 
-    // Try direct parse
+    // If it's already valid JSON, return it
     try {
-      return JSON.parse(text);
+      return JSON.parse(text) as Record<string, unknown>;
     } catch {
-      // try alternatives
+      // Continue to repair
     }
 
-    // Try extracting JSON from markdown code blocks
-    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      try {
-        return JSON.parse(codeBlockMatch[1].trim());
-      } catch {
-        // continue
-      }
-    }
-
-    // Try extracting {...} or [...] with regex
-    const objectMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (objectMatch) {
-      const candidate = objectMatch[1];
-
-      // Try fixing common issues
-      const fixed = candidate
-        // Fix unquoted keys
+    try {
+      // Wrap top-level keys that might not be quoted
+      const step1 = text
         .replace(/(\{|,)\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":')
         // Fix trailing commas
         .replace(/,(\s*[}\]])/g, '$1')
         // Fix single quotes to double quotes
-        .replace(/(?<=[:,\{\[])\s*'(?:[^'\\]|\\.)*?'\s*(?=[:,\}\]])/g, (match) => {
-          return match.replace(/'/g, '"');
-        })
+        .replace(/(?<=[:,[])\s*'(?:[^'\\]|\\.)*?'\s*(?=[:,\]])/g, match => match.replace(/'/g, '"'))
         .replace(/(?<!")\b(true|false|null)\b(?!")/g, '"$1"');
 
       try {
-        return JSON.parse(fixed);
+        return JSON.parse(step1) as Record<string, unknown>;
       } catch {
-        // continue
+        return null;
       }
+    } catch {
+      return null;
     }
-
-    return null;
-}
-}
-
-export function createAIClient(apiKey: string, model?: string, baseUrl?: string): AIClient {
-  return new AIClient({ apiKey, model, baseUrl });
+  }
 }

@@ -23,6 +23,64 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'read_file_chunk',
+    description: 'Read a specific range of lines from a file. Use for large files instead of read_file.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path' },
+        start_line: { type: 'number', description: 'First line (1-indexed)' },
+        end_line: { type: 'number', description: 'Last line (inclusive)' },
+      },
+      required: ['path', 'start_line', 'end_line'],
+    },
+  },
+  {
+    name: 'list_directory',
+    description: 'List files and directories in a path. Use to explore the project structure.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Directory path like / or /src' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'get_project_tree',
+    description: 'Get the full project tree structure.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Root path (default: /)' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'search_files',
+    description: 'Search for files by filename pattern across the project.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Glob pattern like *.tsx or *test*' },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
+    name: 'search_content',
+    description: 'Search file contents across all project files.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Text to search for' },
+        file_pattern: { type: 'string', description: 'Optional glob pattern like *.tsx' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'write_file',
     description: 'Create a new file or completely overwrite an existing file. Parent directories are created automatically. Use for new files or complete rewrites.',
     input_schema: {
@@ -48,26 +106,28 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
-    name: 'list_directory',
-    description: 'List files and directories in a path. Use to explore the project structure.',
+    name: 'patch_file',
+    description: 'Alias for edit_file - make a surgical edit to a specific part of an existing file.',
     input_schema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Directory path like / or /src' },
+        path: { type: 'string', description: 'Absolute path to the file' },
+        old_text: { type: 'string', description: 'Exact text to find' },
+        new_text: { type: 'string', description: 'Replacement text' },
       },
-      required: ['path'],
+      required: ['path', 'old_text', 'new_text'],
     },
   },
   {
-    name: 'search_files',
-    description: 'Search for text content across all project files. Use to find where things are defined.',
+    name: 'create_file',
+    description: 'Create a new file. Fails if the file already exists. Use write_file for overwriting existing files.',
     input_schema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Text to search for' },
-        file_pattern: { type: 'string', description: 'Optional glob pattern like *.tsx' },
+        path: { type: 'string', description: 'Absolute path' },
+        content: { type: 'string', description: 'File content' },
       },
-      required: ['query'],
+      required: ['path', 'content'],
     },
   },
   {
@@ -90,6 +150,29 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         path: { type: 'string' },
       },
       required: ['path'],
+    },
+  },
+  {
+    name: 'rename_file',
+    description: 'Rename/move a file from old_path to new_path.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        old_path: { type: 'string', description: 'Current path' },
+        new_path: { type: 'string', description: 'New path' },
+      },
+      required: ['old_path', 'new_path'],
+    },
+  },
+  {
+    name: 'compile_and_preview',
+    description: 'Compile the current project and update the browser preview. Call after making code changes to verify.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entry_point: { type: 'string', description: 'Entry file, default is /src/main.tsx' },
+      },
+      required: [],
     },
   },
   {
@@ -116,25 +199,25 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'save_memory',
+    description: 'Save a memory/note about a decision or lesson learned during this session.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'Memory content/note to save' },
+      },
+      required: ['content'],
+    },
+  },
+  {
     name: 'write_message',
-    description: 'Write a status message visible to the user. Use to report progress, explain decisions, or ask questions. The user sees this message in the chat.',
+    description: 'Write a status message visible to the user. Use to report progress, explain decisions, or ask questions.',
     input_schema: {
       type: 'object',
       properties: {
         message: { type: 'string', description: 'The message to show to the user' },
       },
       required: ['message'],
-    },
-  },
-  {
-    name: 'compile_and_preview',
-    description: 'Compile the current project and update the browser preview. Call after making code changes to verify.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        entry_point: { type: 'string', description: 'Entry file, default is /src/main.tsx' },
-      },
-      required: [],
     },
   },
 ];

@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import {
   Trash2, Bug, ChevronRight, Square, Play, RotateCcw,
-  Clock, FileCode2, Target, ListTodo, Pause,
+  Clock, FileCode2, Target, ListTodo, Pause, MessageSquare,
 } from 'lucide-react';
 import { useJoyfulStore, checkInterruptedRun } from '@/store/joyfulStore';
 import { agentEventBus } from '@/lib/agent/eventBus';
@@ -9,13 +9,8 @@ import { AgentStatusBar } from './AgentStatusBar';
 import { MessageList } from './MessageList';
 import { ChangedFilesCard } from './ChangedFilesCard';
 import { DeveloperDetails } from './DeveloperDetails';
-import { TodoPanel } from '../TodoPanel/TodoPanel';
-import { ChangedFilesPanel } from '../ChangedFiles/ChangedFilesPanel';
 import { TodoAccordion } from './TodoAccordion';
 import { PromptInput } from './PromptInput';
-import { StorageStatus } from '../StorageStatus/StorageStatus';
-import { exportProjectAsZip } from '@/services/fileSystem';
-import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 
 interface ChatContainerProps {
   onOpenFile?: (path: string) => void;
@@ -32,16 +27,9 @@ function formatElapsed(ms: number): string {
 
 export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: ChatContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'chat' | 'tasks' | 'changes' | 'storage'>('chat');
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [interruptedState, setInterruptedState] = useState<ReturnType<typeof checkInterruptedRun>['state'] | null>(null);
-  const [storageStats, setStorageStats] = useState({
-    backend: 'IndexedDB' as const,
-    projectSize: 0,
-    files: 0,
-    lastSaved: Date.now(),
-    persistence: false,
-  });
+  const [showDevDetails, setShowDevDetails] = useState(false);
 
   const {
     currentProject,
@@ -52,8 +40,6 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
     agentPlan,
     resetAgentUI,
     clearAgentMessages,
-    setAgentRunning,
-    setCurrentTool,
     setElapsedMs,
     toggleDeveloperMode,
     pauseRun,
@@ -67,43 +53,8 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'chat') {
-      scrollToBottom();
-    }
-  }, [agentMessages, scrollToBottom, activeTab]);
-
-  // Load storage stats dynamically from VFS and navigator.storage
-  const loadStorageStats = useCallback(async () => {
-    try {
-      await virtualFS.init();
-      const allFiles = await virtualFS.getAllFiles();
-      let size = 0;
-      let count = 0;
-      const latestSave = Date.now();
-      
-      for (const f of allFiles) {
-        if (f.path.includes('.')) {
-          size += f.content.length;
-          count++;
-        }
-      }
-
-      let persisted = false;
-      if (navigator.storage && navigator.storage.persisted) {
-        persisted = await navigator.storage.persisted();
-      }
-
-      setStorageStats({
-        backend: 'IndexedDB',
-        projectSize: size,
-        files: count,
-        lastSaved: latestSave,
-        persistence: persisted,
-      });
-    } catch (err) {
-      console.error('Error loading storage stats:', err);
-    }
-  }, []);
+    scrollToBottom();
+  }, [agentMessages, scrollToBottom]);
 
   // Check for interrupted runs on mount
   useEffect(() => {
@@ -113,11 +64,6 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
       setShowResumeDialog(true);
     }
   }, []);
-
-  // Poll storage status on mount and when changes occur
-  useEffect(() => {
-    loadStorageStats();
-  }, [loadStorageStats, agentFileChanges]);
 
   // Elapsed timer
   useEffect(() => {
@@ -132,10 +78,8 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
 
   const handleStop = useCallback(() => {
     agentEventBus.emit({ type: 'agent:cancelled' });
-    setAgentRunning(false);
-    setCurrentTool(null);
     discardSavedAgentState();
-  }, [setAgentRunning, setCurrentTool, discardSavedAgentState]);
+  }, [discardSavedAgentState]);
 
   const handlePause = useCallback(() => {
     pauseRun();
@@ -143,7 +87,6 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
 
   const handleResume = useCallback(() => {
     resumeRun();
-    // Re-emit status to resume agent loop
     agentEventBus.emit({ type: 'agent:status', status: agentUI.status, message: 'Resuming...' });
   }, [resumeRun, agentUI.status]);
 
@@ -174,27 +117,6 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
     setInterruptedState(null);
   }, [discardSavedAgentState]);
 
-  const handleExport = useCallback(async () => {
-    try {
-      await virtualFS.init();
-      const allFiles = await virtualFS.getAllFiles();
-      const files = allFiles.map((f) => ({
-        id: f.path,
-        path: f.path.startsWith('/') ? f.path.slice(1) : f.path, // relative path for zip
-        content: f.content,
-        type: 'other' as const,
-        isModified: false,
-      }));
-
-      await exportProjectAsZip({
-        name: currentProject?.name || 'joyful-project',
-        files,
-      });
-    } catch (err) {
-      console.error('Failed to export project ZIP:', err);
-    }
-  }, [currentProject]);
-
   const activeTodo = agentTodos.find((t) => t.status === 'in_progress');
 
   return (
@@ -215,20 +137,23 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
         onRetry={handleRetry}
       />
 
-      {/* Toolbar & Controls */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-foreground">Workspace</span>
+          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold text-foreground">
+            {currentProject?.name || 'Workspace'}
+          </span>
         </div>
         <div className="flex items-center gap-0.5">
           <button
-            onClick={toggleDeveloperMode}
+            onClick={() => { toggleDeveloperMode(); setShowDevDetails(!showDevDetails); }}
             className={`rounded-md p-1.5 transition-colors ${
-              agentUI.developerMode
+              showDevDetails
                 ? 'bg-sky-500/10 text-sky-400'
                 : 'text-muted-foreground hover:bg-white/[0.06] hover:text-foreground'
             }`}
-            title={agentUI.developerMode ? 'Disable developer mode' : 'Enable developer mode'}
+            title="Developer details"
           >
             <Bug className="h-3.5 w-3.5" />
           </button>
@@ -248,50 +173,6 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           )}
-        </div>
-      </div>
-
-      {/* Premium Glassmorphic Tab Bar Switcher */}
-      <div className="border-b border-border/60 bg-white/[0.01] p-1.5 backdrop-blur-md">
-        <div className="grid w-full grid-cols-4 gap-1 rounded-lg bg-black/25 p-0.5">
-          {(['chat', 'tasks', 'changes', 'storage'] as const).map((tab) => {
-            const isActive = activeTab === tab;
-            let label = '';
-            let count: number | string | null = null;
-            
-            if (tab === 'chat') {
-              label = 'Chat';
-              count = agentMessages.length > 0 ? agentMessages.length : null;
-            } else if (tab === 'tasks') {
-              label = 'Tasks';
-              const completedCount = agentTodos.filter((t) => t.status === 'completed').length;
-              count = agentTodos.length > 0 ? `${completedCount}/${agentTodos.length}` : null;
-            } else if (tab === 'changes') {
-              label = 'Changes';
-              count = agentFileChanges.length > 0 ? agentFileChanges.length : null;
-            } else if (tab === 'storage') {
-              label = 'Storage';
-            }
-
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`relative flex flex-col items-center justify-center rounded-md py-1.5 text-[10px] font-semibold transition-all duration-300 ${
-                  isActive
-                    ? 'bg-white/[0.08] text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.2)]'
-                    : 'text-muted-foreground hover:bg-white/[0.03] hover:text-foreground'
-                }`}
-              >
-                <span className="capitalize">{label}</span>
-                {count !== null && (
-                  <span className={`absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/20 px-1 text-[8px] font-bold text-primary ring-1 ring-primary/30 backdrop-blur-sm`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -330,7 +211,7 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
         </div>
       )}
 
-      {/* Active Task Card - Always visible while agent is running */}
+      {/* Active Task Card */}
       {(agentUI.isRunning || agentUI.isPaused) && (
         <div className="mx-3 mt-3">
           <div className={`rounded-xl border p-3 transition-all ${
@@ -366,11 +247,11 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
 
             <div className="grid grid-cols-2 gap-1.5 text-[10px]">
               {agentUI.currentTodoId && (() => {
-                const currentTodo = agentTodos.find(t => t.id === agentUI.currentTodoId);
-                return currentTodo ? (
+                const ct = agentTodos.find(t => t.id === agentUI.currentTodoId);
+                return ct ? (
                   <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
                     <ListTodo className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{currentTodo.title}</span>
+                    <span className="truncate">{ct.title}</span>
                   </div>
                 ) : null;
               })()}
@@ -439,98 +320,92 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
         </div>
       )}
 
-      {/* Tab Panel Viewports */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {activeTab === 'chat' && (
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
-            <MessageList
-              messages={agentMessages}
-              onOpenFile={onOpenFile}
-              onRetry={handleRetry}
-              isGenerating={agentUI.isRunning}
-            />
+      {/* Main message area */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4">
+        <MessageList
+          messages={agentMessages}
+          onOpenFile={onOpenFile}
+          onRetry={handleRetry}
+          isGenerating={agentUI.isRunning}
+        />
 
-            {/* Active plan card */}
-            {agentPlan.length > 0 && agentUI.isRunning && (
-              <div className="mt-4">
-                <div className="rounded-xl border border-border bg-card/50 p-3">
-                  <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
-                    Active Plan
+        {/* Active plan card */}
+        {agentPlan.length > 0 && (
+          <div className="mt-4">
+            <div className="rounded-xl border border-border bg-card/50 p-3">
+              <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-muted-foreground">
+                Active Plan
+              </div>
+              <div className="space-y-1">
+                {agentPlan.map((step) => (
+                  <div key={step.id} className="flex items-start gap-2 text-xs">
+                    <div className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                      step.status === 'completed' ? 'bg-emerald-400' :
+                      step.status === 'in_progress' ? 'bg-sky-400 animate-pulse' :
+                      step.status === 'failed' ? 'bg-red-400' :
+                      'bg-muted-foreground/40'
+                    }`} />
+                    <span className={`${step.status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                      {step.title}
+                    </span>
                   </div>
-                  <div className="space-y-1">
-                    {agentPlan.map((step) => (
-                      <div key={step.id} className="flex items-start gap-2 text-xs">
-                        <div className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                          step.status === 'completed' ? 'bg-emerald-400' :
-                          step.status === 'in_progress' ? 'bg-sky-400 animate-pulse' :
-                          step.status === 'failed' ? 'bg-red-400' :
-                          'bg-muted-foreground/40'
-                        }`} />
-                        <span className={`${step.status === 'completed' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-                          {step.title}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
-            )}
-
-                  {/* Active file changes */}
-            {agentFileChanges.length > 0 && agentUI.isRunning && (
-              <div className="mt-4">
-                <ChangedFilesCard changes={agentFileChanges} onOpenFile={onOpenFile} />
-              </div>
-            )}
-
-            {/* Developer details */}
-            {agentUI.developerMode && (
-              <div className="mt-4">
-                <DeveloperDetails
-                  open={true}
-                  tokenEstimate={undefined}
-                  contextFiles={undefined}
-                  memoryRecords={agentTodos.length}
-                  repoMapEntries={agentPlan.length}
-                  storageUsage={undefined}
-                />
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
+            </div>
           </div>
         )}
 
-        {activeTab === 'tasks' && (
-          <div className="flex-1 overflow-y-auto min-h-0">
-            <TodoPanel
-              todos={agentTodos}
-              currentTodoId={agentUI.currentTodoId}
-            />
-          </div>
-        )}
-
-        {activeTab === 'changes' && (
-          <div className="flex-1 overflow-y-auto min-h-0">
-            <ChangedFilesPanel
-              changes={agentFileChanges}
+        {/* Changed files - compact */}
+        {agentFileChanges.length > 0 && (
+          <div className="mt-4">
+            <ChangedFilesCard
+              changes={agentFileChanges.slice(-6)}
               onOpenFile={onOpenFile}
+              compact
             />
           </div>
         )}
 
-        {activeTab === 'storage' && (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            <StorageStatus
-              backend={storageStats.backend}
-              projectSize={storageStats.projectSize}
-              files={storageStats.files}
-              lastSaved={storageStats.lastSaved}
-              persistence={storageStats.persistence}
-              onExport={handleExport}
+        {/* Developer details */}
+        {showDevDetails && (
+          <div className="mt-4 space-y-3">
+            <DeveloperDetails
+              open={true}
+              tokenEstimate={undefined}
+              contextFiles={undefined}
+              memoryRecords={agentTodos.length}
+              repoMapEntries={agentPlan.length}
+              storageUsage={undefined}
             />
+            <div className="rounded-lg border border-border/60 bg-card/50 p-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase text-muted-foreground mb-2">
+                All Changed Files
+              </div>
+              <ul className="space-y-1">
+                {agentFileChanges.map((ch, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs">
+                    <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${
+                      ch.action === 'created' ? 'bg-emerald-500/10 text-emerald-400' :
+                      ch.action === 'updated' ? 'bg-sky-500/10 text-sky-400' :
+                      ch.action === 'deleted' ? 'bg-red-500/10 text-red-400' :
+                      'bg-amber-500/10 text-amber-400'
+                    }`}>
+                      {ch.action}
+                    </span>
+                    <button
+                      onClick={() => onOpenFile?.(ch.path)}
+                      className="font-mono text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {ch.path}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
+
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Todo accordion - above input */}
@@ -551,12 +426,7 @@ export function ChatContainer({ onOpenFile, onCloseSidebar, onSendMessage }: Cha
           onSend={(content) => onSendMessage(content)}
           disabled={agentUI.isRunning}
           isGenerating={agentUI.isRunning}
-          onCancel={() => {
-            agentEventBus.emit({ type: 'agent:cancelled' });
-            setAgentRunning(false);
-            setCurrentTool(null);
-            discardSavedAgentState();
-          }}
+          onCancel={handleStop}
         />
       )}
     </div>

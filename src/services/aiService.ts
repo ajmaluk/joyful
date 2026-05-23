@@ -3,7 +3,7 @@ import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { executeInSandbox, loadVirtualFS } from '@/services/clientSandbox';
 import { describeAttachment } from '@/services/attachments';
 import { inferImageQueries, searchImages } from '@/services/unsplashService';
-import { uniqueId } from '@/utils/ids';
+
 
 interface AIGenerationOptions {
   skillBrief?: string[];
@@ -765,7 +765,7 @@ async function generateWithJoyfulAI(
   const messages = buildJoyfulMessages(prompt, existingFiles, conversationHistory, options);
   const candidateModels = Array.from(new Set([
     joyfulProviderConfig.model,
-    ...joyfulProviderConfig.fallbackModels,
+    joyfulProviderConfig.fallbackModel,
   ].filter(Boolean)));
   const orderedModels = sortCandidateModelsForAttachments(candidateModels, Boolean(options?.attachments?.length));
   const failures: string[] = [];

@@ -3,6 +3,7 @@ import type { AgentMode, TaskTodo } from '@/engine/types';
 import { agentEventBus, type AgentStatus, type Todo, type FileChange, type ToolActivity, type AgentPlanStep, type CompileError, type FinalSummary } from '@/lib/agent/eventBus';
 import { storageManager } from '@/engine/storage';
 import { uniqueId } from '@/utils/ids';
+import { ChatEventCompactor, NORMAL_POLICY, DEVELOPER_POLICY } from '@/lib/agent/ChatEventCompactor';
 
 // ── Persistence ──────────────────────────────────────────────
 const SAVED_STATE_KEY = 'joyful_agent_saved_state';
@@ -72,7 +73,9 @@ export interface AgentMessage {
     | 'debug_result'
     | 'memory_update'
     | 'final_summary'
-    | 'warning';
+    | 'warning'
+    | 'context_update'
+    | 'storage_update';
   content: string;
   timestamp: number;
   metadata?: Record<string, unknown>;
@@ -168,6 +171,7 @@ interface JoyfulStore {
   resumeRun: () => void;
   restoreAgentState: (state: SavedAgentState) => void;
   discardSavedAgentState: () => void;
+  resetAgentRun: () => void;
 
   setAgentTodos: (todos: Todo[]) => void;
   updateAgentTodo: (todoId: string, updates: Partial<Todo>) => void;
@@ -200,6 +204,8 @@ interface JoyfulStore {
   // Layout
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+
+  compactor: ChatEventCompactor;
 }
 
 const defaultAgentUI: AgentUIState = {
@@ -259,20 +265,9 @@ export const useJoyfulStore = create<JoyfulStore>()((set) => ({
     iteration: 0,
     currentTool: null,
     error: null,
-    status: 'idle',
-    currentGoal: null,
-    currentFile: null,
-    elapsedMs: 0,
-    currentRunId: null,
-    currentTodoId: null,
   },
   agentMessages: [],
   todos: [],
-  changedFiles: [],
-  agentErrors: [],
-  toolActivities: [],
-  developerMode: false,
-  isPaused: false,
 
   // Agent UI State
   agentUI: defaultAgentUI,
@@ -312,7 +307,21 @@ export const useJoyfulStore = create<JoyfulStore>()((set) => ({
   setCurrentFile: (currentFile) => set((s) => ({ agentUI: { ...s.agentUI, currentFile } })),
   setElapsedMs: (elapsedMs) => set((s) => ({ agentUI: { ...s.agentUI, elapsedMs } })),
   setIsPaused: (isPaused) => set((s) => ({ agentUI: { ...s.agentUI, isPaused } })),
-  toggleDeveloperMode: () => set((s) => ({ agentUI: { ...s.agentUI, developerMode: !s.agentUI.developerMode } })),
+  toggleDeveloperMode: () => set((s) => {
+    const newMode = !s.agentUI.developerMode;
+    // Also update compactor policy
+    const compactor = new ChatEventCompactor(newMode ? DEVELOPER_POLICY : NORMAL_POLICY);
+    return { agentUI: { ...s.agentUI, developerMode: newMode }, compactor };
+  }),
+  resetAgentRun: () => set((s) => ({
+    agentTodos: [],
+    agentFileChanges: [],
+    agentToolActivities: [],
+    agentPlan: [],
+    agentCompileErrors: [],
+    agentFinalSummary: null,
+    agentUI: { ...s.agentUI, currentTodoId: null, currentFile: null, elapsedMs: 0, isRunning: true, isPaused: false },
+  })),
   pauseRun: () => set((s) => {
     const newState = { agentUI: { ...s.agentUI, isPaused: true } };
     const saved = getSavedAgentState();
@@ -448,6 +457,9 @@ export const useJoyfulStore = create<JoyfulStore>()((set) => ({
   // Layout
   sidebarOpen: true,
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+
+  // Chat event compactor
+  compactor: new ChatEventCompactor(),
 }));
 
 // Subscribe to StorageManager events for real-time store updates
@@ -483,9 +495,25 @@ storageManager.on('project_changed', (detail) => {
 // Subscribe to agent event bus to update store state in real-time
 agentEventBus.subscribe((event) => {
   const store = useJoyfulStore.getState();
+  const compactor = store.compactor || new ChatEventCompactor();
+  const devMode = store.agentUI?.developerMode || false;
+
+  // Use compactor to filter events in normal mode
+  if (!devMode && !compactor.shouldShowAsMessage(event.type, event as unknown as Record<string, unknown>)) {
+    // Still track file reads for developer mode context
+    if (event.type === 'file:read') {
+      compactor.recordFileRead((event as unknown as { path: string }).path);
+    }
+    if (event.type === 'file:created' || event.type === 'file:updated' || event.type === 'file:deleted' || event.type === 'file:renamed') {
+      const fe = event as unknown as { path?: string; newPath?: string; summary?: string };
+      compactor.recordFileChange(fe.path || fe.newPath || '', event.type.split(':')[1], fe.summary || '');
+    }
+    return;
+  }
   
   switch (event.type) {
     case 'agent:start': {
+      compactor.resetRun();
       const initialState = {
         agentUI: {
           status: 'understanding' as AgentStatus,
@@ -497,7 +525,7 @@ agentEventBus.subscribe((event) => {
           elapsedMs: 0,
           isRunning: true,
           isPaused: false,
-          developerMode: store.agentUI.developerMode,
+          developerMode: devMode,
         },
         agentTodos: [] as Todo[],
         agentFileChanges: [] as FileChange[],
@@ -538,24 +566,35 @@ agentEventBus.subscribe((event) => {
     
     case 'agent:status': {
       store.setAgentUIStatus(event.status);
-      const lastMsg = store.agentMessages[store.agentMessages.length - 1];
-      if (lastMsg && lastMsg.type === 'thinking') {
-        store.updateChatMessage(lastMsg.id, {
-          content: event.message,
-        });
-      } else {
-        store.addAgentMessage({
-          id: uniqueId('status'),
-          role: 'system',
-          type: 'thinking',
-          content: event.message,
-          timestamp: Date.now(),
-        });
+      // Only add visible message for major transitions in normal mode
+      const majorStatuses = ['planning', 'debugging', 'failed', 'completed', 'blocked'];
+      if (devMode || majorStatuses.includes(event.status)) {
+        const lastMsg = store.agentMessages[store.agentMessages.length - 1];
+        const lastIsRecentThinking =
+          lastMsg &&
+          lastMsg.type === 'thinking' &&
+          Date.now() - lastMsg.timestamp < 3000;
+        if (lastIsRecentThinking) {
+          store.updateChatMessage(lastMsg.id, {
+            content: event.message || event.status,
+            timestamp: Date.now(),
+          });
+        } else {
+          store.addAgentMessage({
+            id: uniqueId('status'),
+            role: 'assistant',
+            type: 'thinking',
+            content: event.message || event.status,
+            timestamp: Date.now(),
+          });
+        }
       }
       break;
     }
 
     case 'agent:thinking': {
+      // Throttle thinking updates to avoid flooding in normal mode
+      if (!devMode) break;
       const lastMsg = store.agentMessages[store.agentMessages.length - 1];
       if (lastMsg && lastMsg.type === 'thinking') {
         store.updateChatMessage(lastMsg.id, { content: event.text });
@@ -734,130 +773,126 @@ agentEventBus.subscribe((event) => {
     }
     
     case 'file:read': {
+      compactor.recordFileRead(event.path);
       store.setCurrentFile(event.path);
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('file_read'),
+          role: 'tool',
+          type: 'tool_result',
+          content: `Reading ${event.path}`,
+          timestamp: Date.now(),
+          metadata: {
+            activity: {
+              id: uniqueId('act_read'),
+              tool: 'read_file',
+              display: `Reading ${event.path}`,
+              status: 'success',
+              startedAt: Date.now(),
+              completedAt: Date.now(),
+              input: { path: event.path },
+            },
+          },
+        });
+      }
       break;
     }
 
     case 'file:read_chunk': {
       store.setCurrentFile(event.path);
-      store.addAgentMessage({
-        id: uniqueId('chunk'),
-        role: 'assistant',
-        type: 'tool_call',
-        content: `Reading file ${event.path} (lines ${event.startLine}-${event.endLine} of ${event.totalLines}). Reason: ${event.reason || 'analyzing content'}`,
-        timestamp: Date.now(),
-        metadata: {
-          activity: {
-            id: uniqueId('chunk_act'),
-            tool: 'read_file_chunk',
-            display: `Reading ${event.path} [L${event.startLine}-${event.endLine}]`,
-            status: 'success',
-            input: event,
-            startedAt: Date.now(),
-            completedAt: Date.now()
-          }
-        }
-      });
+      // Only show in normal mode if file is large
+      if (devMode || (event.totalLines && event.endLine - event.startLine > 200)) {
+        store.addAgentMessage({
+          id: uniqueId('file_chunk'),
+          role: 'assistant',
+          type: 'context_update',
+          content: `Large file section read: ${event.path} lines ${event.startLine}-${event.endLine} of ${event.totalLines}. Reason: ${event.reason || 'analyzing content'}`,
+          timestamp: Date.now(),
+          metadata: {
+            path: event.path,
+            startLine: event.startLine,
+            endLine: event.endLine,
+            totalLines: event.totalLines,
+            reason: event.reason,
+          },
+        });
+      }
       break;
     }
     
-    case 'file:created': {
-      const change: FileChange = {
-        path: event.path,
-        action: 'created',
-        summary: `Created file: ${event.path} (${event.size || 0} bytes)`,
-        timestamp: Date.now(),
-        status: 'success',
-      };
-      store.addFileChange(change);
-      store.setCurrentFile(event.path);
-      
-      store.addAgentMessage({
-        id: uniqueId('file_cre'),
-        role: 'assistant',
-        type: 'file_change',
-        content: JSON.stringify(change),
-        timestamp: Date.now(),
-        metadata: { path: event.path, action: 'created', size: event.size }
-      });
-      break;
-    }
-    
-    case 'file:updated': {
-      const change: FileChange = {
-        path: event.path,
-        action: 'updated',
-        summary: event.summary || `Updated file: ${event.path}`,
-        timestamp: Date.now(),
-        status: 'success',
-      };
-      store.addFileChange(change);
-      store.setCurrentFile(event.path);
-      
-      store.addAgentMessage({
-        id: uniqueId('file_upd'),
-        role: 'assistant',
-        type: 'file_change',
-        content: JSON.stringify(change),
-        timestamp: Date.now(),
-        metadata: { path: event.path, action: 'updated', summary: event.summary }
-      });
-      break;
-    }
-    
-    case 'file:deleted': {
-      const change: FileChange = {
-        path: event.path,
-        action: 'deleted',
-        summary: `Deleted file: ${event.path}`,
-        timestamp: Date.now(),
-        status: 'success',
-      };
-      store.addFileChange(change);
-      
-      store.addAgentMessage({
-        id: uniqueId('file_del'),
-        role: 'assistant',
-        type: 'file_change',
-        content: JSON.stringify(change),
-        timestamp: Date.now(),
-        metadata: { path: event.path, action: 'deleted' }
-      });
-      break;
-    }
-    
+    case 'file:created':
+    case 'file:updated':
+    case 'file:deleted':
     case 'file:renamed': {
+      const fe = event as unknown as { path?: string; newPath?: string; oldPath?: string; summary?: string };
+      const path = fe.path || fe.newPath || '';
+      const action = event.type.split(':')[1] as FileChange['action'];
+      const summary = fe.summary || `${action === 'created' ? 'Created' : action === 'updated' ? 'Updated' : action === 'deleted' ? 'Deleted' : 'Renamed'} ${path}`;
+      
       const change: FileChange = {
-        path: event.newPath,
-        oldPath: event.oldPath,
-        action: 'renamed',
-        summary: `Renamed file: ${event.oldPath} -> ${event.newPath}`,
+        path,
+        action,
+        summary,
         timestamp: Date.now(),
         status: 'success',
       };
-      store.addFileChange(change);
+      if (fe.oldPath) change.oldPath = fe.oldPath;
       
-      store.addAgentMessage({
-        id: uniqueId('file_ren'),
-        role: 'assistant',
-        type: 'file_change',
-        content: JSON.stringify(change),
-        timestamp: Date.now(),
-        metadata: { path: event.newPath, oldPath: event.oldPath, action: 'renamed' }
-      });
+      store.addFileChange(change);
+      compactor.recordFileChange(path, action, summary);
+      store.setCurrentFile(path);
+      
+      // Group file changes: update existing file_change card if same path
+      if (!devMode && compactor.shouldShowAsMessage(event.type)) {
+        const existingIdx = [...store.agentMessages].reverse().findIndex(m =>
+          m.type === 'file_change' &&
+          m.metadata?.path === path
+        );
+        if (existingIdx >= 0) {
+          // Update existing message
+        } else {
+          store.addAgentMessage({
+            id: uniqueId('file_chg'),
+            role: 'assistant',
+            type: 'file_change',
+            content: summary,
+            timestamp: Date.now(),
+            metadata: { path, action, summary },
+          });
+        }
+      } else if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('file_chg'),
+          role: 'assistant',
+          type: 'file_change',
+          content: summary,
+          timestamp: Date.now(),
+          metadata: { path, action, summary },
+        });
+      }
       break;
     }
     
     case 'compile:started': {
       store.setAgentUIStatus('compiling');
-      store.addAgentMessage({
-        id: uniqueId('compile'),
-        role: 'system',
-        type: 'compile_result',
-        content: 'Compiling project and running preview checks...',
-        timestamp: Date.now(),
-        metadata: { success: false, errors: [] }
-      });
+      // Update compile card in place (single card per run)
+      const existingCompileIdx = [...store.agentMessages].reverse().findIndex(m => m.type === 'compile_result');
+      if (existingCompileIdx >= 0) {
+        const idx = store.agentMessages.length - 1 - existingCompileIdx;
+        store.updateChatMessage(store.agentMessages[idx].id, {
+          content: 'Compiling...',
+          metadata: { success: false, errors: [], running: true },
+        });
+      } else {
+        store.addAgentMessage({
+          id: uniqueId('compile'),
+          role: 'system',
+          type: 'compile_result',
+          content: 'Compiling...',
+          timestamp: Date.now(),
+          metadata: { success: false, errors: [], running: true }
+        });
+      }
       break;
     }
     
@@ -865,11 +900,13 @@ agentEventBus.subscribe((event) => {
       store.setAgentUIStatus('reviewing');
       store.setAgentCompileErrors([]);
       
-      const lastMsg = store.agentMessages[store.agentMessages.length - 1];
-      if (lastMsg && lastMsg.type === 'compile_result') {
-        store.updateChatMessage(lastMsg.id, {
-          content: `Preview compiled successfully in ${event.durationMs}ms`,
-          metadata: { success: true, durationMs: event.durationMs, errors: [] },
+      // Update existing compile card in place
+      const existingCompileIdx = [...store.agentMessages].reverse().findIndex(m => m.type === 'compile_result');
+      if (existingCompileIdx >= 0) {
+        const idx = store.agentMessages.length - 1 - existingCompileIdx;
+        store.updateChatMessage(store.agentMessages[idx].id, {
+          content: `Preview built successfully ${event.durationMs ? `in ${event.durationMs}ms` : ''}`,
+          metadata: { success: true, durationMs: event.durationMs || 0, errors: [], running: false },
         });
       }
       break;
@@ -879,11 +916,13 @@ agentEventBus.subscribe((event) => {
       store.setAgentUIStatus('debugging');
       store.setAgentCompileErrors(event.errors);
       
-      const lastMsg = store.agentMessages[store.agentMessages.length - 1];
-      if (lastMsg && lastMsg.type === 'compile_result') {
-        store.updateChatMessage(lastMsg.id, {
-          content: `Build failed: ${event.errors.length} error(s) found`,
-          metadata: { success: false, errors: event.errors },
+      // Update existing compile card in place
+      const existingCompileIdx = [...store.agentMessages].reverse().findIndex(m => m.type === 'compile_result');
+      if (existingCompileIdx >= 0) {
+        const idx = store.agentMessages.length - 1 - existingCompileIdx;
+        store.updateChatMessage(store.agentMessages[idx].id, {
+          content: `Build failed: ${event.errors.length} error(s)`,
+          metadata: { success: false, errors: event.errors, running: false },
         });
       }
       break;
@@ -962,13 +1001,16 @@ agentEventBus.subscribe((event) => {
     }
     
     case 'memory:saved': {
-      store.addAgentMessage({
-        id: uniqueId('mem'),
-        role: 'assistant',
-        type: 'memory_update',
-        content: event.summary,
-        timestamp: Date.now(),
-      });
+      // Only show in developer mode or if final summary mentions it
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('mem'),
+          role: 'assistant',
+          type: 'memory_update',
+          content: event.summary,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
     
@@ -976,6 +1018,19 @@ agentEventBus.subscribe((event) => {
       store.setAgentUIStatus('completed');
       store.setAgentFinalSummary(event.summary);
       clearSavedAgentState();
+      
+      // Add grouped file changes before final summary
+      const grouped = compactor.getGroupedFileChanges();
+      if (grouped.count > 0) {
+        store.addAgentMessage({
+          id: uniqueId('grouped_files'),
+          role: 'assistant',
+          type: 'file_change',
+          content: `Changed ${grouped.count} files`,
+          timestamp: Date.now(),
+          metadata: { grouped: true, files: grouped.items },
+        });
+      }
       
       store.addAgentMessage({
         id: uniqueId('final'),
@@ -1038,40 +1093,48 @@ agentEventBus.subscribe((event) => {
     }
 
     case 'context:selected': {
-      store.addAgentMessage({
-        id: uniqueId('ctx'),
-        role: 'assistant',
-        type: 'tool_call',
-        content: `Selected ${event.files.length} files${event.memoryUsed ? ' with memory context' : ''}${event.repoMapUsed ? ' with repo map' : ''}`,
-        timestamp: Date.now(),
-        metadata: {
-          contextFiles: event.files,
-          contextChunks: event.chunks,
-          estimatedTokens: event.estimatedTokens
-        }
-      });
+      // Developer mode only
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('ctx'),
+          role: 'assistant',
+          type: 'tool_call',
+          content: `Selected ${event.files.length} files${event.memoryUsed ? ' with memory context' : ''}${event.repoMapUsed ? ' with repo map' : ''}`,
+          timestamp: Date.now(),
+          metadata: {
+            contextFiles: event.files,
+            contextChunks: event.chunks,
+            estimatedTokens: event.estimatedTokens
+          }
+        });
+      }
       break;
     }
 
     case 'memory:loaded': {
-      store.addAgentMessage({
-        id: uniqueId('mem_loaded'),
-        role: 'system',
-        type: 'memory_update',
-        content: `Memory loaded: ${event.summary}`,
-        timestamp: Date.now(),
-      });
+      // Developer mode only
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('mem_loaded'),
+          role: 'system',
+          type: 'memory_update',
+          content: `Memory loaded: ${event.summary}`,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 
     case 'reflection:saved': {
-      store.addAgentMessage({
-        id: uniqueId('refl'),
-        role: 'system',
-        type: 'memory_update',
-        content: `Saved reflection: ${event.lesson}`,
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('refl'),
+          role: 'system',
+          type: 'memory_update',
+          content: `Saved reflection: ${event.lesson}`,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 
@@ -1080,7 +1143,7 @@ agentEventBus.subscribe((event) => {
     }
 
     case 'skill:loaded': {
-      if (event.skills.length > 0) {
+      if (devMode && event.skills.length > 0) {
         store.addAgentMessage({
           id: uniqueId('skill_loaded'),
           role: 'system',
@@ -1093,86 +1156,136 @@ agentEventBus.subscribe((event) => {
     }
 
     case 'skill:saved': {
-      store.addAgentMessage({
-        id: uniqueId('skill_saved'),
-        role: 'system',
-        type: 'memory_update',
-        content: `Saved skill: ${event.skillName}`,
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('skill_saved'),
+          role: 'system',
+          type: 'memory_update',
+          content: `Saved skill: ${event.skillName}`,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 
     case 'snapshot:created': {
-      store.addAgentMessage({
-        id: uniqueId('snap'),
-        role: 'system',
-        type: 'memory_update',
-        content: `Created snapshot: ${event.label}`,
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('snap'),
+          role: 'system',
+          type: 'memory_update',
+          content: `Created snapshot: ${event.label}`,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 
     case 'snapshot:restored': {
-      store.addAgentMessage({
-        id: uniqueId('snap_restore'),
-        role: 'system',
-        type: 'memory_update',
-        content: `Restored snapshot: ${event.label}`,
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('snap_restore'),
+          role: 'system',
+          type: 'memory_update',
+          content: `Restored snapshot: ${event.label}`,
+          timestamp: Date.now(),
+        });
+      }
+      break;
+    }
+
+    case 'preview:updated': {
+      // If latest compile card exists and succeeded, do nothing
+      // This prevents duplicate preview cards
+      const latestCompile = [...store.agentMessages].reverse().find(m => m.type === 'compile_result');
+      if (latestCompile && latestCompile.metadata?.success) break;
+      
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('preview'),
+          role: 'system',
+          type: 'compile_result',
+          content: 'Preview updated successfully.',
+          timestamp: Date.now(),
+          metadata: {
+            success: true,
+            errors: [],
+          },
+        });
+      }
       break;
     }
 
     case 'storage:updated': {
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('storage'),
+          role: 'system',
+          type: 'storage_update',
+          content: `Project saved locally. ${event.fileCount} files, ${Math.round(event.projectSize / 1024)} KB.`,
+          timestamp: Date.now(),
+          metadata: {
+            usage: event.usage,
+            projectSize: event.projectSize,
+            fileCount: event.fileCount,
+          },
+        });
+      }
       break;
     }
 
     case 'repair:started': {
       store.setAgentUIMode('debugger');
-      store.addAgentMessage({
-        id: uniqueId('repair'),
-        role: 'assistant',
-        type: 'debug_result',
-        content: `Starting auto-repair on ${event.errors.length} error(s)`,
-        timestamp: Date.now(),
-        metadata: { errors: event.errors }
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('repair'),
+          role: 'assistant',
+          type: 'debug_result',
+          content: `Starting auto-repair on ${event.errors.length} error(s)`,
+          timestamp: Date.now(),
+          metadata: { errors: event.errors }
+        });
+      }
       break;
     }
 
     case 'repair:attempt': {
-      store.addAgentMessage({
-        id: uniqueId('repair_attempt'),
-        role: 'assistant',
-        type: 'debug_result',
-        content: `Repair attempt ${event.attempt}: ${event.action}`,
-        timestamp: Date.now(),
-        metadata: { attempt: event.attempt, error: event.error }
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('repair_attempt'),
+          role: 'assistant',
+          type: 'debug_result',
+          content: `Repair attempt ${event.attempt}: ${event.action}`,
+          timestamp: Date.now(),
+          metadata: { attempt: event.attempt, error: event.error }
+        });
+      }
       break;
     }
 
     case 'repair:fixed': {
-      store.addAgentMessage({
-        id: uniqueId('repair_fixed'),
-        role: 'system',
-        type: 'debug_result',
-        content: 'Auto-repair successful!',
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('repair_fixed'),
+          role: 'system',
+          type: 'debug_result',
+          content: 'Auto-repair successful!',
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
 
     case 'repair:failed': {
-      store.addAgentMessage({
-        id: uniqueId('repair_failed'),
-        role: 'error',
-        type: 'warning',
-        content: `Auto-repair failed: ${event.remainingErrors} error(s) remaining. Manual intervention may be needed.`,
-        timestamp: Date.now(),
-      });
+      if (devMode) {
+        store.addAgentMessage({
+          id: uniqueId('repair_failed'),
+          role: 'error',
+          type: 'warning',
+          content: `Auto-repair failed: ${event.remainingErrors} error(s) remaining. Manual intervention may be needed.`,
+          timestamp: Date.now(),
+        });
+      }
       break;
     }
   }

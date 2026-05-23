@@ -1,11 +1,11 @@
 import * as esbuild from 'esbuild-wasm';
 import { virtualFS, normalizePath } from '@/lib/vfs/VirtualFileSystem';
 import { errorCollector } from '@/engine/errors';
-import { htmlToBlobUrl } from '@/utils/blob';
 
 export interface CompileResult {
   success: boolean;
   code?: string;
+  css?: string;
   errors: string[];
   warnings: string[];
 }
@@ -24,15 +24,27 @@ export class BrowserSandbox {
   private currentAbortController: AbortController | null = null;
   private lastConsoleMessage = '';
   private consoleRepeatCount = 0;
-  private pendingBlobUrls: string[] = [];
+  private compileId = 0;
+  private lastGoodCode = '';
+  private lastGoodCss = '';
 
   async init(): Promise<void> {
     if (esbuildInitialized) return;
-    await esbuild.initialize({
-      wasmURL: 'https://unpkg.com/esbuild-wasm@0.28.0/esbuild.wasm',
-      worker: true,
-    });
-    esbuildInitialized = true;
+    try {
+      await esbuild.initialize({
+        wasmURL: 'https://unpkg.com/esbuild-wasm@0.28.0/esbuild.wasm',
+        worker: true,
+      });
+      esbuildInitialized = true;
+    } catch (e) {
+      // esbuild rejects repeated initialize() calls (even with the flag guard,
+      // HMR / Vite hot reloads can reset the module-level variable).
+      if (e instanceof Error && e.message.includes('Cannot call initialize more than once')) {
+        esbuildInitialized = true;
+      } else {
+        throw e;
+      }
+    }
 
     // Wire up error collector's file reader to the virtual FS
     errorCollector.setFileReader(async (path: string) => {
@@ -106,8 +118,12 @@ export class BrowserSandbox {
         return { success: false, errors: ['No output files generated'], warnings };
       }
 
-      const code = new TextDecoder().decode(result.outputFiles[0].contents);
-      return { success: true, code, errors, warnings };
+      const jsFiles = result.outputFiles.filter(f => f.path.endsWith('.js'));
+      const cssFiles = result.outputFiles.filter(f => f.path.endsWith('.css'));
+
+      const code = jsFiles.map(f => new TextDecoder().decode(f.contents)).join('\n');
+      const css = cssFiles.map(f => new TextDecoder().decode(f.contents)).join('\n');
+      return { success: true, code, css, errors, warnings };
 
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -115,67 +131,58 @@ export class BrowserSandbox {
     }
   }
 
-  async updatePreview(compiledCode: string): Promise<void> {
+  async updatePreview(code: string, css = ''): Promise<void> {
     if (!this.iframe) return;
 
-    for (const url of this.pendingBlobUrls) {
-      URL.revokeObjectURL(url);
-    }
-    this.pendingBlobUrls = [];
-
-    const bridgeCode = `
-const origLog = console.log;
-const origError = console.error;
-const origWarn = console.warn;
-const origInfo = console.info;
-function send(level, args) {
-  window.parent.postMessage({
-    type: '__joyful_console__',
-    level: level,
-    message: args.map(a =>
-      typeof a === 'object' ? JSON.stringify(a, null, 2)
-      : typeof a === 'undefined' ? 'undefined'
-      : String(a)
-    ).join(' ')
-  }, '*');
-}
-console.log = function() { origLog.apply(console, arguments); send('log', arguments); };
-console.error = function() { origError.apply(console, arguments); send('error', arguments); };
-console.warn = function() { origWarn.apply(console, arguments); send('warn', arguments); };
-console.info = function() { origInfo.apply(console, arguments); send('info', arguments); };
-window.onerror = function(msg, src, line, col, error) {
-  send('error', ['Runtime error: ' + msg + ' at line ' + line]);
-  return false;
-};
-window.addEventListener('unhandledrejection', function(e) {
-  send('error', ['Unhandled Promise rejection: ' + e.reason]);
-});`;
-
-    const bridgeBlob = new Blob([bridgeCode], { type: 'application/javascript' });
-    const bridgeUrl = URL.createObjectURL(bridgeBlob);
-    const codeBlob = new Blob([compiledCode], { type: 'application/javascript' });
-    const codeUrl = URL.createObjectURL(codeBlob);
-    this.pendingBlobUrls = [bridgeUrl, codeUrl];
-
     const html = `<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Preview</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+    ${css}
   </style>
 </head>
 <body>
   <div id="root"></div>
-  <script src="${bridgeUrl}"></script>
-  <script src="${codeUrl}"></script>
+  <script>
+    var send = function(level, args) {
+      parent.postMessage({
+        type: '__joyful_console__',
+        level: level,
+        message: Array.from(args).map(function(a) {
+          try { return typeof a === 'object' ? JSON.stringify(a) : String(a); }
+          catch(e) { return String(a); }
+        }).join(' ')
+      }, '*');
+    };
+
+    ['log','info','warn','error'].forEach(function(level) {
+      var original = console[level];
+      console[level] = function() {
+        original.apply(console, arguments);
+        send(level, arguments);
+      };
+    });
+
+    window.onerror = function(message, source, line, column) {
+      send('error', ['Runtime error:', message, 'line:', line, 'column:', column]);
+      return false;
+    };
+
+    window.addEventListener('unhandledrejection', function(event) {
+      send('error', ['Unhandled promise rejection:', event.reason]);
+    });
+  </script>
+  <script type="module">
+    ${code}
+  </script>
 </body>
 </html>`;
 
-    this.iframe.src = htmlToBlobUrl(html);
+    this.iframe.srcdoc = html;
   }
 
   private handleMessage = (event: MessageEvent): void => {
@@ -198,9 +205,16 @@ window.addEventListener('unhandledrejection', function(e) {
 
   async compileAndPreview(entryPoint: string): Promise<CompileResult> {
     await this.init();
+    this.compileId++;
+    const currentCompileId = this.compileId;
     const result = await this.compile(entryPoint);
+    if (currentCompileId !== this.compileId) return result;
     if (result.success && result.code) {
-      await this.updatePreview(result.code);
+      this.lastGoodCode = result.code;
+      this.lastGoodCss = result.css || '';
+      await this.updatePreview(result.code, result.css || '');
+    } else if (this.lastGoodCode) {
+      await this.updatePreview(this.lastGoodCode, this.lastGoodCss);
     }
     return result;
   }

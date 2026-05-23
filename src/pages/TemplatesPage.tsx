@@ -49,7 +49,7 @@ export function TemplatesPage({ onCreateProject, onUpdateProject }: TemplatesPag
       const response = await generateWithAI(template.prompt, []);
       const files: ProjectFile[] = response.files
         .filter((file) => file.action !== 'delete' && file.content !== undefined)
-        .map((file, index) => ({
+        .map((file) => ({
           id: uniqueId('file'),
           path: file.path,
           content: file.content || '',

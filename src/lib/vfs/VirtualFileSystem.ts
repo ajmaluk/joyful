@@ -1,4 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
+import JSZip from 'jszip';
 
 const DB_NAME = 'joyful-vfs';
 const DB_VERSION = 1;
@@ -10,6 +11,7 @@ interface FileRecord {
   content: string;
   createdAt: number;
   updatedAt: number;
+  type?: 'file' | 'directory';
 }
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
@@ -31,12 +33,26 @@ function getDb(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
-function normalizePath(path: string): string {
-  return '/' + path
-    .replace(/\\/g, '/')
-    .replace(/\/+/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
+export function normalizePath(path: string): string {
+  // Convert backslashes to forward slashes and collapse duplicate slashes
+  let p = path.replace(/\\/g, '/').replace(/\/+/g, '/');
+  
+  // Split the path into segments
+  const parts = p.split('/');
+  const resolvedParts: string[] = [];
+  
+  for (const part of parts) {
+    if (part === '.' || part === '') {
+      continue;
+    }
+    if (part === '..') {
+      resolvedParts.pop();
+    } else {
+      resolvedParts.push(part);
+    }
+  }
+  
+  return '/' + resolvedParts.join('/');
 }
 
 function getParentDir(path: string): string {
@@ -91,11 +107,40 @@ export class VirtualFileSystem {
     this.loaded = true;
   }
 
+  isDirectoryPath(path: string): boolean {
+    const normalized = normalizePath(path);
+    if (normalized === '/') return true;
+    
+    const record = this.fileCache.get(normalized);
+    if (record) {
+      if (record.type === 'directory') return true;
+      if (record.type === 'file') return false;
+    }
+    
+    const prefix = normalized + '/';
+    for (const [filePath] of this.fileCache) {
+      if (filePath.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isFile(path: string): boolean {
+    const normalized = normalizePath(path);
+    const record = this.fileCache.get(normalized);
+    if (record) {
+      if (record.type === 'file') return true;
+      if (record.type === 'directory') return false;
+    }
+    return this.fileCache.has(normalized) && !this.isDirectoryPath(normalized);
+  }
+
   async readFile(path: string): Promise<string> {
     await this.init();
     const normalized = normalizePath(path);
     const record = this.fileCache.get(normalized);
-    if (!record) {
+    if (!record || record.type === 'directory') {
       throw new Error(`File not found: ${normalized}`);
     }
     return record.content;
@@ -105,20 +150,25 @@ export class VirtualFileSystem {
     await this.init();
     const normalized = normalizePath(path);
     const now = Date.now();
-    const existing = this.fileCache.get(normalized);
-    const isNew = !existing;
+    
+    if (this.isDirectoryPath(normalized)) {
+      throw new Error(`File collision: Cannot write file at "${normalized}" because it is currently a directory.`);
+    }
 
-    // Ensure parent directories exist
     const parent = getParentDir(normalized);
     if (parent !== '/') {
       await this.ensureDir(parent);
     }
+
+    const existing = this.fileCache.get(normalized);
+    const isNew = !existing;
 
     const record: FileRecord = {
       path: normalized,
       content,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      type: 'file',
     };
 
     this.fileCache.set(normalized, record);
@@ -131,7 +181,8 @@ export class VirtualFileSystem {
   async deleteFile(path: string): Promise<void> {
     await this.init();
     const normalized = normalizePath(path);
-    if (!this.fileCache.has(normalized)) {
+    const record = this.fileCache.get(normalized);
+    if (!record || record.type === 'directory') {
       throw new Error(`File not found: ${normalized}`);
     }
     this.fileCache.delete(normalized);
@@ -142,7 +193,8 @@ export class VirtualFileSystem {
 
   async fileExists(path: string): Promise<boolean> {
     await this.init();
-    return this.fileCache.has(normalizePath(path));
+    const normalized = normalizePath(path);
+    return this.isFile(normalized);
   }
 
   async ensureDir(path: string): Promise<void> {
@@ -150,6 +202,13 @@ export class VirtualFileSystem {
     const normalized = normalizePath(path);
     if (normalized === '/') return;
     const dirs = getAllParentDirs(normalized);
+    
+    for (const dir of dirs) {
+      if (this.isFile(dir)) {
+        throw new Error(`Directory collision: Cannot create directory at "${dir}" because it is currently a file.`);
+      }
+    }
+
     const db = await getDb();
     for (const dir of dirs) {
       if (!this.fileCache.has(dir)) {
@@ -158,6 +217,7 @@ export class VirtualFileSystem {
           content: '',
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          type: 'directory',
         };
         this.fileCache.set(dir, record);
         await db.put(FILES_STORE, record);
@@ -184,11 +244,13 @@ export class VirtualFileSystem {
       if (!entries.has(firstName)) {
         const isDir = parts.length > 1;
         const record = this.fileCache.get(filePath);
+        const type = isDir ? 'directory' : (record?.type ?? 'file');
+        
         entries.set(firstName, {
           name: firstName,
           path: childPath,
-          type: isDir ? 'directory' : 'file',
-          size: isDir ? 0 : (record?.content.length ?? 0),
+          type: type as 'file' | 'directory',
+          size: type === 'directory' ? 0 : (record?.content.length ?? 0),
           updatedAt: record?.updatedAt ?? 0,
         });
       } else if (parts.length > 1) {
@@ -207,6 +269,39 @@ export class VirtualFileSystem {
       if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
+  }
+
+  async exportAsZip(): Promise<Blob> {
+    await this.init();
+    const zip = new JSZip();
+    
+    for (const [filePath, record] of this.fileCache) {
+      if (this.isFile(filePath)) {
+        const zipPath = filePath.startsWith('/') ? filePath.slice(1) : filePath;
+        zip.file(zipPath, record.content);
+      }
+    }
+    
+    return await zip.generateAsync({ type: 'blob' });
+  }
+
+  async importFromZip(zipBlob: Blob): Promise<void> {
+    const zip = new JSZip();
+    const loadedZip = await zip.loadAsync(zipBlob);
+    
+    await this.clearProject();
+    
+    for (const [relPath, file] of Object.entries(loadedZip.files)) {
+      if (file.dir) {
+        continue;
+      }
+      
+      const content = await file.async('string');
+      const absPath = '/' + relPath;
+      const normalized = normalizePath(absPath);
+      
+      await this.writeFile(normalized, content);
+    }
   }
 
   async getProjectTree(rootPath = '/'): Promise<FileTreeNode> {

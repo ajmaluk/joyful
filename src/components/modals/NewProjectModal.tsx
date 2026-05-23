@@ -57,6 +57,7 @@ export function NewProjectModal({ isOpen, onClose, onCreate }: NewProjectModalPr
           <div>
             <label className="mb-1.5 block text-sm font-bold text-[#f6f2ea]">Project name</label>
             <input
+              name="project-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -68,6 +69,7 @@ export function NewProjectModal({ isOpen, onClose, onCreate }: NewProjectModalPr
           <div>
             <label className="mb-1.5 block text-sm font-bold text-[#f6f2ea]">Description</label>
             <textarea
+              name="project-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the pages, audience, style, and key sections..."

@@ -1,19 +1,20 @@
 import { useCallback, useRef, useEffect } from 'react';
-import { JoyfulAgent, type AgentObserver } from '@/lib/agent/JoyfulAgent';
+import { JoyfulAgentV2 as JoyfulAgent, type AgentObserver } from '@/lib/agent/JoyfulAgentV2';
 import { browserSandbox } from '@/lib/sandbox/BrowserSandbox';
 import { useJoyfulStore, type AgentMessage, type ConsoleMessage } from '@/store/joyfulStore';
 import type { TaskTodo } from '@/engine/types';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
+import { agentEventBus } from '@/lib/agent/eventBus';
 
 let agentInstance: JoyfulAgent | null = null;
 
 function getAgent(): JoyfulAgent {
   if (!agentInstance) {
-    const isNV = joyfulProviderConfig.enabled;
+    const baseUrl = joyfulProviderConfig.invokeUrl.replace('/chat/completions', '');
     agentInstance = new JoyfulAgent({
       apiKey: joyfulProviderConfig.apiKey,
       model: joyfulProviderConfig.model,
-      baseUrl: isNV ? joyfulProviderConfig.invokeUrl.replace('/chat/completions', '') : undefined,
+      baseUrl,
     });
   }
   return agentInstance;
@@ -62,6 +63,7 @@ export function useAgent(projectId?: string | null) {
             const msg: AgentMessage = {
               id: currentMessageId,
               role: 'assistant',
+              type: 'text',
               content: '',
               timestamp: Date.now(),
             };
@@ -76,9 +78,10 @@ export function useAgent(projectId?: string | null) {
           const msg: AgentMessage = {
             id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
             role: 'tool',
+            type: 'tool_call',
             content: `Using tool: ${name}`,
             timestamp: Date.now(),
-            toolCalls: [{ name, input }],
+            metadata: { toolCall: { name, input } },
           };
           store.addAgentMessage(msg);
           store.setCurrentTool(name);
@@ -116,29 +119,38 @@ export function useAgent(projectId?: string | null) {
 
         onCompileRequest: async (entryPoint) => {
           try {
+            agentEventBus.emit({ type: 'compile:started' });
             store.setPreviewVisible(true);
             await browserSandbox.init();
+            const compileStart = performance.now();
             const result = await browserSandbox.compile(entryPoint);
             if (result.success && result.code) {
               await browserSandbox.updatePreview(result.code);
               store.setCompileErrors([]);
-              return { success: true, data: 'Preview updated successfully' };
+              agentEventBus.emit({ type: 'compile:succeeded', durationMs: Math.round(performance.now() - compileStart) });
+              return { success: true, tool: 'compile', data: 'Preview updated successfully' };
             }
-            store.setCompileErrors(
-              result.errors.map(e => ({
-                file: '',
-                line: 0,
-                column: 0,
+            // Parse file paths from error messages
+            const errors = result.errors.map(e => {
+              const match = e.match(/(?:\/|^)([^\s:]+\.\w+):(\d+):(\d+)/);
+              return {
+                file: match ? match[1] : '',
+                line: match ? parseInt(match[2], 10) : 0,
+                column: match ? parseInt(match[3], 10) : 0,
                 message: e,
-              })),
-            );
+              };
+            });
+            store.setCompileErrors(errors);
+            agentEventBus.emit({ type: 'compile:failed', errors });
             return {
               success: false,
+              tool: 'compile',
               error: `Compile errors:\n${result.errors.join('\n')}`,
             };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            return { success: false, error: msg };
+            agentEventBus.emit({ type: 'compile:failed', errors: [{ file: '', line: 0, column: 0, message: msg }] });
+            return { success: false, tool: 'compile', error: msg };
           }
         },
       };
@@ -151,7 +163,10 @@ export function useAgent(projectId?: string | null) {
       abortRef.current = false;
 
       if (!joyfulProviderConfig.apiKey) {
-        store.setAgentError('No API key configured. Set VITE_NV_API_KEY in your environment.');
+        const error = 'No API key configured. Set VITE_NV_API_KEY in your environment.';
+        store.setAgentError(error);
+        store.setAgentUIStatus('failed');
+        agentEventBus.emit({ type: 'agent:failed', error });
         return;
       }
 
@@ -161,6 +176,7 @@ export function useAgent(projectId?: string | null) {
       const userMsg: AgentMessage = {
         id: `user_${Date.now()}`,
         role: 'user',
+        type: 'text',
         content: prompt,
         timestamp: Date.now(),
       };
@@ -173,6 +189,8 @@ export function useAgent(projectId?: string | null) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         store.setAgentError(msg);
+        store.setAgentUIStatus('failed');
+        agentEventBus.emit({ type: 'agent:failed', error: msg });
       } finally {
         store.setAgentRunning(false);
         store.setCurrentTool(null);
@@ -191,7 +209,7 @@ export function useAgent(projectId?: string | null) {
     agentInstance = null;
     abortRef.current = false;
     store.clearAgentMessages();
-    store.setTodos([]);
+    store.resetAgentUI();
     store.setAgentError(null);
     store.setAgentRunning(false);
   }, [store]);

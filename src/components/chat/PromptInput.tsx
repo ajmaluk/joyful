@@ -163,6 +163,7 @@ export function PromptInput({
     <div className="relative z-30 min-w-0 overflow-visible border-t border-border bg-background px-4 py-4">
       <div className="relative flex min-w-0 flex-col overflow-visible rounded-2xl border border-border bg-card p-3 text-left shadow-sm transition-colors duration-200 focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
         <textarea
+          name="build-prompt"
           ref={textareaRef}
           value={input}
           onChange={(e) => { setInput(e.target.value); handleTextareaInput(); }}

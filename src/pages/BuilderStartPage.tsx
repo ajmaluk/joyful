@@ -82,6 +82,7 @@ export function BuilderStartPage({ projects, onStartProject }: BuilderStartPageP
             </p>
             <div className="mt-6 rounded-2xl border border-white/10 bg-[#1d1f1d] p-3 shadow-2xl shadow-black/30">
               <textarea
+                name="build-prompt"
                 ref={textareaRef}
                 value={prompt}
                 rows={3}

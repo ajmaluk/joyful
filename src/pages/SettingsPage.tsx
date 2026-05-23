@@ -9,6 +9,7 @@ import type { UserSettings, UserSkill } from '@/types';
 import * as storage from '@/services/storage';
 import { defaultBuilderSkills } from '@/services/skills';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
+import { StorageCard } from '@/components/chat/cards/StorageCard';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
@@ -198,6 +199,7 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
+            <StorageCard />
           </div>
         );
 
@@ -336,6 +338,7 @@ export function SettingsPage() {
                 </div>
                 <div className="relative">
                   <input
+                    name="editor-font-size"
                     type="range"
                     min={10}
                     max={20}
@@ -356,6 +359,7 @@ export function SettingsPage() {
                 </div>
                 <div className="relative">
                   <input
+                    name="editor-line-height"
                     type="range"
                     min={12}
                     max={24}
@@ -494,6 +498,7 @@ export function SettingsPage() {
                   <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{settings.aiTemperature}</span>
                 </div>
                 <input
+                  name="ai-temperature"
                   type="range"
                   min={0}
                   max={100}
@@ -539,6 +544,7 @@ export function SettingsPage() {
               <div className="border-b border-border p-4">
                 <label className="text-sm font-medium text-card-foreground mb-2 block">Display Name</label>
                 <input
+                  name="display-name"
                   type="text"
                   value={user?.displayName || ''}
                   readOnly
@@ -548,6 +554,7 @@ export function SettingsPage() {
               <div className="p-4">
                 <label className="text-sm font-medium text-card-foreground mb-2 block">Email</label>
                 <input
+                  name="account-email"
                   type="email"
                   value={user?.email || ''}
                   readOnly
@@ -626,18 +633,21 @@ export function SettingsPage() {
               </div>
               <div className="grid gap-3">
                 <input
+                  name="skill-name"
                   value={skillDraft.name}
                   onChange={(event) => setSkillDraft(prev => ({ ...prev, name: event.target.value }))}
                   placeholder="Skill name"
                   className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
                 />
                 <input
+                  name="skill-description"
                   value={skillDraft.description}
                   onChange={(event) => setSkillDraft(prev => ({ ...prev, description: event.target.value }))}
                   placeholder="Short description"
                   className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
                 />
                 <textarea
+                  name="skill-instructions"
                   value={skillDraft.instructions}
                   onChange={(event) => setSkillDraft(prev => ({ ...prev, instructions: event.target.value }))}
                   rows={4}

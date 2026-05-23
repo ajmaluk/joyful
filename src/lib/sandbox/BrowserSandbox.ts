@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild-wasm';
-import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
+import { virtualFS, normalizePath } from '@/lib/vfs/VirtualFileSystem';
 import { errorCollector } from '@/engine/errors';
 import { htmlToBlobUrl } from '@/utils/blob';
 
@@ -29,10 +29,15 @@ export class BrowserSandbox {
   async init(): Promise<void> {
     if (esbuildInitialized) return;
     await esbuild.initialize({
-      wasmURL: 'https://unpkg.com/esbuild-wasm@0.25.2/esbuild.wasm',
+      wasmURL: 'https://unpkg.com/esbuild-wasm@0.28.0/esbuild.wasm',
       worker: true,
     });
     esbuildInitialized = true;
+
+    // Wire up error collector's file reader to the virtual FS
+    errorCollector.setFileReader(async (path: string) => {
+      return virtualFS.readFile(path);
+    });
   }
 
   setIframe(iframe: HTMLIFrameElement | null): void {
@@ -216,16 +221,30 @@ window.addEventListener('unhandledrejection', function(e) {
             return { path: args.path, external: true };
           }
 
-          // Resolve relative to importer
-          const importerDir = args.importer === '<stdin>'
-            ? ''
-            : args.importer.substring(0, args.importer.lastIndexOf('/'));
-          const resolved = importerDir
-            ? (importerDir + '/' + args.path).replace(/\/+/g, '/')
-            : args.path;
+          let resolved = '';
 
-          // Normalize: prepend / if needed
-          const normalized = resolved.startsWith('/') ? resolved : '/' + resolved;
+          if (args.path.startsWith('@/')) {
+            // Alias resolution: map '@/...' to '/src/...'
+            resolved = args.path.replace(/^@\//, '/src/');
+          } else if (args.path.startsWith('.') || args.path.startsWith('/')) {
+            // Relative or absolute local path
+            if (args.path.startsWith('/')) {
+              resolved = args.path;
+            } else {
+              const importerDir = args.importer === '<stdin>'
+                ? ''
+                : args.importer.substring(0, args.importer.lastIndexOf('/'));
+              resolved = importerDir
+                ? importerDir + '/' + args.path
+                : args.path;
+            }
+          } else {
+            // Bare module import (e.g. 'react', 'lucide-react') -> CDN external
+            return { path: `https://esm.sh/${args.path}`, external: true };
+          }
+
+          // Normalize path: resolve relative segments like . and ..
+          const normalized = normalizePath(resolved);
 
           // Try with extensions
           for (const ext of ['', '.tsx', '.ts', '.jsx', '.js', '.css', '.json']) {
@@ -236,11 +255,6 @@ window.addEventListener('unhandledrejection', function(e) {
             } catch {
               // not found
             }
-          }
-
-          // Check if it's in node_modules via CDN fallback
-          if (!args.path.startsWith('.')) {
-            return { path: `https://esm.sh/${args.path}`, external: true };
           }
 
           return { path: normalized, namespace: 'vfs' };

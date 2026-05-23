@@ -10,6 +10,7 @@ import { NetworkPanel } from '@/components/sandbox/NetworkPanel';
 import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
 import { htmlToBlobUrl, revokeBlobUrl, inlineScriptsToSrc } from '@/utils/blob';
 import { ElementInspector } from '@/components/sandbox/ElementInspector';
+import { useJoyfulStore } from '@/store/joyfulStore';
 
 interface SandboxPanelProps {
   files: ProjectFile[];
@@ -38,6 +39,8 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
   const [bottomOpen, setBottomOpen] = useState(false);
   const [bottomHeight] = useState(200);
 
+  const storeConsoleMessages = useJoyfulStore((state) => state.consoleMessages);
+
   const {
     logs,
     network,
@@ -59,11 +62,9 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
 
       const previousCleanupScripts = cleanupScriptsRef.current;
       const previousPreviewUrl = previewUrlRef.current;
+      cleanupScriptsRef.current = null;
 
-      const { html: safeHtml, cleanup: cleanupScripts } = inlineScriptsToSrc(htmlWithBridge);
-      cleanupScriptsRef.current = cleanupScripts;
-
-      const url = htmlToBlobUrl(safeHtml);
+      const url = htmlToBlobUrl(htmlWithBridge);
       previewUrlRef.current = url;
       setPreviewUrl(url);
 
@@ -247,7 +248,7 @@ export function SandboxPanel({ files }: SandboxPanelProps) {
               </div>
 
               <div className="flex-1 min-h-0 overflow-hidden">
-                {bottomTab === 'console' && <ConsolePanel logs={logs} onClear={clearLogs} />}
+                {bottomTab === 'console' && <ConsolePanel logs={logs} onClear={clearLogs} systemMessages={storeConsoleMessages} />}
                 {bottomTab === 'network' && <NetworkPanel requests={network} onClear={clearNetwork} />}
                 {bottomTab === 'performance' && <PerformanceMetrics metrics={metrics} onRequestMetrics={requestMetrics} />}
               </div>

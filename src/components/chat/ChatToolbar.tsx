@@ -52,6 +52,7 @@ export function ChatToolbar({
         {isEditing ? (
           <div className="flex items-center gap-1 min-w-0">
             <input
+              name="chat-rename"
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}

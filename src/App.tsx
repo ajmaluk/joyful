@@ -100,11 +100,25 @@ function AppLayout() {
     };
   }, []);
 
-  // Initialize IndexedDB-backed StorageManager
+  // Initialize IndexedDB-backed StorageManager and wire its events to window events
   useEffect(() => {
     storageManager.init().catch((err) => {
       console.warn('[Storage] Init failed, falling back to localStorage:', err);
     });
+
+    const handleSettingsChanged = (settings: unknown) => {
+      window.dispatchEvent(new CustomEvent('joyful_settings_changed', { detail: settings }));
+    };
+    const handleAuthChanged = () => {
+      window.dispatchEvent(new CustomEvent('joyful_auth_changed'));
+    };
+
+    storageManager.on('settings_changed', handleSettingsChanged);
+    storageManager.on('auth_changed', handleAuthChanged);
+    return () => {
+      storageManager.off('settings_changed', handleSettingsChanged);
+      storageManager.off('auth_changed', handleAuthChanged);
+    };
   }, []);
 
   // Cross-tab synchronization

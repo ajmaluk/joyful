@@ -118,6 +118,7 @@ export function SandboxToolbar({
         <div className="absolute right-12 top-12 z-50 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
           <div className="flex items-center gap-2 mb-2">
             <input
+              name="viewport-width"
               type="number"
               value={tempWidth}
               onChange={e => setTempWidth(e.target.value)}
@@ -127,6 +128,7 @@ export function SandboxToolbar({
             />
             <span className="text-xs text-gray-400">x</span>
             <input
+              name="viewport-height"
               type="number"
               value={tempHeight}
               onChange={e => setTempHeight(e.target.value)}

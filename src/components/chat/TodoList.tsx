@@ -123,6 +123,7 @@ export function TodoList({ todos, onToggle, onAdd, onRemove }: TodoListProps) {
       <div className="flex items-center gap-2 border-t border-white/[0.08] px-3 py-2">
         <Plus className="h-3.5 w-3.5 flex-shrink-0 text-gray-500/50" />
         <input
+          name="new-todo"
           type="text"
           value={newTodo}
           onChange={(e) => setNewTodo(e.target.value)}

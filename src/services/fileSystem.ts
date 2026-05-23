@@ -671,6 +671,12 @@ function extractImportedNames(content: string): string[] {
 
   while ((match = importRegex.exec(content)) !== null) {
     const specifier = match[1].trim();
+    const defaultImport = specifier.match(/^([A-Za-z_$][\w$]*)/)?.[1];
+    if (defaultImport) names.add(defaultImport);
+
+    const namespaceImport = specifier.match(/^\*\s+as\s+([A-Za-z_$][\w$]*)/)?.[1];
+    if (namespaceImport) names.add(namespaceImport);
+
     const named = specifier.match(/\{([\s\S]*?)\}/)?.[1] || '';
     for (const part of named.split(',')) {
       const clean = part.trim();
@@ -761,12 +767,11 @@ function buildPreviewFallbacks(importedNames: string[]): string {
 
   if (safeNames.length === 0) return '';
 
-  return `\nconst __JoyfulIcon = ({ size = 20, className = '', ...props }) => (
-  <svg viewBox="0 0 24 24" width={size} height={size} className={className} aria-hidden="true" {...props}>
-    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" />
-    <path d="M8 12h8M12 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
+  return `\nconst __JoyfulIcon = ({ size = 20, className = '', ...props }) =>
+  React.createElement('svg', { viewBox: '0 0 24 24', width: size, height: size, className, 'aria-hidden': true, ...props },
+    React.createElement('circle', { cx: 12, cy: 12, r: 9, fill: 'none', stroke: 'currentColor', strokeWidth: 2 }),
+    React.createElement('path', { d: 'M8 12h8M12 8v8', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' })
+  );
 ${safeNames.map(name => `const ${name} = __JoyfulIcon;`).join('\n')}
 `;
 }

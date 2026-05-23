@@ -155,11 +155,14 @@ export class ErrorTracker {
     if (recent.length === 0) return null;
 
     const attempt = recent.length;
+    if (attempt >= 5) {
+      return `Critical: ${operation} has failed ${attempt} times. Recommend escalating to user for guidance.`;
+    }
     if (attempt >= 3) {
-      return `This operation (${operation}) has failed ${attempt} times. Suggest switching strategies.`;
+      return `This operation (${operation}) has failed ${attempt} times. Suggest switching strategies or reading the file fresh before retrying.`;
     }
     if (attempt >= 2) {
-      return `Retrying ${operation} (attempt ${attempt + 1}). Verify the file state before retrying.`;
+      return `Retrying ${operation} (attempt ${attempt + 1}). Verify the file state and re-read before retrying.`;
     }
 
     return null;

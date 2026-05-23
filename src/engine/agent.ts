@@ -101,6 +101,31 @@ export class Agent {
         return response;
       }
 
+      // Guard: if no tasks remain pending or in progress, stop the loop
+      const activeCount = this.tasks.getActiveCount();
+      if (activeCount.pending === 0 && activeCount.inProgress === 0) {
+        this.state.status = 'done';
+        return {
+          status: 'done',
+          message: 'All tasks completed.',
+          actions: [],
+          tasks: [],
+          mode: this.state.mode,
+        };
+      }
+
+      // Guard: if all active tasks are blocked or failed, stop to avoid spin-loop
+      if (activeCount.blocked > 0 && activeCount.pending === 0 && activeCount.inProgress === 0) {
+        this.state.status = 'done';
+        return {
+          status: 'done',
+          message: `Stopping — ${activeCount.blocked} task(s) blocked, ${activeCount.failed} task(s) failed.`,
+          actions: [],
+          tasks: [],
+          mode: this.state.mode,
+        };
+      }
+
       // Continue if there are pending tasks
       userMessage = 'Continue with the next task.';
     }

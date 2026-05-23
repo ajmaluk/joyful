@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { routeMeta } from '@/lib/seo';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChatPanel } from '@/components/panels/ChatPanel';
+import { ChatContainer } from '@/components/chat/ChatContainer';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { CodeEditor } from '@/components/panels/CodeEditor';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
@@ -16,10 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { useChat } from '@/hooks/useChat';
 import { useAgent } from '@/hooks/useAgent';
+import { useVFSBridge } from '@/hooks/useVFSBridge';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import type { ApplyReport, ChatAttachment, FileOperation, PendingFileOperation, Project, ProjectFile, ChatMode } from '@/types';
 import { applyFileOperations, applyPatchOperations, exportProjectAsZip, getFileType, validatePath } from '@/services/fileSystem';
+import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import { useAuth } from '@/hooks/useAuth';
 import { signOutUser } from '@/services/firebase';
 import { generateWithAI } from '@/services/aiService';
@@ -58,6 +61,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
   const [showChatSidebar, setShowChatSidebar] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [pendingChatContext, setPendingChatContext] = useState('');
+  const [agentViewActive, setAgentViewActive] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [pendingOperationReview, setPendingOperationReview] = useState<PendingFileOperation[] | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -79,7 +83,15 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
 
   const {
     setPreviewIframe,
+    runAgent,
   } = useAgent(projectId);
+
+  const {
+    syncVFSAll,
+    writeToVFS,
+    deleteFromVFS,
+    renameInVFS,
+  } = useVFSBridge(setFiles, setSelectedFile, setOpenFiles);
 
   const filesRef = useRef<ProjectFile[]>(files);
   useEffect(() => { filesRef.current = files; }, [files]);
@@ -114,12 +126,29 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     return nextPath;
   }, [files]);
 
-  // Load project files
+  // Load project files: sync VFS ↔ ProjectFile[] bidirectionally
   useEffect(() => {
-    if (project) {
-      setFiles(project.files);
-    }
-  }, [project]);
+    if (!project) return;
+    
+    const initFiles = async () => {
+      await virtualFS.init();
+      const vfsFiles = await virtualFS.getAllFiles();
+      const hasVFSContent = vfsFiles.some(f => f.path.includes('.'));
+      
+      if (hasVFSContent) {
+        // VFS has files — sync into React state (agent has been used)
+        await syncVFSAll();
+      } else {
+        // VFS is empty — seed from project files so agent can see them
+        setFiles(project.files);
+        for (const file of project.files) {
+          await virtualFS.writeFile('/' + file.path, file.content).catch(() => {});
+        }
+      }
+    };
+    
+    initFiles().catch(console.error);
+  }, [project, syncVFSAll]);
 
   useEffect(() => {
     if (!mobileChatOpen) return;
@@ -148,13 +177,16 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     const currentFiles = filesRef.current;
     const response = await sendMessage(content, currentFiles, mode, attachments);
     if (response) {
-      const commitAppliedFiles = (newFiles: ProjectFile[], appliedCount: number, skippedCount: number) => {
+      const commitAppliedFiles = async (newFiles: ProjectFile[], appliedCount: number, skippedCount: number) => {
         setFiles(newFiles);
         setOpenFiles(prev => prev.filter(openFile => newFiles.some(file => file.path === openFile.path)));
         if (selectedFile && !newFiles.some(file => file.path === selectedFile.path)) {
           setSelectedFile(newFiles.find(file => file.path === 'index.html') || newFiles[0] || null);
         }
         persistFiles(newFiles);
+        for (const file of newFiles) {
+          await writeToVFS(file.path, file.content).catch(() => {});
+        }
         const nextActiveFile = newFiles.find(file => file.path === 'index.html') || newFiles[0] || null;
         if (nextActiveFile) {
           setSelectedFile(nextActiveFile);
@@ -227,7 +259,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       }
 
       if (appliedCount > 0) {
-        commitAppliedFiles(workingFiles, appliedCount, skippedCount);
+        await commitAppliedFiles(workingFiles, appliedCount, skippedCount);
       } else {
         addToast('info', firstSkipReason || 'No file operations to apply');
       }
@@ -312,7 +344,8 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     if (selectedFile?.path === path) {
       setSelectedFile(prev => prev ? { ...prev, content, isModified: false } : null);
     }
-  }, [selectedFile]);
+    writeToVFS(path, content).catch(() => {});
+  }, [selectedFile, writeToVFS]);
 
   // Persist files to storage when they change
   const filesJsonRef = useRef(JSON.stringify(files));
@@ -343,9 +376,10 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       persistFiles(next);
       return next;
     });
+    writeToVFS(nextPath, '').catch(() => {});
     handleSelectFile(newFile);
     addToast('success', `Created ${nextPath}`);
-  }, [createUniquePath, persistFiles, handleSelectFile, addToast]);
+  }, [createUniquePath, persistFiles, handleSelectFile, addToast, writeToVFS]);
 
   // Delete file
   const handleDeleteFile = useCallback((path: string) => {
@@ -358,8 +392,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     if (selectedFile?.path === path) {
       setSelectedFile(null);
     }
+    deleteFromVFS(path).catch(() => {});
     addToast('info', `Deleted ${path}`);
-  }, [selectedFile, persistFiles, addToast]);
+  }, [selectedFile, persistFiles, addToast, deleteFromVFS]);
 
   // Rename file
   const handleRenameFile = useCallback((oldPath: string, newPath: string) => {
@@ -381,8 +416,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
     if (selectedFile?.path === oldPath) {
       setSelectedFile(prev => prev ? { ...prev, path: cleanPath, type: getFileType(cleanPath) } : null);
     }
+    renameInVFS(oldPath, cleanPath).catch(() => {});
     addToast('success', `Renamed ${oldPath} to ${cleanPath}`);
-  }, [files, selectedFile, persistFiles, addToast]);
+  }, [files, selectedFile, persistFiles, addToast, renameInVFS]);
 
   // Duplicate file
   const handleDuplicateFile = useCallback((path: string) => {
@@ -460,6 +496,9 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       
       setFiles(newFiles);
       persistFiles(newFiles);
+      for (const f of newFiles) {
+        await writeToVFS(f.path, f.content).catch(() => {});
+      }
       
       // Set the first file as selected
       const firstFile = newFiles.find(f => f.path === 'index.html') || newFiles[0];
@@ -681,25 +720,63 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
         </section>
 
         <aside className={`${showChatSidebar ? 'hidden lg:flex' : 'hidden'} min-h-0 w-[360px] min-w-0 flex-shrink-0 flex-col overflow-x-hidden border-l border-gray-200/70 bg-white/72 backdrop-blur-xl dark:border-border/60 dark:bg-card/80 xl:w-[400px]`}>
+          <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5">
+            <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-card/50 p-0.5">
+              <button
+                onClick={() => setAgentViewActive(false)}
+                className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                  !agentViewActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Chat
+              </button>
+              <button
+                onClick={() => setAgentViewActive(true)}
+                className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                  agentViewActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Agent
+              </button>
+            </div>
+            <button
+              onClick={() => setShowChatSidebar(false)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            <ChatPanel
-              messages={messages}
-              isGenerating={isGenerating}
-              buildTodos={buildTodos}
-              files={files}
-              activeFile={selectedFile}
-              onSendMessage={handleSendMessage}
-              onOpenFile={handleOpenFileFromChat}
-              onRegenerateMessage={handleRegenerateMessage}
-              onClearMessages={clearMessages}
-              onAbortGeneration={abortGeneration}
-              savedGeneration={savedGeneration}
-              onRetrySavedGeneration={handleRetrySavedGeneration}
-              onDismissSavedGeneration={clearSavedGeneration}
-              onSelectTemplate={handleSelectTemplate}
-              onCloseSidebar={() => setShowChatSidebar(false)}
-              pendingContext={pendingChatContext}
-            />
+            {agentViewActive ? (
+              <ChatContainer
+                onOpenFile={handleOpenFileFromChat}
+                onCloseSidebar={() => setShowChatSidebar(false)}
+                onSendMessage={(prompt) => runAgent(prompt)}
+              />
+            ) : (
+              <ChatPanel
+                messages={messages}
+                isGenerating={isGenerating}
+                buildTodos={buildTodos}
+                files={files}
+                activeFile={selectedFile}
+                onSendMessage={handleSendMessage}
+                onOpenFile={handleOpenFileFromChat}
+                onRegenerateMessage={handleRegenerateMessage}
+                onClearMessages={clearMessages}
+                onAbortGeneration={abortGeneration}
+                savedGeneration={savedGeneration}
+                onRetrySavedGeneration={handleRetrySavedGeneration}
+                onDismissSavedGeneration={clearSavedGeneration}
+                onSelectTemplate={handleSelectTemplate}
+                onCloseSidebar={() => setShowChatSidebar(false)}
+                pendingContext={pendingChatContext}
+              />
+            )}
           </div>
         </aside>
 

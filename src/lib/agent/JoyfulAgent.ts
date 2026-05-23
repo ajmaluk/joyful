@@ -1,9 +1,11 @@
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
-import { ClaudeClient, type Message, type ToolCall } from '@/lib/agent/ClaudeClient';
+import { AIClient, type Message, type ToolCall } from '@/lib/agent/AIClient';
 import { buildSystemPrompt, type ProjectContext, type TodoSummary } from '@/lib/agent/SystemPrompt';
 import { TOOL_DEFINITIONS } from '@/lib/agent/tools';
+import { ContextManager } from '@/lib/agent/ContextManager';
 import { storageManager } from '@/engine/storage';
 import { SafetyMonitor, StaleReadDetector } from '@/engine/safety';
+import { agentEventBus, type Todo } from '@/lib/agent/eventBus';
 
 export interface ToolResult {
   success: boolean;
@@ -22,7 +24,7 @@ export type AgentObserver = {
 };
 
 export class JoyfulAgent {
-  private client: ClaudeClient;
+  private client: AIClient;
   private messages: Message[] = [];
   private todos: TodoSummary[] = [];
   private observer: AgentObserver = {};
@@ -31,9 +33,10 @@ export class JoyfulAgent {
   private sessionMemory: string[] = [];
   private safety = new SafetyMonitor();
   private staleRead = new StaleReadDetector();
+  private contextManager = new ContextManager();
 
   constructor(config: { apiKey: string; model?: string; baseUrl?: string }) {
-    this.client = new ClaudeClient(config);
+    this.client = new AIClient(config);
   }
 
   setProjectId(id: string | null): void {
@@ -80,24 +83,54 @@ export class JoyfulAgent {
   }
 
   async runTask(userRequest: string): Promise<void> {
+    const runId = `run_${Date.now()}`;
+    agentEventBus.emit({ type: 'agent:start', runId, userRequest });
+    
     this.messages.push({ role: 'user', content: userRequest });
     this.observer.onStatusChange?.('running', 'Starting task...');
+    agentEventBus.emit({ type: 'agent:status', status: 'understanding', message: 'Analyzing task and scanning project...' });
 
     const projectContext = await this.buildProjectContext();
+    
+    // Generate an initial plan based on files and project context
+    const initialPlan = [
+      { id: 'step_1', title: 'Scan project and understand framework', status: 'completed' as const },
+      { id: 'step_2', title: 'Prepare execution path & tasks', status: 'in_progress' as const },
+      { id: 'step_3', title: 'Implement modifications', status: 'pending' as const },
+      { id: 'step_4', title: 'Build and verify changes', status: 'pending' as const },
+      { id: 'step_5', title: 'Perform final review and memory sync', status: 'pending' as const },
+    ];
+    agentEventBus.emit({ type: 'agent:plan_created', plan: initialPlan });
+
+    const startTime = Date.now();
 
     for (let i = 0; i < this.maxIterations; i++) {
       const systemPrompt = buildSystemPrompt(projectContext, this.todos);
 
       this.observer.onStatusChange?.('running', `Iteration ${i + 1}...`);
+      agentEventBus.emit({ type: 'agent:status', status: i === 0 ? 'planning' : 'reading', message: `Running work cycle (Iteration ${i + 1})...` });
+
+      let accumulatedToken = '';
+      const onTokenWrapper = (token: string) => {
+        accumulatedToken += token;
+        agentEventBus.emit({ type: 'agent:thinking', text: accumulatedToken });
+        this.observer.onToken?.(token);
+      };
+
+      // Compress history using the ContextManager before sending to Claude
+      this.messages = this.contextManager.compressHistory(this.messages);
 
       const response = await this.client.sendMessage(
         systemPrompt,
         this.messages,
         TOOL_DEFINITIONS,
-        this.observer.onToken,
+        onTokenWrapper,
       );
 
+      // Emit model output text directly to event bus as an assistant message
       if (response.text) {
+        agentEventBus.emit({ type: 'agent:message', text: response.text });
+        
         if (this.messages[this.messages.length - 1]?.role === 'assistant') {
           this.messages[this.messages.length - 1].content += response.text;
         } else {
@@ -108,6 +141,16 @@ export class JoyfulAgent {
       if (response.toolCalls.length === 0) {
         this.observer.onStatusChange?.('done', 'Task complete.');
         await this.saveProjectState();
+        
+        const summary = {
+          summary: response.text || 'Task completed successfully.',
+          changedFiles: [] as Array<{ path: string; action: 'created' | 'updated' | 'deleted' | 'renamed' }>,
+          errors: 0,
+          warnings: 0,
+          durationMs: Date.now() - startTime,
+          previewStatus: 'success' as const,
+        };
+        agentEventBus.emit({ type: 'agent:completed', summary });
         break;
       }
 
@@ -116,11 +159,40 @@ export class JoyfulAgent {
 
       for (const toolCall of response.toolCalls) {
         this.observer.onToolCall?.(toolCall.name, toolCall.input);
+        
+        const displayPath = toolCall.input && typeof toolCall.input === 'object'
+          ? (toolCall.input as Record<string, unknown>).path || (toolCall.input as Record<string, unknown>).file_pattern || ''
+          : '';
+        const verb = toolCall.name.replace(/_/g, ' ');
+        const displayText = displayPath
+          ? `${verb} ${displayPath}`
+          : `${verb}...`;
+        
+        agentEventBus.emit({
+          type: 'tool:started',
+          tool: toolCall.name,
+          input: toolCall.input,
+          display: displayText,
+        });
+
         const result = await this.executeToolCall(toolCall);
         this.observer.onToolResult?.(toolCall.name, result);
 
-        if (!result.success) {
+        if (result.success) {
+          agentEventBus.emit({
+            type: 'tool:completed',
+            tool: toolCall.name,
+            result: result.data,
+            display: displayText,
+          });
+        } else {
           allSuccessful = false;
+          agentEventBus.emit({
+            type: 'tool:failed',
+            tool: toolCall.name,
+            error: result.error || 'Unknown tool failure',
+            display: displayText,
+          });
         }
 
         toolResultMessages.push(
@@ -131,11 +203,18 @@ export class JoyfulAgent {
       const resultContent = toolResultMessages.join('\n');
       this.messages.push({ role: 'user', content: resultContent });
 
+      // Context compression: compress history when approaching limits
+      const compressedMessages = this.contextManager.compressHistory(this.messages);
+      if (compressedMessages !== this.messages) {
+        this.messages = compressedMessages;
+      }
+
       // Safety: check for progress
       const progressCheck = this.safety.checkProgress(resultContent);
       if (progressCheck) {
         this.messages.push({ role: 'user', content: `[SAFETY] ${progressCheck}` });
         this.observer.onError?.(progressCheck);
+        agentEventBus.emit({ type: 'agent:failed', error: progressCheck });
         break;
       }
 
@@ -160,21 +239,43 @@ export class JoyfulAgent {
           const content = await virtualFS.readFile(path);
           this.staleRead.recordRead(path, content);
           const lines = content.split('\n');
+          const fileSize = content.length;
           if (startLine && endLine) {
             const selected = lines.slice(startLine - 1, endLine).join('\n');
+            agentEventBus.emit({
+              type: 'file:read_chunk',
+              path,
+              startLine,
+              endLine,
+              totalLines: lines.length,
+              reason: 'Reading targeted lines to inspect implementation details.'
+            });
             return {
               success: true,
-              data: `Lines ${startLine}-${endLine} of ${path} (${lines.length} total):\n${selected}`,
+              data: `Lines ${startLine}-${endLine} of ${path} (${lines.length} total, ${fileSize}b):\n${selected}`,
             };
           }
           if (lines.length > 300) {
             const head = lines.slice(0, 100).join('\n');
             const tail = lines.slice(-50).join('\n');
+            agentEventBus.emit({
+              type: 'file:read_chunk',
+              path,
+              startLine: 1,
+              endLine: 100,
+              totalLines: lines.length,
+              reason: 'Large file detected. Reading first 100 and last 50 lines to grasp structure.'
+            });
             return {
               success: true,
-              data: `WARNING: Large file (${lines.length} lines). Showing first 100 + last 50 lines. Use start_line/end_line for targeted reads.\n\n${head}\n\n... (${lines.length - 150} lines omitted) ...\n\n${tail}`,
+              data: `WARNING: Large file (${lines.length} lines, ${fileSize}b). Showing first 100 + last 50 lines. Use start_line/end_line for targeted reads.\n\n${head}\n\n... (${lines.length - 150} lines omitted) ...\n\n${tail}`,
             };
           }
+          agentEventBus.emit({
+            type: 'file:read',
+            path,
+            lines: undefined
+          });
           return { success: true, data: content };
         }
 
@@ -189,8 +290,23 @@ export class JoyfulAgent {
           if (doomWarning) {
             return { success: false, error: doomWarning };
           }
+          const exists = await virtualFS.readFile(path).then(() => true).catch(() => false);
           await virtualFS.writeFile(path, content);
           this.staleRead.clearPath(path);
+          
+          if (exists) {
+            agentEventBus.emit({
+              type: 'file:updated',
+              path,
+              summary: `Updated file (${content.length} chars)`
+            });
+          } else {
+            agentEventBus.emit({
+              type: 'file:created',
+              path,
+              size: content.length
+            });
+          }
           return { success: true, data: `Written ${path} (${content.length} chars)` };
         }
 
@@ -203,17 +319,29 @@ export class JoyfulAgent {
           if (staleWarning) {
             return { success: false, error: staleWarning };
           }
-          if (!currentContent.includes(oldText)) {
-            const similar = this.findSimilarText(currentContent, oldText);
+          
+          // Normalize line endings to avoid \r\n vs \n discrepancies during matching
+          const normalizedContent = currentContent.replace(/\r\n/g, '\n');
+          const normalizedOld = oldText.replace(/\r\n/g, '\n');
+          const normalizedNew = newText.replace(/\r\n/g, '\n');
+
+          if (!normalizedContent.includes(normalizedOld)) {
+            const similar = this.findSimilarText(normalizedContent, normalizedOld);
             const hint = similar ? ` Did you mean: "${similar.slice(0, 100)}..."?` : '';
             return { success: false, error: `Text not found in ${path}.${hint}` };
           }
-          const updated = currentContent.replace(oldText, newText);
-          if (updated === currentContent) {
+          const updated = normalizedContent.replace(normalizedOld, normalizedNew);
+          if (updated === normalizedContent) {
             return { success: false, error: `Replacement produced no change. Check that old_text matches exactly.` };
           }
           await virtualFS.writeFile(path, updated);
           this.staleRead.clearPath(path);
+          
+          agentEventBus.emit({
+            type: 'file:updated',
+            path,
+            summary: `Replaced a block of text containing "${oldText.split('\n')[0]?.trim() || ''}"`
+          });
           return { success: true, data: `Edited ${path} successfully` };
         }
 
@@ -254,6 +382,11 @@ export class JoyfulAgent {
         case 'delete_file': {
           const delPath = input.path as string;
           await virtualFS.deleteFile(delPath);
+          
+          agentEventBus.emit({
+            type: 'file:deleted',
+            path: delPath
+          });
           return { success: true, data: `Deleted ${delPath}` };
         }
 
@@ -270,12 +403,22 @@ export class JoyfulAgent {
             status: t.status,
           }));
           this.observer.onTodoUpdate?.(this.todos);
+          
+          const mappedTodos: Todo[] = this.todos.map(t => ({
+            id: t.id,
+            title: t.task,
+            status: (t.status === 'done' || t.status === 'completed' ? 'completed' : t.status === 'running' || t.status === 'in_progress' ? 'in_progress' : t.status) as Todo['status'],
+            mode: 'builder',
+            relatedFiles: [],
+          }));
+          agentEventBus.emit({ type: 'todo:updated', todos: mappedTodos });
           return { success: true, data: `Todos updated: ${this.todos.filter(t => t.status === 'done').length}/${this.todos.length} done` };
         }
 
         case 'compile_and_preview': {
           const entryPoint = (input.entry_point as string) || '/src/main.tsx';
           this.observer.onStatusChange?.('running', 'Compiling...');
+          agentEventBus.emit({ type: 'compile:started' });
           if (this.observer.onCompileRequest) {
             const result = await this.observer.onCompileRequest(entryPoint);
             return result;
@@ -287,6 +430,11 @@ export class JoyfulAgent {
           const message = input.message as string;
           this.sessionMemory.push(message);
           this.observer.onStatusChange?.('message', message);
+          
+          agentEventBus.emit({
+            type: 'memory:saved',
+            summary: message
+          });
           return { success: true, data: message };
         }
 

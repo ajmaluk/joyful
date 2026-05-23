@@ -116,6 +116,17 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
   },
   {
+    name: 'write_message',
+    description: 'Write a status message visible to the user. Use to report progress, explain decisions, or ask questions. The user sees this message in the chat.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'The message to show to the user' },
+      },
+      required: ['message'],
+    },
+  },
+  {
     name: 'compile_and_preview',
     description: 'Compile the current project and update the browser preview. Call after making code changes to verify.',
     input_schema: {

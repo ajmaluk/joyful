@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { Copy, Download, FileCode2, FileText, FileJson, Code2, X, Braces, Save, Check, Clock, Zap, FileCode, FileCog } from 'lucide-react';
 import type { ProjectFile } from '@/types';
 import { getFileType } from '@/services/fileSystem';
+import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import * as storage from '@/services/storage';
 
 interface CodeEditorProps {
@@ -111,13 +112,67 @@ export function CodeEditor({
     return () => window.removeEventListener('joyful_settings_changed', syncSettings);
   }, []);
 
+  // Track content version to detect external updates to the same file reference
+  const contentVersionRef = useRef(0);
+
+  // On tab switch, read latest content from VFS cache directly (bypasses stale ProjectFile.content)
   useEffect(() => {
-    if (activeFile) {
-      setContent(activeFile.content);
-      setLastSaved(null);
-    } else {
+    if (!activeFile) {
       setContent('');
+      return;
     }
+    let cancelled = false;
+    const vfsPath = '/' + activeFile.path.replace(/^\/+/, '');
+    virtualFS.fileExists(vfsPath).then((exists) => {
+      if (cancelled) return;
+      if (exists) {
+        virtualFS.readFile(vfsPath).then((vfsContent) => {
+          if (cancelled) return;
+          setContent(vfsContent);
+          setLastSaved(null);
+          contentVersionRef.current++;
+        }).catch(() => {
+          // Fallback to prop content if VFS read fails
+          if (!cancelled) {
+            setContent(activeFile.content);
+            setLastSaved(null);
+            contentVersionRef.current++;
+          }
+        });
+      } else {
+        // File doesn't exist in VFS yet — use prop content as initial value
+        setContent(activeFile.content);
+        setLastSaved(null);
+        contentVersionRef.current++;
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setContent(activeFile.content);
+        setLastSaved(null);
+        contentVersionRef.current++;
+      }
+    });
+    return () => { cancelled = true; };
+  }, [activeFile]);
+
+  // Poll activeFile content for external changes (VFS bridge updates)
+  // This catches cases where the file reference didn't change but content did
+  useEffect(() => {
+    if (!activeFile) return;
+    const interval = setInterval(() => {
+      virtualFS.fileExists('/' + activeFile.path.replace(/^\/+/, '')).then((exists) => {
+        if (!exists) return;
+        virtualFS.readFile('/' + activeFile.path.replace(/^\/+/, '')).then((vfsContent) => {
+          setContent((prev) => {
+            if (prev === vfsContent) return prev;
+            setLastSaved(null);
+            contentVersionRef.current++;
+            return vfsContent;
+          });
+        }).catch(() => {});
+      }).catch(() => {});
+    }, 1000);
+    return () => clearInterval(interval);
   }, [activeFile]);
 
   useEffect(() => {

@@ -76,7 +76,7 @@ function analyzeFile(
 
 function shouldAnalyze(path: string): boolean {
   const ext = path.split('.').pop()?.toLowerCase();
-  return !!(ext && ['ts', 'tsx', 'js', 'jsx', 'css', 'json', 'html'].includes(ext));
+  return !!(ext && ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts', 'css', 'json', 'html'].includes(ext));
 }
 
 function extractImports(content: string): string[] {
@@ -140,13 +140,17 @@ function resolveImport(specifier: string, filePaths: Set<string>): string | null
     ? `src/${specifier.slice(2)}`
     : specifier;
 
-  const extensions = ['.tsx', '.ts', '.jsx', '.js', '.css', '.json', ''];
+  const extensions = ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.mts', '.cts', '.css', '.json', ''];
   for (const ext of extensions) {
     const candidate = ext ? `${base}${ext}` : base;
     if (filePaths.has(candidate)) return candidate;
     const indexCandidate = `${base}/index${ext}`;
     if (filePaths.has(indexCandidate)) return indexCandidate;
   }
+
+  // Strip leading ./ for matching paths that don't use the prefix
+  const stripped = base.replace(/^\.\//, '');
+  if (stripped !== base && filePaths.has(stripped)) return stripped;
 
   return null;
 }

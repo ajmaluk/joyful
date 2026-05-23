@@ -273,6 +273,55 @@ export class LocalStorageProjectStorage implements ProjectMemoryStorage {
   }
 }
 
+// ── IndexedDB Storage ──────────────────────────────────────────────
+// Preferred over localStorage for larger memory payloads (5MB+ limit).
+// Uses the same 'idb' library already present in the project.
+
+import { openDB, type IDBPDatabase } from 'idb';
+
+export class IndexedDbProjectStorage implements ProjectMemoryStorage {
+  private dbName: string;
+  private storeName = 'project_memory';
+  private dbPromise: Promise<IDBPDatabase> | null = null;
+
+  constructor(dbName = 'joyful-engine') {
+    this.dbName = dbName;
+  }
+
+  private async getDb(): Promise<IDBPDatabase> {
+    if (!this.dbPromise) {
+      this.dbPromise = openDB(this.dbName, 1, {
+        upgrade: (db) => {
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName, { keyPath: 'key' });
+          }
+        },
+      });
+    }
+    return this.dbPromise;
+  }
+
+  async save(data: ProjectMemoryData): Promise<void> {
+    try {
+      const db = await this.getDb();
+      await db.put(this.storeName, { key: 'project_memory', value: data });
+    } catch (e) {
+      console.warn('Failed to save project memory to IndexedDB:', e);
+    }
+  }
+
+  async load(): Promise<Partial<ProjectMemoryData> | undefined> {
+    try {
+      const db = await this.getDb();
+      const record = await db.get(this.storeName, 'project_memory');
+      return record?.value as ProjectMemoryData | undefined;
+    } catch (e) {
+      console.warn('Failed to load project memory from IndexedDB:', e);
+    }
+    return undefined;
+  }
+}
+
 // ── ID Generation ──────────────────────────────────────────────────
 
 let memoryCounter = 0;

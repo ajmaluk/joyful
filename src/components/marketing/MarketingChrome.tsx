@@ -105,6 +105,7 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
     <div className={`mx-auto w-full ${compact ? 'max-w-xl' : 'max-w-3xl'}`}>
       <div className="rounded-[1.15rem] border border-gray-200/80 bg-white/90 p-2.5 text-left shadow-[0_22px_70px_rgba(15,23,42,0.11)] ring-1 ring-black/5 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_26px_80px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[#1d1f1d]/90 dark:shadow-[0_22px_70px_rgba(0,0,0,0.3)] dark:ring-black/40 dark:hover:shadow-[0_26px_80px_rgba(0,0,0,0.36)]">
         <textarea
+          name="build-prompt"
           ref={textareaRef}
           value={prompt}
           rows={compact ? 2 : 4}

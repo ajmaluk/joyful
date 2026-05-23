@@ -21,6 +21,19 @@ type JoyfulMessageContent = string | Array<
 
 const FETCH_TIMEOUT = 120_000;
 
+let _lastFetchTime = 0;
+const MIN_FETCH_INTERVAL = 300;
+
+async function rateLimitedFetch(url: string, options: RequestInit & { signal?: AbortSignal }, timeoutMs = FETCH_TIMEOUT): Promise<Response> {
+  const now = Date.now();
+  const timeSinceLastFetch = now - _lastFetchTime;
+  if (timeSinceLastFetch < MIN_FETCH_INTERVAL) {
+    await new Promise(r => setTimeout(r, MIN_FETCH_INTERVAL - timeSinceLastFetch));
+  }
+  _lastFetchTime = Date.now();
+  return fetchWithTimeout(url, options, timeoutMs);
+}
+
 async function fetchWithTimeout(url: string, options: RequestInit & { signal?: AbortSignal }, timeoutMs = FETCH_TIMEOUT): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -803,7 +816,7 @@ async function generateWithJoyfulAI(
         headers.Accept = 'application/json';
       }
 
-      const res = await fetchWithTimeout(apiUrl, {
+      const res = await rateLimitedFetch(apiUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -821,6 +834,11 @@ async function generateWithJoyfulAI(
 
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
+        if (res.status === 429) {
+          const backoff = Math.min(1000 * Math.pow(2, attempt), 16000);
+          await new Promise(r => setTimeout(r, backoff));
+          continue;
+        }
         if (toolsEnabled && providerRejectedTools(res.status, bodyText)) {
           toolsEnabled = false;
           continue;
@@ -1078,7 +1096,7 @@ Rules:
 - Features like "pricing", "contact", "gallery", "team", "faq", "blog" should be inferred from the text.
 - estimatedPages should be 1 for single-page, 3-5 for multi-page, 6+ for complex sites.`;
 
-    const res = await fetchWithTimeout(joyfulProviderConfig.invokeUrl, {
+    const res = await rateLimitedFetch(joyfulProviderConfig.invokeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2312,128 +2330,12 @@ function generatePageComponent(
   }
 }
 
-function htmlDoc(title: string, head: string, body: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  ${head}
-</head>
-<body>
-${body}
-  <script src="script.js"></script>
-</body>
-</html>`;
-}
-
-function navHTML(p: ColorPalette, links: string[]): string {
-  const items = links.map(l => `      <li><a href="#${l.toLowerCase().replace(/\s+/g, '-')}">${l}</a></li>`).join('\n');
-  return `  <nav class="navbar" style="background:${p.bg};border-bottom:1px solid ${p.border}">
-    <div class="logo" style="color:${p.primary}">Site</div>
-    <button class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
-    <ul class="nav-links">
-${items}
-    </ul>
-  </nav>`;
-}
-
-interface PageLink { label: string; file: string; }
-
-function navMultiPage(p: ColorPalette, pages: PageLink[], current: string): string {
-  const items = pages.map(pl =>
-    `      <li><a href="${pl.file}"${pl.file === current ? ` class="active" style="color:${p.primary};font-weight:600"` : ''}>${pl.label}</a></li>`
-  ).join('\n');
-  return `  <nav class="navbar" style="background:${p.bg};border-bottom:1px solid ${p.border}">
-    <div class="logo" style="color:${p.primary}">Site</div>
-    <button class="menu-toggle" aria-label="Toggle menu">&#9776;</button>
-    <ul class="nav-links">
-${items}
-    </ul>
-  </nav>`;
-}
-
-function pageDoc(title: string, p: ColorPalette, navPages: PageLink[], current: string, bodyContent: string): string {
-  return htmlDoc(title,
-    `<link rel="stylesheet" href="style.css">`,
-    `${navMultiPage(p, navPages, current)}
-${bodyContent}
-${footerHTML(p)}`
-  );
-}
-
-function heroHTML(p: ColorPalette, title: string, subtitle: string, cta: string, ctaHref = '#contact'): string {
-  return `  <section class="hero" style="background:${p.gradient}">
-    <h1>${title}</h1>
-    <p>${subtitle}</p>
-    <a href="${ctaHref}" class="btn btn-primary" style="background:${p.bg};color:${p.primary}">${cta}</a>
-  </section>`;
-}
-
-function footerHTML(p: ColorPalette): string {
-  return `  <footer style="background:${p.bgAlt};border-top:1px solid ${p.border}">
-    <p style="color:${p.textMuted}">&copy; ${new Date().getFullYear()} Site. All rights reserved.</p>
-  </footer>`;
-}
-
-function cssReset(): string {
-  return `*{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
-img{max-width:100%;display:block}
-a{text-decoration:none}
-ul{list-style:none}`;
-}
-
-function cssNavbar(p: ColorPalette): string {
-  return `.navbar{display:flex;justify-content:space-between;align-items:center;padding:1rem clamp(1rem,5vw,4rem);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.logo{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
-.nav-links{display:flex;gap:2rem;align-items:center}
-.nav-links a{color:${p.textMuted};font-weight:500;font-size:.9rem;transition:color .2s}
-.nav-links a:hover{color:${p.primary}}
-.menu-toggle{display:none;background:none;border:none;font-size:1.5rem;cursor:pointer;color:${p.text}}
-@media(max-width:768px){.menu-toggle{display:block}.nav-links{display:none;position:absolute;top:100%;left:0;right:0;background:${p.bg};flex-direction:column;padding:1rem;gap:1rem;border-bottom:1px solid ${p.border};box-shadow:0 4px 20px rgba(0,0,0,.1)}.nav-links.open{display:flex}}`;
-}
-
-function cssHero(p: ColorPalette): string {
-  return `.hero{min-height:80vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:4rem clamp(1rem,5vw,4rem);color:#fff}
-.hero h1{font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;letter-spacing:-.03em;line-height:1.1;max-width:800px;margin-bottom:1.5rem}
-.hero p{font-size:clamp(1rem,2vw,1.25rem);opacity:.9;max-width:600px;margin-bottom:2.5rem}
-.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.875rem 2rem;border-radius:50px;font-weight:600;font-size:.95rem;transition:transform .2s,box-shadow .2s}
-.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,0,0,.2)}
-.btn-primary{background:${p.bg};color:${p.primary}}`;
-}
-
-function cssSections(p: ColorPalette): string {
-  return `section{padding:clamp(3rem,8vw,6rem) clamp(1rem,5vw,4rem)}
-.section-title{text-align:center;font-size:clamp(1.75rem,4vw,2.75rem);font-weight:800;letter-spacing:-.02em;color:${p.text};margin-bottom:1rem}
-.section-subtitle{text-align:center;color:${p.textMuted};max-width:600px;margin:0 auto 3rem;font-size:1.05rem}
-.grid{display:grid;gap:1.5rem}
-.grid-2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.grid-3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.grid-4{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}`;
-}
-
-function cssCard(p: ColorPalette): string {
-  return `.card{background:${p.bg};border:1px solid ${p.border};border-radius:16px;padding:2rem;transition:transform .3s,box-shadow .3s}
-.card:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.08)}
-.card h3{font-size:1.15rem;font-weight:700;color:${p.text};margin-bottom:.5rem}
-.card p{color:${p.textMuted};font-size:.95rem;line-height:1.6}
-.card-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1rem;background:${p.primary}15;color:${p.primary}}`;
-}
-
 function cssForm(p: ColorPalette): string {
   return `.contact-form{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:1rem}
 .contact-form input,.contact-form textarea,.contact-form select{padding:.875rem 1rem;border:1px solid ${p.border};border-radius:10px;background:${p.bg};color:${p.text};font-family:inherit;font-size:.95rem;transition:border-color .2s}
 .contact-form input:focus,.contact-form textarea:focus{outline:none;border-color:${p.primary};box-shadow:0 0 0 3px ${p.primary}20}
 .contact-form button{padding:.875rem;background:${p.primary};color:#fff;border:none;border-radius:10px;font-weight:600;font-size:.95rem;cursor:pointer;transition:background .2s}
 .contact-form button:hover{background:${p.primaryHover}}`;
-}
-
-function cssFooter(p: ColorPalette): string {
-  return `footer{text-align:center;padding:2rem;background:${p.bgAlt};border-top:1px solid ${p.border}}
-footer p{font-size:.85rem}`;
 }
 
 function cssFAQ(p: ColorPalette): string {
@@ -2449,12 +2351,10 @@ function cssTeam(p: ColorPalette): string {
   return `.team-card{text-align:center;padding:2rem;background:${p.bg};border:1px solid ${p.border};border-radius:16px;transition:transform .3s,box-shadow .3s}
 .team-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px rgba(0,0,0,.08)}
 .team-avatar{width:96px;height:96px;border-radius:50%;margin:0 auto 1.25rem;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:#fff}
-.team-card h3{font-size:1.1rem;font-weight:700;color:${p.text};margin-bottom:.25rem}
-.team-card .role{font-size:.85rem;color:${p.primary};font-weight:500;margin-bottom:.75rem}
-.team-card p{font-size:.9rem;color:${p.textMuted};line-height:1.5}`;
+`;
 }
 
-function cssGallery(_p: ColorPalette): string {
+function cssGallery(): string {
   return `.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
 .gallery-item{aspect-ratio:1;border-radius:12px;overflow:hidden;position:relative;cursor:pointer;transition:transform .3s}
 .gallery-item:hover{transform:scale(1.03)}
@@ -2687,7 +2587,7 @@ export default function Navbar({ query, onQueryChange }: NavbarProps) {
     <nav className="topbar">
       <div className="brand">StreamFlix</div>
       <div className="links"><span>Home</span><span>Series</span><span>Movies</span><span>My List</span></div>
-      <input value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Search titles" />
+      <input name="search-titles" value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Search titles" />
     </nav>
   );
 }`;
@@ -3012,6 +2912,7 @@ export default function WorkCard({ record, onDelete, onStageChange, stages }: Wo
         <div><dt>Due</dt><dd>{record.due}</dd></div>
       </dl>
       <select
+        name="record-stage"
         value={record.stage}
         onChange={(e) => onStageChange(record.id, e.target.value)}
         aria-label={'Stage for ' + record.name}
@@ -3202,7 +3103,7 @@ export default function App() {
           </div>
           <label className="search">
             <span>Search</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search records, owners, notes..." />
+            <input name="record-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search records, owners, notes..." />
           </label>
         </header>
 
@@ -3232,22 +3133,22 @@ export default function App() {
           <section className="page-grid">
             <form className="panel form-panel" onSubmit={submitRecord}>
               <div className="panel-title"><h2>Add ${entityName}</h2><button type="submit">Save</button></div>
-              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="${entityName.charAt(0).toUpperCase() + entityName.slice(1)} name" aria-label="${entityName} name" />
-              <input value={draft.company} onChange={(e) => setDraft({ ...draft, company: e.target.value })} placeholder="Company or source" aria-label="Company or source" />
+              <input name="${entityName}-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="${entityName.charAt(0).toUpperCase() + entityName.slice(1)} name" aria-label="${entityName} name" />
+              <input name="company" value={draft.company} onChange={(e) => setDraft({ ...draft, company: e.target.value })} placeholder="Company or source" aria-label="Company or source" />
               <div className="split">
-                <select value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} aria-label="Owner"><option>Maya</option><option>Noah</option><option>Iris</option></select>
-                <select value={draft.priority} onChange={(e) => setDraft({ ...draft, priority: e.target.value })} aria-label="Priority"><option>High</option><option>Medium</option><option>Low</option></select>
+                <select name="owner" value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} aria-label="Owner"><option>Maya</option><option>Noah</option><option>Iris</option></select>
+                <select name="priority" value={draft.priority} onChange={(e) => setDraft({ ...draft, priority: e.target.value })} aria-label="Priority"><option>High</option><option>Medium</option><option>Low</option></select>
               </div>
               <div className="split">
-                <input value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="Value" inputMode="numeric" aria-label="Value" />
-                <input value={draft.due} onChange={(e) => setDraft({ ...draft, due: e.target.value })} type="date" aria-label="Due date" />
+                <input name="value" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} placeholder="Value" inputMode="numeric" aria-label="Value" />
+                <input name="due-date" value={draft.due} onChange={(e) => setDraft({ ...draft, due: e.target.value })} type="date" aria-label="Due date" />
               </div>
-              <textarea value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes" aria-label="Notes" />
+              <textarea name="notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Notes" aria-label="Notes" />
             </form>
             <section className="panel wide">
               <div className="panel-title">
                 <h2>${isProject ? 'Project board' : isInventory ? 'Inventory board' : isBooking ? 'Booking board' : 'Deal pipeline'}</h2>
-                <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Filter stage">{stages.map((s: string) => <option key={s}>{s}</option>)}</select>
+                <select name="filter-stage" value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Filter stage">{stages.map((s: string) => <option key={s}>{s}</option>)}</select>
               </div>
               {filteredRecords.length === 0 ? (
                 <div className="empty"><strong>No records found</strong><p>Clear search or add a new ${entityName} to continue.</p></div>
@@ -3272,8 +3173,8 @@ export default function App() {
         {route === 'settings' && (
           <section className="panel settings">
             <div className="panel-title"><h2>Settings</h2><button onClick={() => setState({ records: data.seedRecords, contacts: data.seedContacts, tasks: data.seedTasks, compactMode: false, weeklyDigest: true })}>Reset demo data</button></div>
-            <label><span>Compact interface</span><input type="checkbox" checked={state.compactMode} onChange={(e) => setState((current: any) => ({ ...current, compactMode: e.target.checked }))} /></label>
-            <label><span>Weekly digest</span><input type="checkbox" checked={state.weeklyDigest} onChange={(e) => setState((current: any) => ({ ...current, weeklyDigest: e.target.checked }))} /></label>
+            <label><span>Compact interface</span><input name="compact-mode" type="checkbox" checked={state.compactMode} onChange={(e) => setState((current: any) => ({ ...current, compactMode: e.target.checked }))} /></label>
+            <label><span>Weekly digest</span><input name="weekly-digest" type="checkbox" checked={state.weeklyDigest} onChange={(e) => setState((current: any) => ({ ...current, weeklyDigest: e.target.checked }))} /></label>
             <p>All demo data persists in localStorage so generated app behavior survives refreshes.</p>
           </section>
         )}
@@ -3678,7 +3579,7 @@ export default function App() {
         </section>
 
         <section className="toolbar">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this template..." />
+          <input name="template-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this template..." />
           <div className="segments">
             {['All', 'Active', 'Review', 'Ready'].map((status) => (
               <button key={status} onClick={() => setActiveStatus(status)} className={activeStatus === status ? 'selected' : ''}>
@@ -3785,689 +3686,6 @@ h1 { margin: 0; font-size: clamp(2.15rem, 5vw, 4.5rem); line-height: 1; letter-s
   };
 }
 
-// ─── Full Template Builders ────────────────────────────────────────
-
-function buildPortfolio(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'about', 'projects', 'contact'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'About', file: 'about.html' },
-    { label: 'Projects', file: 'projects.html' },
-    { label: 'Contact', file: 'contact.html' },
-  ];
-
-  const indexHtml = pageDoc('Creative Portfolio', p, navPages, 'index.html',
-    `${heroHTML(p, 'Hello, I\'m a Creator', 'I craft digital experiences that blend beauty with function.', 'View My Work', 'projects.html')}`
-  );
-  const aboutHtml = pageDoc('About | Creative Portfolio', p, navPages, 'about.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh">
-      <h2 class="section-title">About Me</h2>
-      <p class="section-subtitle">Passionate about creating elegant solutions to complex problems.</p>
-      <div class="grid grid-3" style="max-width:900px;margin:0 auto">
-        <div class="card"><div class="card-icon">&#9998;</div><h3>Design</h3><p>Creating intuitive interfaces that users love.</p></div>
-        <div class="card"><div class="card-icon">&#60;/&#62;</div><h3>Development</h3><p>Building robust, scalable web applications.</p></div>
-        <div class="card"><div class="card-icon">&#9889;</div><h3>Performance</h3><p>Optimizing for speed and accessibility.</p></div>
-      </div>
-    </section>`
-  );
-  const projectsHtml = pageDoc('Projects | Creative Portfolio', p, navPages, 'projects.html',
-    `  <section class="fade-up" style="min-height:60vh">
-      <h2 class="section-title">Featured Work</h2>
-      <p class="section-subtitle">A selection of recent projects I'm proud of.</p>
-      <div class="grid grid-3">
-        <div class="card"><div class="card-icon">&#127912;</div><h3>Brand Identity</h3><p>Complete visual identity for a tech startup.</p></div>
-        <div class="card"><div class="card-icon">&#128241;</div><h3>Mobile App</h3><p>Cross-platform app with 50k+ downloads.</p></div>
-        <div class="card"><div class="card-icon">&#127760;</div><h3>Web Platform</h3><p>SaaS dashboard serving 10k daily users.</p></div>
-      </div>
-    </section>`
-  );
-  const contactHtml = pageDoc('Contact | Creative Portfolio', p, navPages, 'contact.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh">
-      <h2 class="section-title">Get In Touch</h2>
-      <p class="section-subtitle">Have a project in mind? Let's talk.</p>
-      <form class="contact-form">
-        <input type="text" placeholder="Your Name" required>
-        <input type="email" placeholder="Your Email" required>
-        <textarea rows="5" placeholder="Tell me about your project..." required></textarea>
-        <button type="submit">Send Message</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Thanks! I\\'ll get back to you soon.');\n  e.target.reset();\n});`;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'about.html', content: aboutHtml },
-      { path: 'projects.html', content: projectsHtml },
-      { path: 'contact.html', content: contactHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: `Built a ${p.bg === '#0F172A' ? 'dark' : 'light'}-themed multi-page portfolio (index, about, projects, contact).`,
-    nextSteps: ['Add real project images', 'Connect contact form to backend', 'Add testimonials section', 'Customize colors'],
-    metadata: { template: 'portfolio', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildSaaS(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'features', 'pricing', 'testimonials', 'cta'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'Features', file: 'features.html' },
-    { label: 'Pricing', file: 'pricing.html' },
-    { label: 'Contact', file: 'contact.html' },
-  ];
-
-  const indexHtml = pageDoc('SaaS Product', p, navPages, 'index.html',
-    `${heroHTML(p, 'Ship Faster, Scale Smarter', 'The all-in-one platform for modern teams.', 'Start Free Trial', 'features.html')}`
-  );
-  const featuresHtml = pageDoc('Features | SaaS Product', p, navPages, 'features.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Everything You Need</h2>
-      <p class="section-subtitle">Powerful tools designed for modern teams.</p>
-      <div class="grid grid-3">
-        <div class="card"><div class="card-icon">&#9889;</div><h3>Lightning Fast</h3><p>Sub-second load times with edge caching.</p></div>
-        <div class="card"><div class="card-icon">&#128274;</div><h3>Enterprise Security</h3><p>SOC 2 compliant with end-to-end encryption.</p></div>
-        <div class="card"><div class="card-icon">&#128640;</div><h3>Auto Scaling</h3><p>Handles traffic spikes automatically.</p></div>
-        <div class="card"><div class="card-icon">&#128202;</div><h3>Analytics</h3><p>Real-time performance insights.</p></div>
-        <div class="card"><div class="card-icon">&#127912;</div><h3>Team Collab</h3><p>Built-in tools for seamless teamwork.</p></div>
-        <div class="card"><div class="card-icon">&#128295;</div><h3>API First</h3><p>RESTful API with comprehensive docs.</p></div>
-      </div>
-    </section>`
-  );
-  const pricingHtml = pageDoc('Pricing | SaaS Product', p, navPages, 'pricing.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Simple Pricing</h2>
-      <p class="section-subtitle">Start free, upgrade when ready.</p>
-      <div class="grid grid-3" style="max-width:900px;margin:0 auto">
-        <div class="card" style="text-align:center"><h3>Starter</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">$0</div><p>For side projects</p><a href="contact.html" class="btn" style="margin-top:1rem;width:100%;justify-content:center;border:1px solid ${p.border};color:${p.text}">Get Started</a></div>
-        <div class="card" style="text-align:center;border-color:${p.primary};position:relative"><span style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:${p.primary};color:#fff;padding:4px 16px;border-radius:20px;font-size:.75rem;font-weight:600">Popular</span><h3>Pro</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">$29<span style="font-size:1rem;font-weight:400;color:${p.textMuted}">/mo</span></div><p>For growing teams</p><a href="contact.html" class="btn" style="margin-top:1rem;width:100%;justify-content:center;background:${p.primary};color:#fff">Start Free Trial</a></div>
-        <div class="card" style="text-align:center"><h3>Enterprise</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">Custom</div><p>For large orgs</p><a href="contact.html" class="btn" style="margin-top:1rem;width:100%;justify-content:center;border:1px solid ${p.border};color:${p.text}">Contact Sales</a></div>
-      </div>
-    </section>`
-  );
-  const contactHtml = pageDoc('Contact | SaaS Product', p, navPages, 'contact.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Get In Touch</h2>
-      <p class="section-subtitle">Have questions? We're here to help.</p>
-      <form class="contact-form" style="max-width:500px">
-        <input type="text" placeholder="Your Name" required>
-        <input type="email" placeholder="Your Email" required>
-        <textarea rows="5" placeholder="How can we help?" required></textarea>
-        <button type="submit">Send Message</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Thanks! We\\'ll be in touch soon.');\n  e.target.reset();\n});`;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'features.html', content: featuresHtml },
-      { path: 'pricing.html', content: pricingHtml },
-      { path: 'contact.html', content: contactHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: 'Created a multi-page SaaS site (home, features, pricing, contact) with feature grid, 3-tier pricing, and CTA.',
-    nextSteps: ['Add monthly/annual pricing toggle', 'Add FAQ section', 'Integrate payment provider', 'Add more testimonials'],
-    metadata: { template: 'saas', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildRestaurant(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'menu', 'about', 'reservations'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'Menu', file: 'menu.html' },
-    { label: 'About', file: 'about.html' },
-    { label: 'Reservations', file: 'reservations.html' },
-  ];
-
-  const indexHtml = pageDoc('Restaurant', p, navPages, 'index.html',
-    `${heroHTML(p, 'Taste the Difference', 'Farm-to-table dining in the heart of the city.', 'View Menu', 'menu.html')}`
-  );
-  const menuHtml = pageDoc('Menu | Restaurant', p, navPages, 'menu.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Our Menu</h2>
-      <p class="section-subtitle">Seasonal ingredients, timeless flavors.</p>
-      <div class="grid grid-2">
-        <div class="card"><div class="card-icon">&#127837;</div><h3>Starters</h3><p>Fresh garden salad, artisan bread, seasonal soup.</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">From $12</p></div>
-        <div class="card"><div class="card-icon">&#127830;</div><h3>Mains</h3><p>Grilled salmon, grass-fed steak, wild mushroom risotto.</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">From $28</p></div>
-        <div class="card"><div class="card-icon">&#127856;</div><h3>Desserts</h3><p>Creme brulee, chocolate fondant, fruit tart.</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">From $14</p></div>
-        <div class="card"><div class="card-icon">&#127863;</div><h3>Drinks</h3><p>Curated wine list, craft cocktails, local beers.</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">From $8</p></div>
-      </div>
-    </section>`
-  );
-  const aboutHtml = pageDoc('About | Restaurant', p, navPages, 'about.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Our Story</h2>
-      <p class="section-subtitle">Since 2015, serving the community with passion and dedication.</p>
-      <div class="grid grid-3" style="max-width:700px;margin:0 auto">
-        <div class="card" style="text-align:center"><div style="font-size:2rem;font-weight:800;color:${p.primary}">9+</div><p>Years of Service</p></div>
-        <div class="card" style="text-align:center"><div style="font-size:2rem;font-weight:800;color:${p.primary}">50k+</div><p>Happy Guests</p></div>
-        <div class="card" style="text-align:center"><div style="font-size:2rem;font-weight:800;color:${p.primary}">4.9</div><p>Star Rating</p></div>
-      </div>
-    </section>`
-  );
-  const resHtml = pageDoc('Reservations | Restaurant', p, navPages, 'reservations.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Reserve a Table</h2>
-      <form class="contact-form">
-        <input type="text" placeholder="Your Name" required>
-        <input type="email" placeholder="Email" required>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem"><input type="date" required><input type="time" required></div>
-        <select required><option value="">Party Size</option><option>1-2 guests</option><option>3-4 guests</option><option>5-6 guests</option><option>7+ guests</option></select>
-        <button type="submit">Reserve Now</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Reservation confirmed!');\n  e.target.reset();\n});`;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'menu.html', content: menuHtml },
-      { path: 'about.html', content: aboutHtml },
-      { path: 'reservations.html', content: resHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: 'Built a multi-page restaurant site (home, menu, about, reservations).',
-    nextSteps: ['Add food photography', 'Integrate reservation system', 'Add Google Maps', 'Add wine list'],
-    metadata: { template: 'restaurant', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildEcommerce(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'products', 'features', 'cta'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'Products', file: 'products.html' },
-    { label: 'Features', file: 'features.html' },
-    { label: 'Contact', file: 'contact.html' },
-  ];
-
-  const indexHtml = pageDoc('Shop', p, navPages, 'index.html',
-    `${heroHTML(p, 'Curated Collections', 'Premium products crafted for modern living.', 'Shop Now', 'products.html')}`
-  );
-  const productsHtml = pageDoc('Products | Shop', p, navPages, 'products.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Featured Products</h2>
-      <div class="grid grid-4">
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#128091;</div><div style="padding:1.25rem"><h3>Leather Bag</h3><p style="font-size:.85rem">Handcrafted premium leather</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">$189</p></div></div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#8986;</div><div style="padding:1.25rem"><h3>Classic Watch</h3><p style="font-size:.85rem">Swiss movement, minimalist</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">$349</p></div></div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#128085;</div><div style="padding:1.25rem"><h3>Wool Jacket</h3><p style="font-size:.85rem">Sustainable merino blend</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">$275</p></div></div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#128092;</div><div style="padding:1.25rem"><h3>Sneakers</h3><p style="font-size:.85rem">Limited edition colorway</p><p style="margin-top:.5rem;font-weight:700;color:${p.primary}">$145</p></div></div>
-      </div>
-    </section>`
-  );
-  const featuresHtml = pageDoc('Why Shop With Us', p, navPages, 'features.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Why Shop With Us</h2>
-      <div class="grid grid-3" style="max-width:700px;margin:0 auto">
-        <div class="card"><div class="card-icon">&#128666;</div><h3>Free Shipping</h3><p>On all orders over $75.</p></div>
-        <div class="card"><div class="card-icon">&#128260;</div><h3>Easy Returns</h3><p>30-day hassle-free returns.</p></div>
-        <div class="card"><div class="card-icon">&#128274;</div><h3>Secure Checkout</h3><p>256-bit SSL encryption.</p></div>
-      </div>
-    </section>`
-  );
-  const contactHtml = pageDoc('Contact | Shop', p, navPages, 'contact.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Get In Touch</h2>
-      <p class="section-subtitle">Questions? We'd love to hear from you.</p>
-      <form class="contact-form" style="max-width:500px">
-        <input type="text" placeholder="Your Name" required>
-        <input type="email" placeholder="Your Email" required>
-        <textarea rows="5" placeholder="Your message..." required></textarea>
-        <button type="submit">Send Message</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('.contact-form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Thanks! We\\'ll get back to you soon.');\n  e.target.reset();\n});`;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'products.html', content: productsHtml },
-      { path: 'features.html', content: featuresHtml },
-      { path: 'contact.html', content: contactHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: 'Created a multi-page e-commerce site (home, products, features, contact) with product grid and trust badges.',
-    nextSteps: ['Add product detail pages', 'Integrate Stripe', 'Add shopping cart', 'Add search/filtering'],
-    metadata: { template: 'ecommerce', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildPhotography(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'gallery', 'about', 'contact'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'Gallery', file: 'gallery.html' },
-    { label: 'About', file: 'about.html' },
-    { label: 'Contact', file: 'contact.html' },
-  ];
-
-  const indexHtml = pageDoc('Photography', p, navPages, 'index.html',
-    `${heroHTML(p, 'Capturing Moments', 'Fine art photography that tells stories through light and shadow.', 'View Gallery', 'gallery.html')}`
-  );
-  const galleryHtml = pageDoc('Gallery | Photography', p, navPages, 'gallery.html',
-    `  <section class="fade-up" style="padding-top:6rem">
-      <h2 class="section-title">Portfolio</h2>
-      <div class="masonry-grid">
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:3/4;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127748;</div></div>
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:4/3;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127742;</div></div>
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:1/1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127749;</div></div>
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:3/4;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127750;</div></div>
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:4/3;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127743;</div></div>
-        <div class="masonry-item" onclick="openLightbox(this)"><div style="aspect-ratio:1/1;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:3rem">&#127744;</div></div>
-      </div>
-    </section>`
-  );
-  const aboutHtml = pageDoc('About | Photography', p, navPages, 'about.html',
-    `  <section class="fade-up" style="background:${p.bgAlt};min-height:60vh;padding-top:6rem">
-      <div style="max-width:800px;margin:0 auto;display:grid;grid-template-columns:1fr 2fr;gap:3rem;align-items:center">
-        <div style="aspect-ratio:1;background:${p.surface};border-radius:1rem;display:flex;align-items:center;justify-content:center;font-size:4rem">&#128247;</div>
-        <div><p style="font-size:.85rem;color:${p.primary};font-weight:600;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem">About the Photographer</p><h2 style="font-size:clamp(1.5rem,3vw,2rem);font-weight:800;margin-bottom:1rem">Visual Storyteller</h2><p style="color:${p.textMuted};line-height:1.7">With over a decade of experience capturing the world's most breathtaking moments, I specialize in landscape, portrait, and street photography. Every frame is an opportunity to reveal something extraordinary in the ordinary.</p></div>
-      </div>
-    </section>`
-  );
-  const contactHtml = pageDoc('Contact | Photography', p, navPages, 'contact.html',
-    `  <section class="fade-up" style="min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Get in Touch</h2>
-      <p class="section-subtitle">Available for commissions, collaborations, and prints.</p>
-      <form style="max-width:500px;margin:0 auto;display:flex;flex-direction:column;gap:1rem">
-        <input type="text" placeholder="Your name" required style="border-radius:50px;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text}">
-        <input type="email" placeholder="Your email" required style="border-radius:50px;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text}">
-        <textarea placeholder="Tell me about your project" rows="4" style="border-radius:1rem;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text};resize:vertical"></textarea>
-        <button type="submit" class="btn" style="border-radius:50px;align-self:center">Send Message</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssFooter(p), cssAnimations(), `
-    .masonry-grid { columns: 3; column-gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
-    .masonry-item { break-inside: avoid; margin-bottom: 1.5rem; border-radius: 0.75rem; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
-    .masonry-item:hover { transform: scale(1.02); }
-    @media (max-width: 768px) { .masonry-grid { columns: 2; } }
-    @media (max-width: 480px) { .masonry-grid { columns: 1; } }
-    #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 9999; cursor: pointer; }
-    #lightbox img, #lightbox div { max-width: 90vw; max-height: 90vh; border-radius: 0.5rem; }
-    #lightbox-close { position: absolute; top: 1rem; right: 1rem; color: #fff; font-size: 2rem; cursor: pointer; }
-  `].join('\n');
-  const js = `${jsBase()}
-    function openLightbox(el) {
-      var overlay = document.createElement('div');
-      overlay.id = 'lightbox';
-      overlay.onclick = function() { overlay.remove(); };
-      var content = el.querySelector('div').cloneNode(true);
-      content.style.fontSize = '8rem';
-      overlay.appendChild(content);
-      var close = document.createElement('div');
-      close.id = 'lightbox-close';
-      close.textContent = '\\u00d7';
-      overlay.appendChild(close);
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-    }
-  `;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'gallery.html', content: galleryHtml },
-      { path: 'about.html', content: aboutHtml },
-      { path: 'contact.html', content: contactHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: 'Built a multi-page photography portfolio (home, gallery, about, contact) with masonry gallery and lightbox.',
-    nextSteps: ['Add high-res images', 'Integrate Instagram feed', 'Add print shop', 'Add EXIF data display'],
-    metadata: { template: 'photography', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildBlog(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'articles', 'newsletter'];
-  const navPages: PageLink[] = [
-    { label: 'Home', file: 'index.html' },
-    { label: 'Articles', file: 'articles.html' },
-    { label: 'Subscribe', file: 'subscribe.html' },
-  ];
-
-  const indexHtml = pageDoc('Blog', p, navPages, 'index.html',
-    `${heroHTML(p, 'Insights & Ideas', 'Thoughtful perspectives on design, technology, and creativity.', 'Read Latest', 'articles.html')}`
-  );
-  const articlesHtml = pageDoc('Articles | Blog', p, navPages, 'articles.html',
-    `  <section class="fade-up" style="padding-top:6rem">
-      <h2 class="section-title">Latest Articles</h2>
-      <div class="grid grid-3">
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:16/9;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:2.5rem">&#128221;</div><div style="padding:1.5rem"><p style="font-size:.8rem;color:${p.primary};font-weight:600;text-transform:uppercase;letter-spacing:.05em">Design</p><h3 style="margin-top:.5rem">The Future of Web Design</h3><p style="margin-top:.5rem">Emerging trends shaping the web.</p><p style="margin-top:1rem;font-size:.85rem;color:${p.textMuted}">5 min read</p></div></div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:16/9;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:2.5rem">&#128187;</div><div style="padding:1.5rem"><p style="font-size:.8rem;color:${p.primary};font-weight:600;text-transform:uppercase;letter-spacing:.05em">Engineering</p><h3 style="margin-top:.5rem">Scalable APIs with Edge Functions</h3><p style="margin-top:.5rem">A practical serverless guide.</p><p style="margin-top:1rem;font-size:.85rem;color:${p.textMuted}">8 min read</p></div></div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:16/9;background:${p.surface};display:flex;align-items:center;justify-content:center;font-size:2.5rem">&#127912;</div><div style="padding:1.5rem"><p style="font-size:.8rem;color:${p.primary};font-weight:600;text-transform:uppercase;letter-spacing:.05em">Creative</p><h3 style="margin-top:.5rem">Color Theory for Interfaces</h3><p style="margin-top:.5rem">Palettes that convert and delight.</p><p style="margin-top:1rem;font-size:.85rem;color:${p.textMuted}">6 min read</p></div></div>
-      </div>
-    </section>`
-  );
-  const subscribeHtml = pageDoc('Subscribe | Blog', p, navPages, 'subscribe.html',
-    `  <section class="fade-up" style="text-align:center;background:${p.bgAlt};min-height:60vh;padding-top:6rem">
-      <h2 class="section-title">Stay Updated</h2>
-      <p class="section-subtitle">Get the latest articles delivered to your inbox.</p>
-      <form style="display:flex;gap:.5rem;max-width:420px;margin:2rem auto 0">
-        <input type="email" placeholder="your@email.com" required style="flex:1;border-radius:50px;padding:.75rem 1.25rem;border:1px solid ${p.border};background:${p.bg};color:${p.text}">
-        <button type="submit" class="btn" style="border-radius:50px;background:${p.primary};color:#fff">Subscribe</button>
-      </form>
-    </section>`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\n\ndocument.querySelector('form')?.addEventListener('submit',e=>{\n  e.preventDefault();\n  joyfulNotify('Subscribed! Check your inbox.');\n  e.target.reset();\n});`;
-
-  return {
-    files: [
-      { path: 'index.html', content: indexHtml },
-      { path: 'articles.html', content: articlesHtml },
-      { path: 'subscribe.html', content: subscribeHtml },
-      { path: 'style.css', content: css },
-      { path: 'script.js', content: js },
-    ],
-    summary: 'Created a multi-page blog (home, articles, subscribe) with article cards and newsletter section.',
-    nextSteps: ['Add RSS feed', 'Add search', 'Add categories/tags', 'Add social sharing'],
-    metadata: { template: 'blog', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildDashboard(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'stats', 'features'];
-
-  const html = htmlDoc('Dashboard',
-    `<link rel="stylesheet" href="style.css">`,
-    `${navHTML(p, ['Stats', 'Features'])}
-${heroHTML(p, 'Command Center', 'Real-time analytics and insights for your business.', 'View Dashboard')}
-  <section id="stats" class="fade-up" style="background:${p.bgAlt}">
-    <h2 class="section-title">Key Metrics</h2>
-    <div class="grid grid-4">
-      <div class="card" style="text-align:center"><p style="font-size:.85rem;color:${p.textMuted};text-transform:uppercase;letter-spacing:.05em">Revenue</p><p style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:.5rem 0">$48.2k</p><p style="color:#10B981;font-size:.85rem;font-weight:600">&#9650; 12.5%</p></div>
-      <div class="card" style="text-align:center"><p style="font-size:.85rem;color:${p.textMuted};text-transform:uppercase;letter-spacing:.05em">Users</p><p style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:.5rem 0">12.4k</p><p style="color:#10B981;font-size:.85rem;font-weight:600">&#9650; 8.3%</p></div>
-      <div class="card" style="text-align:center"><p style="font-size:.85rem;color:${p.textMuted};text-transform:uppercase;letter-spacing:.05em">Conversion</p><p style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:.5rem 0">3.2%</p><p style="color:#10B981;font-size:.85rem;font-weight:600">&#9650; 2.1%</p></div>
-      <div class="card" style="text-align:center"><p style="font-size:.85rem;color:${p.textMuted};text-transform:uppercase;letter-spacing:.05em">Avg Session</p><p style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:.5rem 0">4m 32s</p><p style="color:#EF4444;font-size:.85rem;font-weight:600">&#9660; 1.2%</p></div>
-    </div>
-  </section>
-  <section id="features" class="fade-up">
-    <h2 class="section-title">Platform Features</h2>
-    <div class="grid grid-3">
-      <div class="card"><div class="card-icon">&#128202;</div><h3>Real-time Charts</h3><p>Interactive live visualizations.</p></div>
-      <div class="card"><div class="card-icon">&#128276;</div><h3>Smart Alerts</h3><p>Threshold-based notifications.</p></div>
-      <div class="card"><div class="card-icon">&#128203;</div><h3>Custom Reports</h3><p>Build and export tailored reports.</p></div>
-    </div>
-  </section>
-${footerHTML(p)}`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssFooter(p), cssAnimations()].join('\n');
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: jsBase() }],
-    summary: 'Created a dashboard landing page with metric cards showing trends and feature highlights.',
-    nextSteps: ['Add interactive charts with Chart.js', 'Add data tables', 'Add date filters', 'Connect to real API'],
-    metadata: { template: 'dashboard', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildWebApp(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['sidebar', 'metrics', 'workspace', 'table', 'modal'];
-
-  const html = htmlDoc('Joyful Workspace App',
-    `<link rel="stylesheet" href="style.css">`,
-    `  <div class="app-shell">
-    <aside class="app-sidebar">
-      <div class="brand-mark">J</div>
-      <nav>
-        <button class="nav-item active" data-view="overview">Overview</button>
-        <button class="nav-item" data-view="pipeline">Pipeline</button>
-        <button class="nav-item" data-view="tasks">Tasks</button>
-        <button class="nav-item" data-view="reports">Reports</button>
-      </nav>
-    </aside>
-    <main class="workspace">
-      <header class="workspace-header">
-        <div>
-          <p class="eyebrow">Application workspace</p>
-          <h1>Operations Command Center</h1>
-          <p class="muted">Manage projects, owners, status, priority, and delivery risk from one responsive app.</p>
-        </div>
-        <button class="primary-action" id="newItemBtn">New item</button>
-      </header>
-      <section class="metrics-grid">
-        <article class="metric-card"><span>Open work</span><strong id="openCount">0</strong><small>Active records</small></article>
-        <article class="metric-card"><span>Completed</span><strong id="doneCount">0</strong><small>Ready to ship</small></article>
-        <article class="metric-card"><span>High priority</span><strong id="priorityCount">0</strong><small>Needs attention</small></article>
-        <article class="metric-card"><span>Health</span><strong id="healthScore">0%</strong><small>Portfolio score</small></article>
-      </section>
-      <section class="control-panel">
-        <div class="segmented" role="tablist" aria-label="Status filter">
-          <button class="filter-btn active" data-filter="all">All</button>
-          <button class="filter-btn" data-filter="Active">Active</button>
-          <button class="filter-btn" data-filter="Review">Review</button>
-          <button class="filter-btn" data-filter="Done">Done</button>
-        </div>
-        <input id="searchInput" type="search" placeholder="Search projects, owners, or tags">
-      </section>
-      <section class="content-grid">
-        <div class="panel">
-          <div class="panel-header"><h2>Delivery Board</h2><span id="recordCount">0 records</span></div>
-          <div class="kanban" id="kanbanBoard"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-header"><h2>Work Register</h2><span>Live data</span></div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Project</th><th>Owner</th><th>Status</th><th>Priority</th><th>Due</th></tr></thead>
-              <tbody id="workTable"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-  <dialog id="itemDialog">
-    <form method="dialog" id="itemForm" class="dialog-card">
-      <div class="panel-header"><h2>Add work item</h2><button type="button" id="closeDialog">Close</button></div>
-      <label>Project name<input name="name" required placeholder="Customer onboarding redesign"></label>
-      <label>Owner<input name="owner" required placeholder="Maya"></label>
-      <div class="form-grid">
-        <label>Status<select name="status"><option>Active</option><option>Review</option><option>Done</option></select></label>
-        <label>Priority<select name="priority"><option>High</option><option>Medium</option><option>Low</option></select></label>
-      </div>
-      <label>Due date<input name="due" type="date" required></label>
-      <button class="primary-action" type="submit">Save item</button>
-    </form>
-  </dialog>`
-  );
-
-  const css = `${cssReset()}
-:root{--primary:${p.primary};--primary-hover:${p.primaryHover};--surface:${p.bg};--surface-2:${p.bgAlt};--panel:${p.surface};--text:${p.text};--muted:${p.textMuted};--border:${p.border};--shadow:0 24px 80px rgba(15,23,42,.12)}
-body{min-height:100vh;background:linear-gradient(135deg,${p.bgAlt},${p.bg});color:var(--text)}
-.app-shell{display:grid;grid-template-columns:88px minmax(0,1fr);min-height:100vh}
-.app-sidebar{border-right:1px solid var(--border);background:rgba(255,255,255,.78);backdrop-filter:blur(18px);padding:1rem;display:flex;flex-direction:column;align-items:center;gap:2rem}
-.brand-mark{width:48px;height:48px;border-radius:14px;background:${p.gradient};display:grid;place-items:center;color:#fff;font-weight:900;box-shadow:0 14px 30px rgba(99,102,241,.24)}
-.app-sidebar nav{display:grid;gap:.75rem;width:100%}.nav-item{border:1px solid transparent;background:transparent;color:var(--muted);border-radius:12px;padding:.8rem .35rem;font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}.nav-item.active,.nav-item:hover{background:var(--surface);border-color:var(--border);color:var(--primary)}
-.workspace{min-width:0;padding:clamp(1rem,3vw,2rem);display:grid;gap:1.25rem}.workspace-header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.eyebrow{color:var(--primary);font-weight:800;text-transform:uppercase;font-size:.72rem;letter-spacing:.08em}.workspace h1{font-size:clamp(2rem,4vw,3.5rem);line-height:1.05;margin:.2rem 0 .6rem}.muted{color:var(--muted);max-width:680px}
-.primary-action{border:0;border-radius:12px;background:var(--primary);color:#fff;padding:.8rem 1rem;font-weight:800;cursor:pointer;box-shadow:0 12px 30px rgba(99,102,241,.22)}.primary-action:hover{background:var(--primary-hover)}
-.metrics-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.metric-card,.panel{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}.metric-card{padding:1.2rem}.metric-card span,.metric-card small{display:block;color:var(--muted);font-size:.82rem}.metric-card strong{display:block;font-size:2rem;margin:.4rem 0;color:var(--text)}
-.control-panel{display:flex;gap:1rem;align-items:center;justify-content:space-between}.segmented{display:flex;gap:.35rem;border:1px solid var(--border);background:rgba(255,255,255,.76);padding:.35rem;border-radius:14px}.filter-btn{border:0;background:transparent;color:var(--muted);border-radius:10px;padding:.6rem .85rem;font-weight:700;cursor:pointer}.filter-btn.active{background:var(--primary);color:#fff}#searchInput{min-width:min(100%,320px);border:1px solid var(--border);border-radius:12px;background:#fff;padding:.8rem 1rem;color:var(--text)}
-.content-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:1rem}.panel{min-width:0;padding:1rem}.panel-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.panel-header h2{font-size:1rem}.panel-header span,.panel-header button{color:var(--muted);font-size:.78rem;background:transparent;border:0}
-.kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.lane{border:1px dashed var(--border);border-radius:14px;padding:.75rem;background:var(--surface-2);min-height:260px}.lane h3{font-size:.78rem;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem}.work-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:.85rem;margin-bottom:.75rem}.work-card strong{display:block;margin-bottom:.35rem}.card-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:.75rem}.pill{display:inline-flex;border-radius:999px;padding:.2rem .55rem;font-size:.7rem;font-weight:800}.High{background:#fee2e2;color:#b91c1c}.Medium{background:#fef3c7;color:#92400e}.Low{background:#dcfce7;color:#166534}
-.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.86rem}th,td{text-align:left;border-bottom:1px solid var(--border);padding:.8rem .65rem;white-space:nowrap}th{color:var(--muted);font-size:.74rem;text-transform:uppercase}
-dialog{border:0;background:transparent}dialog::backdrop{background:rgba(15,23,42,.5)}.dialog-card{width:min(92vw,460px);background:#fff;border:1px solid var(--border);border-radius:18px;padding:1.2rem;box-shadow:var(--shadow);display:grid;gap:1rem}.dialog-card label{display:grid;gap:.4rem;font-weight:700;font-size:.82rem}.dialog-card input,.dialog-card select{border:1px solid var(--border);border-radius:10px;padding:.75rem;font:inherit}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-@media(max-width:980px){.metrics-grid,.content-grid{grid-template-columns:1fr}.kanban{grid-template-columns:1fr}.workspace-header,.control-panel{flex-direction:column;align-items:stretch}.app-shell{grid-template-columns:1fr}.app-sidebar{position:sticky;top:0;z-index:10;flex-direction:row;justify-content:space-between}.app-sidebar nav{grid-template-columns:repeat(4,1fr)}}`;
-
-  const js = `const defaultItems=[
-  {name:'Customer portal launch',owner:'Maya',status:'Active',priority:'High',due:'2026-06-04'},
-  {name:'Billing workflow QA',owner:'Noah',status:'Review',priority:'Medium',due:'2026-05-28'},
-  {name:'Partner analytics view',owner:'Iris',status:'Active',priority:'High',due:'2026-06-10'},
-  {name:'Help center migration',owner:'Ari',status:'Done',priority:'Low',due:'2026-05-18'},
-  {name:'Admin permission model',owner:'Sam',status:'Review',priority:'High',due:'2026-05-30'}
-];
-let items=JSON.parse(localStorage.getItem('joyful_app_items')||'null')||defaultItems;
-let filter='all';
-const save=()=>localStorage.setItem('joyful_app_items',JSON.stringify(items));
-const matches=(item,query)=>[item.name,item.owner,item.status,item.priority].join(' ').toLowerCase().includes(query.toLowerCase());
-function render(){
-  const query=document.querySelector('#searchInput').value.trim();
-  const visible=items.filter(item=>(filter==='all'||item.status===filter)&&matches(item,query));
-  document.querySelector('#openCount').textContent=items.filter(i=>i.status!=='Done').length;
-  document.querySelector('#doneCount').textContent=items.filter(i=>i.status==='Done').length;
-  document.querySelector('#priorityCount').textContent=items.filter(i=>i.priority==='High').length;
-  document.querySelector('#healthScore').textContent=Math.round((items.filter(i=>i.status==='Done').length/Math.max(items.length,1))*100)+'%';
-  document.querySelector('#recordCount').textContent=visible.length+' records';
-  document.querySelector('#kanbanBoard').innerHTML=['Active','Review','Done'].map(status=>{
-    const cards=visible.filter(item=>item.status===status).map(item=>'<article class="work-card"><strong>'+item.name+'</strong><div class="card-meta"><span>'+item.owner+'</span><span class="pill '+item.priority+'">'+item.priority+'</span></div><div class="card-meta"><span>Due '+item.due+'</span><button data-promote="'+item.name+'">Move</button></div></article>').join('');
-    return '<section class="lane"><h3>'+status+'</h3>'+cards+'</section>';
-  }).join('');
-  document.querySelector('#workTable').innerHTML=visible.map(item=>'<tr><td>'+item.name+'</td><td>'+item.owner+'</td><td>'+item.status+'</td><td><span class="pill '+item.priority+'">'+item.priority+'</span></td><td>'+item.due+'</td></tr>').join('');
-}
-document.querySelectorAll('.filter-btn').forEach(btn=>btn.addEventListener('click',()=>{
-  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');filter=btn.dataset.filter;render();
-}));
-document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',()=>{
-  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-}));
-document.querySelector('#searchInput').addEventListener('input',render);
-document.querySelector('#newItemBtn').addEventListener('click',()=>document.querySelector('#itemDialog').showModal());
-document.querySelector('#closeDialog').addEventListener('click',()=>document.querySelector('#itemDialog').close());
-document.querySelector('#itemForm').addEventListener('submit',event=>{
-  event.preventDefault();
-  const data=Object.fromEntries(new FormData(event.currentTarget));
-  items=[data,...items];save();event.currentTarget.reset();document.querySelector('#itemDialog').close();render();
-});
-document.querySelector('#kanbanBoard').addEventListener('click',event=>{
-  const target=event.target.closest('[data-promote]');
-  if(!target)return;
-  const item=items.find(record=>record.name===target.dataset.promote);
-  if(!item)return;
-  item.status=item.status==='Active'?'Review':item.status==='Review'?'Done':'Active';
-  save();render();
-});
-render();`;
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
-    summary: 'Built a complex application workspace with responsive navigation, metrics, Kanban board, searchable data table, modal creation flow, local storage, and status updates.',
-    nextSteps: ['Add authentication screens', 'Connect to an API', 'Add charts and role permissions', 'Create detail pages'],
-    metadata: { template: 'webapp', sections, estimatedComplexity: 'complex' },
-  };
-}
-
-function buildAgency(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'services', 'work', 'contact'];
-
-  const html = htmlDoc('Creative Agency',
-    `<link rel="stylesheet" href="style.css">`,
-    `${navHTML(p, ['Services', 'Work', 'Contact'])}
-${heroHTML(p, 'We Create What Others Imagine', 'Award-winning digital agency crafting brands and experiences.', 'See Our Work')}
-  <section id="services" class="fade-up">
-    <h2 class="section-title">What We Do</h2>
-    <div class="grid grid-3">
-      <div class="card"><div class="card-icon">&#127912;</div><h3>Brand Identity</h3><p>Logos, guidelines, and visual systems.</p></div>
-      <div class="card"><div class="card-icon">&#128187;</div><h3>Web Development</h3><p>Custom websites built for performance.</p></div>
-      <div class="card"><div class="card-icon">&#128241;</div><h3>Product Design</h3><p>User-centered design for digital products.</p></div>
-    </div>
-  </section>
-  <section id="work" class="fade-up" style="background:${p.bgAlt}">
-    <h2 class="section-title">Selected Work</h2>
-    <div class="grid grid-2">
-      <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:4/3;background:${p.gradient};display:flex;align-items:center;justify-content:center;font-size:3rem;color:#fff">&#9733;</div><div style="padding:1.5rem"><h3>Nexus Brand Redesign</h3><p>Complete rebrand for a Fortune 500 company.</p></div></div>
-      <div class="card" style="padding:0;overflow:hidden"><div style="aspect-ratio:4/3;background:linear-gradient(135deg,#10B981,#3B82F6);display:flex;align-items:center;justify-content:center;font-size:3rem;color:#fff">&#9670;</div><div style="padding:1.5rem"><h3>FinFlow App</h3><p>Mobile banking app serving 2M+ users.</p></div></div>
-    </div>
-  </section>
-  <section id="contact" class="fade-up">
-    <h2 class="section-title">Start a Project</h2>
-    <p class="section-subtitle">Let's build something great together.</p>
-    <form class="contact-form">
-      <input type="text" placeholder="Your Name" required>
-      <input type="email" placeholder="Email" required>
-      <select required><option value="">Project Type</option><option>Brand Identity</option><option>Web Development</option><option>Product Design</option></select>
-      <textarea rows="4" placeholder="Tell us about your project..." required></textarea>
-      <button type="submit">Send Inquiry</button>
-    </form>
-  </section>
-${footerHTML(p)}`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: jsBase() }],
-    summary: 'Built a creative agency site with services, portfolio showcase with gradient cards, and project inquiry form.',
-    nextSteps: ['Add case study pages', 'Add team section', 'Add client logos', 'Add process timeline'],
-    metadata: { template: 'agency', sections, estimatedComplexity: 'medium' },
-  };
-}
-
-function buildEvent(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-  const sections = ['hero', 'schedule', 'speakers', 'register'];
-
-  const html = htmlDoc('Event',
-    `<link rel="stylesheet" href="style.css">`,
-    `${navHTML(p, ['Schedule', 'Speakers', 'Register'])}
-${heroHTML(p, 'Tech Summit 2026', 'The premier conference for developers and designers.', 'Register Now')}
-  <section id="schedule" class="fade-up">
-    <h2 class="section-title">Schedule</h2>
-    <div class="grid grid-2">
-      <div class="card"><h3 style="color:${p.primary}">Day 1 — June 15</h3><div style="margin-top:1rem;display:flex;flex-direction:column;gap:.75rem"><p><strong>9:00 AM</strong> — Registration</p><p><strong>10:00 AM</strong> — Opening Keynote</p><p><strong>11:30 AM</strong> — Workshop: Modern CSS</p><p><strong>2:00 PM</strong> — Panel: Future of Web</p><p><strong>4:00 PM</strong> — Networking</p></div></div>
-      <div class="card"><h3 style="color:${p.primary}">Day 2 — June 16</h3><div style="margin-top:1rem;display:flex;flex-direction:column;gap:.75rem"><p><strong>9:00 AM</strong> — Morning Sessions</p><p><strong>10:30 AM</strong> — Workshop: AI Tools</p><p><strong>1:00 PM</strong> — Lightning Talks</p><p><strong>3:00 PM</strong> — Closing Keynote</p><p><strong>4:30 PM</strong> — After Party</p></div></div>
-    </div>
-  </section>
-  <section id="speakers" class="fade-up" style="background:${p.bgAlt}">
-    <h2 class="section-title">Speakers</h2>
-    <div class="grid grid-4">
-      <div class="card" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:${p.gradient};margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem">AK</div><h3>Alex Kim</h3><p style="font-size:.85rem">VP of Design, Stripe</p></div>
-      <div class="card" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#10B981,#3B82F6);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem">SP</div><h3>Sara Patel</h3><p style="font-size:.85rem">CTO, Vercel</p></div>
-      <div class="card" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#F97316,#EF4444);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem">MC</div><h3>Marcus Chen</h3><p style="font-size:.85rem">Staff Eng, Google</p></div>
-      <div class="card" style="text-align:center"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#EC4899);margin:0 auto 1rem;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem">LW</div><h3>Lisa Wang</h3><p style="font-size:.85rem">Founder, DesignLab</p></div>
-    </div>
-  </section>
-  <section class="fade-up" style="text-align:center;background:${p.gradient};color:#fff;padding:5rem 2rem">
-    <h2 style="font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;margin-bottom:1rem">Secure Your Spot</h2>
-    <p style="opacity:.9;margin-bottom:.5rem">Early bird pricing until May 1st.</p>
-    <p style="font-size:2rem;font-weight:800;margin-bottom:2rem">$199</p>
-    <a href="#" class="btn" style="background:#fff;color:${p.primary}">Register Now</a>
-  </section>
-${footerHTML(p)}`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssFooter(p), cssAnimations()].join('\n');
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: jsBase() }],
-    summary: 'Created an event page with 2-day schedule, speaker cards, and registration CTA.',
-    nextSteps: ['Add ticket tiers', 'Add countdown timer', 'Add venue map', 'Add sponsor logos'],
-    metadata: { template: 'event', sections, estimatedComplexity: 'medium' },
-  };
-}
 
 // ─── Modification Engine ───────────────────────────────────────────
 
@@ -4919,7 +4137,7 @@ footer { border-top: 1px solid ${p.border} !important; }
     const p = pickPalette(analysis);
     const galleryHTML = `\n  <section id="gallery" class="fade-up" style="background:${p.bgAlt}">\n    <h2 class="section-title">Gallery</h2>\n    <p class="section-subtitle">A visual showcase of our work.</p>\n    <div class="gallery-grid">\n      <div class="gallery-item" style="background:${p.gradient}"><div class="overlay"><span>Project Alpha</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#10B981,#3B82F6)"><div class="overlay"><span>Project Beta</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#F97316,#EF4444)"><div class="overlay"><span>Project Gamma</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#8B5CF6,#EC4899)"><div class="overlay"><span>Project Delta</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#06B6D4,#10B981)"><div class="overlay"><span>Project Epsilon</span></div></div>\n      <div class="gallery-item" style="background:linear-gradient(135deg,#F43F5E,#F97316)"><div class="overlay"><span>Project Zeta</span></div></div>\n    </div>\n  </section>\n`;
     html = html.replace('</body>', `${galleryHTML}</body>`);
-    css += `\n${cssGallery(p)}`;
+    css += `\n${cssGallery()}`;
     summary = 'Added a responsive image gallery with hover overlays.';
     nextSteps.push('Add real images', 'Add lightbox', 'Add filtering by category');
   } else if (/animation|animate|motion|scroll/.test(lower)) {
@@ -4953,147 +4171,7 @@ footer { border-top: 1px solid ${p.border} !important; }
   };
 }
 
-function buildRealEstate(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
 
-  const html = htmlDoc('Premium Properties',
-    `<link rel="stylesheet" href="style.css">`,
-    `${navHTML(p, ['Listings', 'Featured', 'Agents', 'Contact'])}
-<section class="hero" style="background:linear-gradient(135deg,${p.primary},${p.secondary});min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6rem 2rem;color:#fff">
-  <h1 style="font-size:3.5rem;font-weight:800;margin-bottom:1rem;max-width:800px">Find Your Dream Home</h1>
-  <p style="font-size:1.25rem;opacity:0.9;margin-bottom:2rem;max-width:600px">Browse premium properties in the most sought-after locations.</p>
-  <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;max-width:600px;width:100%">
-    <select style="flex:1;min-width:150px;padding:0.875rem 1.25rem;border-radius:12px;border:none;font-size:1rem;color:${p.text};background:${p.bg}"><option>All Types</option><option>Houses</option><option>Apartments</option><option>Condos</option><option>Commercial</option></select>
-    <select style="flex:1;min-width:150px;padding:0.875rem 1.25rem;border-radius:12px;border:none;font-size:1rem;color:${p.text};background:${p.bg}"><option>Any Price</option><option>$100k - $300k</option><option>$300k - $600k</option><option>$600k - $1M</option><option>$1M+</option></select>
-    <a href="#" class="btn" style="background:#fff;color:${p.primary};padding:0.875rem 2rem">Search</a>
-  </div>
-</section>
-<section id="listings" class="fade-up">
-  <h2 class="section-title">Featured Listings</h2>
-  <p class="section-subtitle">Hand-picked properties for you.</p>
-  <div class="grid grid-3">
-    <div class="card"><div style="background:${p.secondary};height:160px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;margin-bottom:1rem">&#127968;</div><h3>Modern Family Home</h3><p style="color:${p.primary};font-weight:700;font-size:1.25rem">$450,000</p><p>4 bed • 3 bath • 2,400 sqft</p><p style="color:${p.textMuted};font-size:0.9rem">123 Oak Street, CA</p></div>
-    <div class="card"><div style="background:${p.secondary};height:160px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;margin-bottom:1rem">&#127963;</div><h3>Downtown Loft</h3><p style="color:${p.primary};font-weight:700;font-size:1.25rem">$320,000</p><p>2 bed • 2 bath • 1,200 sqft</p><p style="color:${p.textMuted};font-size:0.9rem">456 Main Street, NY</p></div>
-    <div class="card"><div style="background:${p.secondary};height:160px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;margin-bottom:1rem">&#127969;</div><h3>Luxury Villa</h3><p style="color:${p.primary};font-weight:700;font-size:1.25rem">$1,250,000</p><p>6 bed • 5 bath • 4,800 sqft</p><p style="color:${p.textMuted};font-size:0.9rem">789 Ocean Drive, FL</p></div>
-  </div>
-</section>
-<section id="agents" class="fade-up" style="background:${p.bgAlt}">
-  <h2 class="section-title">Meet Our Agents</h2>
-  <p class="section-subtitle">Expert guidance every step of the way.</p>
-  <div class="grid grid-3">
-    <div class="card" style="text-align:center"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Ccircle cx='40' cy='40' r='40' fill='${encodeURIComponent(p.secondary)}'/%3E%3Ctext x='40' y='48' text-anchor='middle' font-size='28' fill='%23fff'%3E%A%3C/text%3E%3C/svg%3E" alt="Agent" style="width:80px;height:80px;border-radius:50%;margin:0 auto 1rem;display:block"><h3>Alice Johnson</h3><p style="color:${p.textMuted};font-size:0.9rem">Senior Agent • 12+ years</p></div>
-    <div class="card" style="text-align:center"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Ccircle cx='40' cy='40' r='40' fill='${encodeURIComponent(p.secondary)}'/%3E%3Ctext x='40' y='48' text-anchor='middle' font-size='28' fill='%23fff'%3EB%3C/text%3E%3C/svg%3E" alt="Agent" style="width:80px;height:80px;border-radius:50%;margin:0 auto 1rem;display:block"><h3>Bob Smith</h3><p style="color:${p.textMuted};font-size:0.9rem">Listing Specialist • 8+ years</p></div>
-    <div class="card" style="text-align:center"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Ccircle cx='40' cy='40' r='40' fill='${encodeURIComponent(p.secondary)}'/%3E%3Ctext x='40' y='48' text-anchor='middle' font-size='28' fill='%23fff'%3EC%3C/text%3E%3C/svg%3E" alt="Agent" style="width:80px;height:80px;border-radius:50%;margin:0 auto 1rem;display:block"><h3>Carol Davis</h3><p style="color:${p.textMuted};font-size:0.9rem">Buyer Specialist • 10+ years</p></div>
-  </div>
-</section>
-<section id="contact" class="fade-up">
-  <h2 class="section-title">Schedule a Viewing</h2>
-  <p class="section-subtitle">Ready to find your perfect property?</p>
-  <form class="contact-form">
-    <input type="text" placeholder="Your Name" required>
-    <input type="email" placeholder="Your Email" required>
-    <input type="tel" placeholder="Phone Number">
-    <textarea rows="4" placeholder="Message..." required></textarea>
-    <button type="submit">Send Inquiry</button>
-  </form>
-</section>
-${footerHTML(p)}`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\ndocument.querySelector('form')?.addEventListener('submit',e=>{e.preventDefault();joyfulNotify('Thanks! We\\'ll contact you soon.');e.target.reset();});`;
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
-    summary: `Built a real estate site "${name}" with property listings, agent profiles, search filters, and contact form.`,
-    nextSteps: ['Add mortgage calculator', 'Integrate map view', 'Add property detail pages', 'Connect MLS listings'],
-    metadata: { template: 'realestate', sections: ['hero', 'listings', 'agents', 'contact'], estimatedComplexity: 'medium' },
-  };
-}
-
-function buildFitness(analysis: PromptAnalysis): AIGenerationResponse {
-  const p = pickPalette(analysis);
-
-  const html = htmlDoc('FitLife Studio',
-    `<link rel="stylesheet" href="style.css">`,
-    `${navHTML(p, ['Classes', 'Trainers', 'Pricing', 'Contact'])}
-<section class="hero" style="background:linear-gradient(135deg,${p.primary},${p.secondary});min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6rem 2rem;color:#fff">
-  <h1 style="font-size:3.5rem;font-weight:800;margin-bottom:1rem;max-width:800px">Transform Your Body</h1>
-  <p style="font-size:1.25rem;opacity:0.9;margin-bottom:2rem;max-width:600px">Expert trainers, modern equipment, and a supportive community.</p>
-  <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">
-    <a href="#" class="btn" style="background:#fff;color:${p.primary}">Start Free Trial</a>
-    <a href="#" class="btn" style="border:2px solid rgba(255,255,255,0.5);color:#fff">View Classes</a>
-  </div>
-</section>
-<section id="classes" class="fade-up">
-  <h2 class="section-title">Our Classes</h2>
-  <p class="section-subtitle">Something for every fitness level.</p>
-  <div class="grid grid-3">
-    <div class="card"><div style="background:${p.secondary};height:120px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:1rem">&#128170;</div><h3>Strength Training</h3><p>Build muscle and increase power with guided weight training sessions.</p><p style="color:${p.primary};font-weight:600;margin-top:0.5rem">Mon/Wed/Fri • 7am & 6pm</p></div>
-    <div class="card"><div style="background:${p.secondary};height:120px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:1rem">&#129764;</div><h3>Yoga & Flexibility</h3><p>Improve flexibility and find your inner balance with our yoga program.</p><p style="color:${p.primary};font-weight:600;margin-top:0.5rem">Tue/Thu/Sat • 8am & 5pm</p></div>
-    <div class="card"><div style="background:${p.secondary};height:120px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:1rem">&#128084;</div><h3>HIIT</h3><p>High intensity interval training for maximum calorie burn.</p><p style="color:${p.primary};font-weight:600;margin-top:0.5rem">Mon/Wed/Fri • 12pm & 7pm</p></div>
-  </div>
-</section>
-<section id="trainers" class="fade-up" style="background:${p.bgAlt}">
-  <h2 class="section-title">Meet Your Trainers</h2>
-  <p class="section-subtitle">Certified professionals dedicated to your success.</p>
-  <div class="grid grid-3">
-    <div class="card" style="text-align:center"><div style="background:${p.secondary};width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;color:#fff;margin:0 auto 1rem">&#9794;</div><h3>Mike Torres</h3><p style="color:${p.textMuted}">NASM Certified • Strength Coach</p></div>
-    <div class="card" style="text-align:center"><div style="background:${p.secondary};width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;color:#fff;margin:0 auto 1rem">&#9792;</div><h3>Sarah Kim</h3><p style="color:${p.textMuted}">500hr RYT • Yoga Instructor</p></div>
-    <div class="card" style="text-align:center"><div style="background:${p.secondary};width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;color:#fff;margin:0 auto 1rem">&#9794;</div><h3>James Park</h3><p style="color:${p.textMuted}">CrossFit Level 2 • HIIT Specialist</p></div>
-  </div>
-</section>
-<section id="pricing" class="fade-up">
-  <h2 class="section-title">Membership Plans</h2>
-  <p class="section-subtitle">Flexible options that fit your lifestyle.</p>
-  <div class="grid grid-3">
-    <div class="card" style="text-align:center"><h3>Basic</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">$29<span style="font-size:1rem;color:${p.textMuted}">/mo</span></div><p>Gym access during staffed hours</p><a href="#" class="btn" style="margin-top:1rem;border:1px solid ${p.border};color:${p.text}">Join Now</a></div>
-    <div class="card" style="text-align:center;border-color:${p.primary}"><span style="background:${p.primary};color:#fff;padding:4px 16px;border-radius:20px;font-size:.75rem;font-weight:600;position:absolute;top:-12px;left:50%;transform:translateX(-50%)">Popular</span><h3>Premium</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">$59<span style="font-size:1rem;color:${p.textMuted}">/mo</span></div><p>Unlimited classes + gym access</p><a href="#" class="btn" style="margin-top:1rem;background:${p.primary};color:#fff">Start Free Trial</a></div>
-    <div class="card" style="text-align:center"><h3>Elite</h3><div style="font-size:2.5rem;font-weight:800;color:${p.primary};margin:1rem 0">$99<span style="font-size:1rem;color:${p.textMuted}">/mo</span></div><p>Everything + personal training sessions</p><a href="#" class="btn" style="margin-top:1rem;border:1px solid ${p.border};color:${p.text}">Get Started</a></div>
-  </div>
-</section>
-<section id="contact" class="fade-up" style="background:${p.bgAlt}">
-  <h2 class="section-title">Get Started Today</h2>
-  <p class="section-subtitle">First session is on us!</p>
-  <form class="contact-form">
-    <input type="text" placeholder="Your Name" required>
-    <input type="email" placeholder="Your Email" required>
-    <input type="tel" placeholder="Phone">
-    <textarea rows="4" placeholder="Tell us about your fitness goals..." required></textarea>
-    <button type="submit">Claim Free Session</button>
-  </form>
-</section>
-${footerHTML(p)}`
-  );
-
-  const css = [cssReset(), cssNavbar(p), cssHero(p), cssSections(p), cssCard(p), cssForm(p), cssFooter(p), cssAnimations()].join('\n');
-  const js = jsBase() + `\ndocument.querySelector('form')?.addEventListener('submit',e=>{e.preventDefault();joyfulNotify('Welcome! We\\'ll reach out to schedule your free session.');e.target.reset();});`;
-
-  return {
-    files: [{ path: 'index.html', content: html }, { path: 'style.css', content: css }, { path: 'script.js', content: js }],
-    summary: `Built a fitness studio site "${name}" with class schedule, trainer profiles, membership plans, and contact form.`,
-    nextSteps: ['Add class booking system', 'Add client testimonials', 'Add progress tracking', 'Create mobile app'],
-    metadata: { template: 'fitness', sections: ['hero', 'classes', 'trainers', 'pricing', 'contact'], estimatedComplexity: 'medium' },
-  };
-}
-
-// ─── Template Router ───────────────────────────────────────────────
-
-const TEMPLATE_BUILDERS: Record<string, (analysis: PromptAnalysis) => AIGenerationResponse> = {
-  portfolio: buildPortfolio,
-  saas: buildSaaS,
-  restaurant: buildRestaurant,
-  ecommerce: buildEcommerce,
-  photography: buildPhotography,
-  blog: buildBlog,
-  dashboard: buildDashboard,
-  webapp: buildWebApp,
-  agency: buildAgency,
-  event: buildEvent,
-  realestate: buildRealEstate,
-  fitness: buildFitness,
-  startup: buildSaaS,
-};
 
 // ─── Main Generation Function ──────────────────────────────────────
 
@@ -5180,12 +4258,7 @@ export async function generateWithAI(
     }
   }
 
-  if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
-    return finalizeGenerationResponse(buildReactTemplate(analysis, prompt, mediaAssets), existingFiles, generationOptions);
-  }
-
-  const builder = TEMPLATE_BUILDERS[analysis.template] || buildPortfolio;
-  return finalizeGenerationResponse(builder(analysis), existingFiles, generationOptions);
+  return finalizeGenerationResponse(buildReactTemplate(analysis, prompt, mediaAssets), existingFiles, generationOptions);
 }
 
 // ─── Streaming Support ─────────────────────────────────────────────
@@ -5200,11 +4273,9 @@ export async function* generateWithAIStream(
   let response: AIGenerationResponse;
   if (analysis.intent === 'modify') {
     const modified = modifyExistingFiles(prompt, existingFiles, analysis);
-    response = modified || (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
-  } else if (!/\b(static html|plain html|vanilla html|no react)\b/i.test(prompt)) {
-    response = buildReactTemplate(analysis, prompt);
+    response = modified || buildReactTemplate(analysis, prompt);
   } else {
-    response = (TEMPLATE_BUILDERS[analysis.template] || buildPortfolio)(analysis);
+    response = buildReactTemplate(analysis, prompt);
   }
 
   for (const file of response.files) {

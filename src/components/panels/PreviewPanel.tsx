@@ -8,6 +8,8 @@ import { ConsolePanel } from '@/components/sandbox/ConsolePanel';
 import { NetworkPanel } from '@/components/sandbox/NetworkPanel';
 import { PerformanceMetrics } from '@/components/sandbox/PerformanceMetrics';
 import { htmlToBlobUrl, revokeBlobUrl, inlineScriptsToSrc } from '@/utils/blob';
+import { agentEventBus } from '@/lib/agent/eventBus';
+import { useJoyfulStore } from '@/store/joyfulStore';
 
 interface PreviewPanelProps {
   files: ProjectFile[];
@@ -83,6 +85,8 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
     return () => onIframeMount?.(null);
   }, [onIframeMount]);
 
+  const storeConsoleMessages = useJoyfulStore((state) => state.consoleMessages);
+
   const {
     logs,
     network,
@@ -149,11 +153,9 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
 
       const previousCleanupScripts = cleanupScriptsRef.current;
       const previousPreviewUrl = previewUrlRef.current;
+      cleanupScriptsRef.current = null;
 
-      const { html: safeHtml, cleanup: cleanupScripts } = inlineScriptsToSrc(htmlWithBridge);
-      cleanupScriptsRef.current = cleanupScripts;
-
-      const url = htmlToBlobUrl(safeHtml);
+      const url = htmlToBlobUrl(htmlWithBridge);
       previewUrlRef.current = url;
       setPreviewUrl(url);
 
@@ -186,8 +188,17 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
     const timer = setTimeout(() => {
       refreshPreviewRef.current();
     }, 500);
+
+    // Auto-refresh preview when agent compiles successfully
+    const unsubscribe = agentEventBus.subscribe((event) => {
+      if (event.type === 'compile:succeeded' || event.type === 'preview:updated') {
+        refreshPreviewRef.current();
+      }
+    });
+
     return () => {
       clearTimeout(timer);
+      unsubscribe();
       if (delayedCleanupTimerRef.current !== null) {
         window.clearTimeout(delayedCleanupTimerRef.current);
       }
@@ -294,7 +305,7 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
               <span className="text-[10px] font-medium text-muted-foreground">HTTPS</span>
             </div>
             <div className="h-3 w-px bg-border" />
-            <select
+            <select name="preview-routes"
               value={currentPath}
               onChange={(event) => setCurrentPath(event.target.value)}
               className="min-w-0 flex-1 appearance-none bg-transparent font-mono text-xs text-muted-foreground outline-none"
@@ -603,7 +614,7 @@ export function PreviewPanel({ files, projectId, onRequestFix, onUseSelection, o
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
-              {bottomTab === 'console' && <ConsolePanel logs={logs} onClear={clearLogs} />}
+              {bottomTab === 'console' && <ConsolePanel logs={logs} onClear={clearLogs} systemMessages={storeConsoleMessages} />}
               {bottomTab === 'network' && <NetworkPanel requests={network} onClear={clearNetwork} />}
               {bottomTab === 'performance' && <PerformanceMetrics metrics={metrics} onRequestMetrics={requestMetrics} />}
             </div>

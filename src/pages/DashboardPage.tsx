@@ -26,7 +26,6 @@ import {
 import { NewProjectModal } from '@/components/modals/NewProjectModal';
 import { SiteConfirmDialog } from '@/components/ui/site-dialogs';
 import { exportProjectAsZip, generatePreview } from '@/services/fileSystem';
-import { inlineScriptsToSrc } from '@/utils/blob';
 import type { ChatAttachment, ChatMode, Project, ProjectFile } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
@@ -204,6 +203,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
           <div className="mt-7 w-full max-w-3xl rounded-2xl border border-gray-200 bg-white/95 p-2.5 text-left shadow-[0_18px_60px_rgba(15,23,42,0.14)] ring-1 ring-black/5 backdrop-blur dark:border-white/10 dark:bg-[#1d1e22]/95 dark:shadow-[0_18px_60px_rgba(0,0,0,0.34)] dark:ring-white/10">
             <textarea
+              name="build-prompt"
               ref={textareaRef}
               value={prompt}
               rows={3}
@@ -364,6 +364,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
                 <div className="relative sm:ml-auto">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-[#aaa69d]" />
                   <input
+                    name="project-search"
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -548,8 +549,7 @@ function PreviewThumbnail({ files, name }: { files: ProjectFile[]; name: string 
     (async () => {
       const html = await generatePreview(files);
       if (cancelled) return;
-      const { html: safeHtml } = inlineScriptsToSrc(html);
-      const blob = new Blob([safeHtml], { type: 'text/html' });
+      const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       urlRef.current = url;
       if (iframeRef.current) {

@@ -985,6 +985,7 @@ function DocsPageContent() {
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-white/40" />
                 <input
+                  name="docs-search"
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
@@ -1483,6 +1484,7 @@ function DocsPageContent() {
               <div className="border-t border-gray-200 p-4 dark:border-white/8">
                 <div className="rounded-[1.4rem] border border-[#2e8eff]/20 bg-gray-50 p-3 shadow-[0_0_0_1px_rgba(46,142,255,0.08)] transition-all duration-200 focus-within:border-[#2e8eff]/40 dark:bg-[#090b10]">
                   <textarea
+                    name="assistant-input"
                     value={assistantInput}
                     onChange={(event) => setAssistantInput(event.target.value)}
                     onKeyDown={(event) => {

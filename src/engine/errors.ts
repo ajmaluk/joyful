@@ -1,5 +1,3 @@
-import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
-
 export interface SourceLocation {
   file: string;
   line: number;
@@ -43,6 +41,15 @@ function matchSuggestion(errorText: string): string | null {
 
 export class ErrorCollector {
   private seen = new Set<string>();
+  private readFileFn: ((path: string) => Promise<string>) | null = null;
+
+  /**
+   * Set a read function for source context extraction.
+   * This avoids hard coupling to any specific file system implementation.
+   */
+  setFileReader(fn: (path: string) => Promise<string>): void {
+    this.readFileFn = fn;
+  }
 
   async enrichError(
     raw: string,
@@ -129,8 +136,10 @@ export class ErrorCollector {
     line: number,
     column: number,
   ): Promise<SourceLocation | null> {
+    if (!this.readFileFn) return null;
+
     try {
-      const content = await virtualFS.readFile(file);
+      const content = await this.readFileFn(file);
       const lines = content.split('\n');
 
       if (line < 1 || line > lines.length) return null;

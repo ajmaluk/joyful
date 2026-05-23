@@ -66,6 +66,7 @@ export function NetworkPanel({ requests, onClear }: NetworkPanelProps) {
           <label className="relative mr-1 hidden items-center sm:flex">
             <Search className="absolute left-1.5 h-3 w-3 text-gray-400" />
             <input
+              name="network-search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search requests"

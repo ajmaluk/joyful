@@ -79,8 +79,11 @@ Set status to "done" only when the full task is complete. Use "continue" for int
 {
   "action": "rename_file",
   "path": "src/components/OldName.tsx",
-  "oldPath": "src/components/OldName.tsx"
+  "oldPath": "src/components/NewName.tsx"
 }
+- \`path\` is the current file location (source)
+- \`oldPath\` is the new file location (destination) — despite the name, it's the *target* path
+- Fails if source doesn't exist or target already exists
 
 ### create_folder
 {

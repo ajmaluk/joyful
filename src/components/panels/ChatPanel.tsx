@@ -8,6 +8,7 @@ import { TodoAccordion } from '@/components/chat/TodoAccordion';
 import { WorkingProcess, type BuildTodo } from '@/components/chat/WorkingProcess';
 import { TodoList, type TodoItem } from '@/components/chat/TodoList';
 import { TemplateSelector, type Template } from '@/components/chat/TemplateSelector';
+import { uniqueId } from '@/utils/ids';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -87,7 +88,7 @@ export function ChatPanel({
   }, []);
 
   const handleAddTodo = useCallback((text: string) => {
-    setTodos(prev => [...prev, { id: `todo_${Date.now()}_${prev.length}`, text, completed: false }]);
+    setTodos(prev => [...prev, { id: uniqueId('todo'), text, completed: false }]);
   }, []);
 
   const handleRemoveTodo = useCallback((id: string) => {

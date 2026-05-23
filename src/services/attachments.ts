@@ -1,4 +1,5 @@
 import type { ChatAttachment } from '@/types';
+import { uniqueId } from '@/utils/ids';
 
 export const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -24,7 +25,7 @@ export function readImageAttachment(file: File): Promise<ChatAttachment> {
         return;
       }
       resolve({
-        id: `attachment_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        id: uniqueId('attachment'),
         type: 'image',
         name: file.name || 'image',
         mimeType: file.type || 'image/png',

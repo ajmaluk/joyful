@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { executeInSandbox as runSandboxCommand } from '@/services/clientSandbox';
 import type { PreviewIssue, ProjectFile } from '@/types';
+import { uniqueId } from '@/utils/ids';
 
 export interface SandboxLogEntry {
   id: string;
@@ -107,7 +108,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
             const currentFiles = filesRef.current;
             const location = parseIssueLocation(msg.data.message, currentFiles);
             const next = [...prev, {
-              id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              id: uniqueId('log'),
               level: msg.data.level,
               message: msg.data.message,
               timestamp: msg.timestamp,
@@ -211,7 +212,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
       const newLogs: SandboxLogEntry[] = [];
       for (const event of events) {
         const logEntry: SandboxLogEntry = {
-          id: `sandbox_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          id: uniqueId('sandbox'),
           level: event.type === 'stderr' || event.type === 'error' ? 'error' : event.type === 'exit' ? 'info' : 'log',
           message: typeof event.data === 'string' ? event.data : `exit code: ${(event.data as { code: number }).code}`,
           timestamp: event.timestamp,
@@ -224,7 +225,7 @@ export function useSandboxMessages(iframeRef: React.RefObject<HTMLIFrameElement 
       });
     } catch (error) {
       const errorLog: SandboxLogEntry = {
-        id: `sandbox_error_${Date.now()}`,
+        id: uniqueId('sandbox_error'),
         level: 'error',
         message: error instanceof Error ? error.message : String(error),
         timestamp: Date.now(),

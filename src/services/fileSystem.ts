@@ -1,5 +1,6 @@
 import type { FileOperation, FilePatchOperation, ProjectFile, FileType } from '@/types';
 import { transpilePreviewCode } from './previewCompiler';
+import { uniqueId } from '@/utils/ids';
 
 // Detect file type from extension
 export function getFileType(path: string): FileType {
@@ -184,7 +185,7 @@ export function applyFileOperations(
     }
 
     const nextFile: ProjectFile = {
-      id: existingIdx >= 0 ? files[existingIdx].id : `file_${Date.now()}_${applied.length}_${path}`,
+      id: existingIdx >= 0 ? files[existingIdx].id : uniqueId('file'),
       path,
       content: operation.content,
       type: getFileType(path),

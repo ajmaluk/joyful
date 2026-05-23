@@ -2,11 +2,7 @@ import { create } from 'zustand';
 import type { AgentMode, TaskTodo } from '@/engine/types';
 import { agentEventBus, type AgentStatus, type Todo, type FileChange, type ToolActivity, type AgentPlanStep, type CompileError, type FinalSummary } from '@/lib/agent/eventBus';
 import { storageManager } from '@/engine/storage';
-
-let _msgCounter = 0;
-function uniqueId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${++_msgCounter}`;
-}
+import { uniqueId } from '@/utils/ids';
 
 // ── Persistence ──────────────────────────────────────────────
 const SAVED_STATE_KEY = 'joyful_agent_saved_state';

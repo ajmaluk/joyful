@@ -6,6 +6,7 @@ import { ContextManager } from '@/lib/agent/ContextManager';
 import { storageManager } from '@/engine/storage';
 import { SafetyMonitor, StaleReadDetector } from '@/engine/safety';
 import { agentEventBus, type Todo } from '@/lib/agent/eventBus';
+import { uniqueId } from '@/utils/ids';
 
 export interface ToolResult {
   success: boolean;
@@ -83,7 +84,7 @@ export class JoyfulAgent {
   }
 
   async runTask(userRequest: string): Promise<void> {
-    const runId = `run_${Date.now()}`;
+    const runId = uniqueId('run');
     agentEventBus.emit({ type: 'agent:start', runId, userRequest });
     
     this.messages.push({ role: 'user', content: userRequest });

@@ -5,6 +5,7 @@ import { useJoyfulStore, type AgentMessage, type ConsoleMessage } from '@/store/
 import type { TaskTodo } from '@/engine/types';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { agentEventBus } from '@/lib/agent/eventBus';
+import { uniqueId } from '@/utils/ids';
 
 let agentInstance: JoyfulAgent | null = null;
 
@@ -30,7 +31,7 @@ export function useAgent(projectId?: string | null) {
   useEffect(() => {
     unsubConsoleRef.current = browserSandbox.onConsole((capture) => {
       const msg: ConsoleMessage = {
-        id: `console_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: uniqueId('console'),
         level: capture.level,
         message: capture.message + (capture.count ? ` (repeated ${capture.count}x)` : ''),
         timestamp: Date.now(),
@@ -59,7 +60,7 @@ export function useAgent(projectId?: string | null) {
         onToken: (token: string) => {
           if (abortRef.current) return;
           if (!currentMessageId) {
-            currentMessageId = `msg_${Date.now()}_${messageCountRef.current++}`;
+            currentMessageId = uniqueId('msg');
             const msg: AgentMessage = {
               id: currentMessageId,
               role: 'assistant',
@@ -76,7 +77,7 @@ export function useAgent(projectId?: string | null) {
         onToolCall: (name: string, input: unknown) => {
           if (abortRef.current) return;
           const msg: AgentMessage = {
-            id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            id: uniqueId('tool'),
             role: 'tool',
             type: 'tool_call',
             content: `Using tool: ${name}`,
@@ -174,7 +175,7 @@ export function useAgent(projectId?: string | null) {
       agent.setObserver(buildObserver());
 
       const userMsg: AgentMessage = {
-        id: `user_${Date.now()}`,
+        id: uniqueId('user'),
         role: 'user',
         type: 'text',
         content: prompt,

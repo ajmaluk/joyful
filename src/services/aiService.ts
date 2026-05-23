@@ -3,6 +3,7 @@ import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { executeInSandbox, loadVirtualFS } from '@/services/clientSandbox';
 import { describeAttachment } from '@/services/attachments';
 import { inferImageQueries, searchImages } from '@/services/unsplashService';
+import { uniqueId } from '@/utils/ids';
 
 interface AIGenerationOptions {
   skillBrief?: string[];
@@ -3089,7 +3090,7 @@ export default function App() {
   const addTask = () => {
     const text = window.prompt('Task name');
     if (!text || !text.trim()) return;
-    setState((current: any) => ({ ...current, tasks: [{ id: Date.now(), text: text.trim(), owner: 'Maya', done: false }, ...current.tasks] }));
+    setState((current: any) => ({ ...current, tasks: [{ id: uniqueId('task'), text: text.trim(), owner: 'Maya', done: false }, ...current.tasks] }));
   };
 
   return (

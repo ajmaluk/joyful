@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Toast } from '@/types';
+import { uniqueId } from '@/utils/ids';
 
 const MAX_TOASTS = 3;
 
@@ -18,7 +19,7 @@ export function useToast() {
   }, []);
 
   const addToast = useCallback((type: Toast['type'], message: string) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const id = uniqueId('toast');
     const toast: Toast = { id, type, message };
     setToasts(prev => [...prev.slice(-(MAX_TOASTS - 1)), toast]);
     const timeoutId = setTimeout(() => {

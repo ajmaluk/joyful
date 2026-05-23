@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { UserSettings, UserSkill } from '@/types';
 import * as storage from '@/services/storage';
+import { uniqueId } from '@/utils/ids';
 import { defaultBuilderSkills } from '@/services/skills';
 import { joyfulProviderConfig } from '@/services/joyfulProvider';
 import { StorageCard } from '@/components/chat/cards/StorageCard';
@@ -113,7 +114,7 @@ export function SettingsPage() {
       persistUserSkills([
         ...userSkills,
         {
-          id: `skill_${Date.now()}`,
+          id: uniqueId('skill'),
           name,
           description: skillDraft.description.trim(),
           instructions,

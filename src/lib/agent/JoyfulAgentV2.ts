@@ -2,6 +2,7 @@ import { AgentOrchestrator } from './AgentOrchestrator';
 import { agentEventBus } from './eventBus';
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
 import { type ToolResult } from './ToolExecutor';
+import { uniqueId } from '@/utils/ids';
 
 export interface AgentObserver {
   onToken?: (token: string) => void;
@@ -43,7 +44,7 @@ export class JoyfulAgentV2 {
 
     agentEventBus.emit({
       type: 'agent:start',
-      runId: `run_${Date.now()}`,
+      runId: uniqueId('run'),
       userRequest,
     });
 

@@ -16,6 +16,7 @@ import {
   buildMemoryPrompt,
 } from './Prompts';
 import { snapshotManager } from './SnapshotManager';
+import { uniqueId } from '@/utils/ids';
 
 export type OrchestratorPhase =
   | 'planning'
@@ -37,7 +38,7 @@ export interface OrchestratorOptions {
 }
 
 function generateRunId(): string {
-  return `run_${Date.now()}`;
+  return uniqueId('run');
 }
 
 export class AgentOrchestrator {

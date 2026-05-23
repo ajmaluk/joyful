@@ -6,6 +6,7 @@ import * as storage from '@/services/storage';
 import type { BuildTodo } from '@/components/chat/WorkingProcess';
 import { buildFileContextGraph, getSkillManifest, selectSkillsWithConfidence, composeSkills, mergeSkillBriefs, buildQualityGatesForPrompt, type BuilderSkill } from '@/services/skills';
 import { buildAgentPlanFromContext, buildAgentToolTrace, buildProjectMemorySnapshot, sessionMemory, taskDecomposition, MultiStepPipelineExecutor, type PipelinePhase } from '@/services/agentRuntime';
+import { uniqueId } from '@/utils/ids';
 
 const MIN_REQUEST_INTERVAL = 3000;
 const lastRequestTimeRef = { current: 0 };
@@ -13,7 +14,7 @@ const lastRequestTimeRef = { current: 0 };
 function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
   const todos: BuildTodo[] = [];
   let index = 0;
-  const baseId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const baseId = uniqueId('base');
   const failedCommands = new Set(
     (response.metadata?.sandboxResults || [])
       .filter(result => result.status === 'error')
@@ -72,28 +73,28 @@ function buildTodosFromResponse(response: AIGenerationResponse): BuildTodo[] {
 function buildInitialWorkflowTodos(hasExistingFiles: boolean, providerLabel = 'Joyful AI'): BuildTodo[] {
   return [
     {
-      id: `todo_${Date.now()}_analyze`,
+      id: uniqueId('todo_analyze'),
       label: 'Analyzing your request',
       status: 'active',
       detail: 'Selecting skills, files, and recent conversation context',
     },
     {
-      id: `todo_${Date.now()}_plan`,
+      id: uniqueId('todo_plan'),
       label: hasExistingFiles ? 'Planning changes' : 'Planning project structure',
       status: 'pending',
     },
     {
-      id: `todo_${Date.now()}_generate`,
+      id: uniqueId('todo_generate'),
       label: `Generating code with ${providerLabel}`,
       status: 'pending',
     },
     {
-      id: `todo_${Date.now()}_apply`,
+      id: uniqueId('todo_apply'),
       label: 'Applying changes to files',
       status: 'pending',
     },
     {
-      id: `todo_${Date.now()}_validate`,
+      id: uniqueId('todo_validate'),
       label: 'Validating in sandbox',
       status: 'pending',
     },
@@ -258,7 +259,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
     await enforceRequestDelay();
 
     const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: uniqueId('msg'),
       role: 'user',
       content,
       mode,
@@ -307,7 +308,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
           : todo
     ));
     const checkpoint: SavedGenerationState = {
-      id: `generation_${Date.now()}`,
+      id: uniqueId('generation'),
       projectId,
       prompt: content,
       mode,
@@ -342,7 +343,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
           : '';
 
         const assistantMsg: ChatMessage = {
-          id: `msg_${Date.now() + 1}`,
+          id: uniqueId('msg'),
           role: 'assistant',
           mode: 'plan',
           actionType: 'plan',
@@ -647,7 +648,7 @@ export function useChat(projectId: string, options?: { onToast?: (type: 'error' 
         let failedChecks = sandbox.results.filter(result => result.status === 'error');
 
         if (failedChecks.length > 0) {
-          const healTodoId = `heal_${Date.now()}`;
+          const healTodoId = uniqueId('heal');
           setBuildTodos(prev => [
             ...prev.map(todo =>
               todo.label.includes('Generating') ? { ...todo, status: 'done' as const }
@@ -805,7 +806,7 @@ Return the corrected files or patches. Make sure all imports use exact paths or 
       const memory = buildProjectMemorySnapshot(selectedSkills, contextGraph, response);
 
       const assistantMsg: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: uniqueId('msg'),
         role: 'assistant',
         mode: 'build',
         content: walkthrough,
@@ -871,7 +872,7 @@ Return the corrected files or patches. Make sure all imports use exact paths or 
       setSavedGeneration(failedCheckpoint);
       storage.saveGenerationState(projectId, failedCheckpoint);
       const errorMsg: ChatMessage = {
-        id: `msg_${Date.now() + 1}`,
+        id: uniqueId('msg'),
         role: 'system',
         content: `Something went wrong while building. ${detail}`,
         timestamp: new Date().toISOString(),
@@ -881,7 +882,7 @@ Return the corrected files or patches. Make sure all imports use exact paths or 
       storage.saveChatHistory(projectId, finalMessages);
       setBuildTodos(prev => prev.length > 0
         ? prev.map(todo => todo.status === 'active' ? { ...todo, status: 'error' as const, detail } : todo)
-        : [{ id: `todo_${Date.now()}_error`, label: 'Build failed', status: 'error' as const, detail }]
+        : [{ id: uniqueId('todo_error'), label: 'Build failed', status: 'error' as const, detail }]
       );
       return null;
     } finally {
@@ -898,7 +899,7 @@ Return the corrected files or patches. Make sure all imports use exact paths or 
       const next = [...prev];
       const message = next[targetIndex];
       const skippedTrace = report.skippedOperations.map(operation => ({
-        id: `trace_apply_skip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: uniqueId('trace_apply_skip'),
         tool: operation.action === 'delete' ? 'delete_file' as const : operation.action === 'patch' ? 'apply_patch' as const : 'write_file' as const,
         label: `Skipped ${operation.path}`,
         status: 'skipped' as const,
@@ -921,7 +922,7 @@ Return the corrected files or patches. Make sure all imports use exact paths or 
           toolTrace: [
             ...(message.metadata?.toolTrace || []),
             {
-              id: `trace_apply_${Date.now()}`,
+              id: uniqueId('trace_apply'),
               tool: 'write_file',
               label: `Applied ${report.applied} operation${report.applied === 1 ? '' : 's'}`,
               status: report.skipped > 0 ? 'skipped' : 'done',

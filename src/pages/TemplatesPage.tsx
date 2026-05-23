@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { routeMeta } from '@/lib/seo';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { uniqueId } from '@/utils/ids';
 import {
   ArrowRight, Search, Star, Sparkles, Check,
   Layout, Globe, Heart,
@@ -49,7 +50,7 @@ export function TemplatesPage({ onCreateProject, onUpdateProject }: TemplatesPag
       const files: ProjectFile[] = response.files
         .filter((file) => file.action !== 'delete' && file.content !== undefined)
         .map((file, index) => ({
-          id: `file_${Date.now()}_${index}_${file.path}`,
+          id: uniqueId('file'),
           path: file.path,
           content: file.content || '',
           type: getFileType(file.path),

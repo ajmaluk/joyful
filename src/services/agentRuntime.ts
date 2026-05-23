@@ -12,6 +12,7 @@ import {
   type DependencyGraph,
   type DependencyNode,
 } from '@/types/buildSteps';
+import { uniqueId } from '@/utils/ids';
 
 // ─── Utilities ────────────────────────────────────────────────────
 
@@ -20,7 +21,7 @@ function now() {
 }
 
 function uid(): string {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  return uniqueId('uid');
 }
 
 function createTrace(
@@ -1240,7 +1241,7 @@ If no issues found, return empty arrays.`;
     parsed: NonNullable<ReturnType<MultiStepPipelineExecutor['parsePlanResponse']>>,
   ): import('@/types/buildSteps').ProjectPlan {
     this.onPhaseChange?.({ type: 'planning', status: 'active', detail: 'Creating project plan' });
-    const planId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const planId = uniqueId('plan');
     const files = parsed.files.map(f => ({
       path: f.path,
       action: (f.action === 'delete' ? 'delete' : f.action === 'modify' ? 'modify' : 'create') as 'create' | 'modify' | 'delete',

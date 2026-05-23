@@ -4,6 +4,7 @@ import * as storage from '@/services/storage';
 import { storageManager } from '@/engine/storage';
 import { createReactViteStarterFiles } from '@/services/projectScaffold';
 import { virtualFS } from '@/lib/vfs/VirtualFileSystem';
+import { uniqueId } from '@/utils/ids';
 
 function filesToVFS(files: ProjectFile[]): Promise<void> {
   return virtualFS.writeMultipleFiles(
@@ -47,7 +48,7 @@ export function useProjects() {
 
   const createProject = useCallback((name: string, description: string, templateId?: string) => {
     const project: Project = {
-      id: `proj_${Date.now()}`,
+      id: uniqueId('proj'),
       name,
       description,
       files: createReactViteStarterFiles(name),

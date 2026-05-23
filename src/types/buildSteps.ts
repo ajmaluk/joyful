@@ -1,5 +1,7 @@
 // ── Core Build Step ─────────────────────────────────────────────
 
+import { uniqueId } from '@/utils/ids';
+
 export interface BuildStep {
   id: string;
   type: 'analyze' | 'plan' | 'create' | 'modify' | 'delete' | 'patch' | 'command' | 'preview' | 'validate' | 'done';
@@ -11,7 +13,7 @@ export interface BuildStep {
 
 export function createBuildStep(type: BuildStep['type'], label: string, detail?: string): BuildStep {
   return {
-    id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id: uniqueId('step'),
     type,
     label,
     status: 'pending',

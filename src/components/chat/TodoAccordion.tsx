@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2, Circle, Loader2, AlertCircle, Ban,
-  Clock, FileCode2, ChevronDown, ListTodo, Target,
+  Clock, FileCode2, ChevronDown,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { Todo } from '@/lib/agent/eventBus';

@@ -5,6 +5,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ChatPanel } from '@/components/panels/ChatPanel';
 import { ChatContainer } from '@/components/chat/ChatContainer';
 import { FileExplorer } from '@/components/panels/FileExplorer';
+import { uniqueId } from '@/utils/ids';
 import { CodeEditor } from '@/components/panels/CodeEditor';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import {
@@ -366,7 +367,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       return;
     }
     const newFile: ProjectFile = {
-      id: `file_${Date.now()}`,
+      id: uniqueId('file'),
       path: nextPath,
       content: '',
       type: getFileType(nextPath),
@@ -488,7 +489,7 @@ export function BuilderPage({ projects, onUpdateProject }: BuilderPageProps) {
       const newFiles: ProjectFile[] = response.files
         .filter((file) => file.action !== 'delete' && file.content !== undefined)
         .map((file, index) => ({
-          id: `file_${Date.now()}_${index}_${file.path}`,
+          id: uniqueId('file'),
           path: file.path,
           content: file.content || '',
           type: getFileType(file.path),

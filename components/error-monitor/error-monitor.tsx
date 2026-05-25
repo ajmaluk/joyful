@@ -10,6 +10,7 @@ import {
   useRef,
   useSyncExternalStore,
   useTransition,
+  type ReactNode,
 } from 'react'
 import { getSummary } from './get-summary'
 import { useCommandErrorsLogs } from '@/app/state'
@@ -18,7 +19,7 @@ import { useSettings } from '@/components/settings/use-settings'
 import { useSharedChatContext } from '@/lib/chat-context'
 
 interface Props {
-  children: React.ReactNode
+  children: ReactNode
   debounceTimeMs?: number
 }
 
@@ -29,16 +30,21 @@ export function ErrorMonitor({ children, debounceTimeMs = 10000 }: Props) {
   const { fixErrors } = useSettings()
   const { chat } = useSharedChatContext()
   const lastMessagesRef = useRef<ChatUIMessage[] | undefined>(undefined)
+  const lastMessagesKeyRef = useRef<string | undefined>(undefined)
   const getMessagesSnapshot = useCallback(() => {
     const current = chat.messages
-    if (!Object.is(lastMessagesRef.current, current)) {
-      lastMessagesRef.current = current
+    const last = current[current.length - 1]
+    const key = `${current.length}:${last ? (last.id ?? JSON.stringify(last)) : ''}`
+    if (lastMessagesKeyRef.current === key && lastMessagesRef.current) {
+      return lastMessagesRef.current as ChatUIMessage[]
     }
-    return (lastMessagesRef.current ?? current) as ChatUIMessage[]
+    lastMessagesKeyRef.current = key
+    lastMessagesRef.current = current
+    return lastMessagesRef.current as ChatUIMessage[]
   }, [chat])
 
   const messages = useSyncExternalStore<ChatUIMessage[]>(
-    (onChange) => chat['~registerMessagesCallback'](onChange),
+    (onChange: () => void) => chat['~registerMessagesCallback'](onChange),
     getMessagesSnapshot,
     () => lastMessagesRef.current ?? [],
   )
@@ -46,21 +52,25 @@ export function ErrorMonitor({ children, debounceTimeMs = 10000 }: Props) {
   const lastStatusRef = useRef<'ready' | 'submitted' | 'streaming' | 'error' | undefined>(
     undefined,
   )
+  const lastStatusKeyRef = useRef<string | undefined>(undefined)
   const getStatusSnapshot = useCallback(() => {
     const current = chat.status
-    if (!Object.is(lastStatusRef.current, current)) {
-      lastStatusRef.current = current
+    const key = String(current)
+    if (lastStatusKeyRef.current === key && lastStatusRef.current) {
+      return lastStatusRef.current as 'ready' | 'submitted' | 'streaming' | 'error'
     }
-    return (lastStatusRef.current ?? current) as 'ready' | 'submitted' | 'streaming' | 'error'
+    lastStatusKeyRef.current = key
+    lastStatusRef.current = current
+    return lastStatusRef.current as 'ready' | 'submitted' | 'streaming' | 'error'
   }, [chat])
 
   const chatStatus = useSyncExternalStore<'ready' | 'submitted' | 'streaming' | 'error'>(
-    (onChange) => chat['~registerStatusCallback'](onChange),
+    (onChange: () => void) => chat['~registerStatusCallback'](onChange),
     getStatusSnapshot,
     () => lastStatusRef.current ?? 'ready',
   )
 
-  const submitTimeout = useRef<NodeJS.Timeout | null>(null)
+  const submitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inspectedErrors = useRef<number>(0)
   const lastReportedErrors = useRef<string[]>([])
   const errorReportCount = useRef<Map<string, number>>(new Map())

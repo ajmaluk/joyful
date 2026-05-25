@@ -420,13 +420,25 @@ export default function BuilderHubPage() {
                       className="relative block aspect-[16/9] w-full overflow-hidden bg-[#f5f2ea] text-left"
                     >
                       {project.files.length > 0 ? (
-                        <iframe
-                          srcDoc={project.files.map(f => f.content).join('\n')}
-                          className="h-full w-full bg-white"
-                          sandbox="allow-scripts allow-same-origin"
-                          style={{ pointerEvents: 'none' }}
-                          title={project.name}
-                        />
+                        (() => {
+                          const htmlFile = project.files.find(f => /index\.html?$|\.html?$/.test(f.path || ''))
+                          const escapeHtml = (s: string) =>
+                            s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+                          const srcDoc = htmlFile
+                            ? htmlFile.content
+                            : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(project.name)}</title><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:linear-gradient(180deg,#ffffff,#f3f4f6);color:#111}pre{max-width:90%;max-height:80%;overflow:auto;background:#fff;border:1px solid #e5e7eb;padding:16px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,0.08)}</style></head><body><pre>${escapeHtml(project.files.map((f) => `// ${f.path}\n${f.content}`).join('\n\n'))}</pre></body></html>`
+
+                          return (
+                            <iframe
+                              srcDoc={srcDoc}
+                              className="h-full w-full bg-white"
+                              sandbox="allow-scripts allow-same-origin"
+                              style={{ pointerEvents: 'none' }}
+                              title={project.name}
+                            />
+                          )
+                        })()
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1a1a18] dark:to-[#2a2a28]">
                           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#6387ff]/20 text-[#6387ff]">

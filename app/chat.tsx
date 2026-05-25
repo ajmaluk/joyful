@@ -2,7 +2,7 @@
 
 import type { ChatUIMessage } from '@/components/chat/types'
 import { TEST_PROMPTS } from '@/ai/constants'
-import { MessageCircleIcon, SendIcon, Loader2, AlertCircle, PlayIcon, RefreshCw } from 'lucide-react'
+import { MessageCircleIcon, SendIcon, Loader2, AlertCircle, PlayIcon, RefreshCw, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Conversation,
@@ -10,6 +10,7 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
 import { Input } from '@/components/ui/input'
+import { ThinkingBubble } from '@/components/chat/thinking-bubble'
 import { Message } from '@/components/chat/message'
 import { ModelSelector } from '@/components/settings/model-selector'
 import { Panel, PanelHeader } from '@/components/panels/panels'
@@ -34,7 +35,11 @@ const statusLabels: Record<string, string> = {
   error: 'Connection error',
 }
 
+/** Minimum time (ms) between user message submissions to prevent rapid-fire duplicates */
+const SUBMIT_COOLDOWN_MS = 2000
+
 export function Chat({ className }: Props) {
+  const [mounted, setMounted] = useState(false)
   const [input, setInput] = useLocalStorageValue('prompt-input')
   const { chat } = useSharedChatContext()
   const { modelId, reasoningEffort } = useSettings()
@@ -45,6 +50,9 @@ export function Chat({ className }: Props) {
   const projectId = params?.projectId as string | undefined
   const [hydrated, setHydrated] = useState(false)
   const submittingRef = useRef(false)
+  const lastSubmitTime = useRef(0)
+  const [cooldownRemaining, setCooldownRemaining] = useState(0)
+  const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const statusText = statusLabels[status] || ''
 
@@ -56,6 +64,32 @@ export function Chat({ className }: Props) {
     }
     setChatStatus(status)
   }, [status, setChatStatus])
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <Panel className={className}>
+        <PanelHeader>
+          <div className="flex items-center font-mono font-semibold uppercase">
+            <MessageCircleIcon className="mr-2 w-4" />
+            Chat
+          </div>
+        </PanelHeader>
+        <div className="flex-1 min-h-0">
+          <div className="flex flex-col justify-center items-center h-full font-mono text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          </div>
+        </div>
+      </Panel>
+    )
+  }
+
 
   useEffect(() => {
     if (projectId && messages.length > 0) {
@@ -71,14 +105,56 @@ export function Chat({ className }: Props) {
     }
   }, [hydrated, searchParams, status, messages.length, projectId])
 
+  // Clean up cooldown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current)
+      }
+    }
+  }, [])
+
+  const startCooldown = useCallback(() => {
+    if (cooldownTimerRef.current) {
+      clearInterval(cooldownTimerRef.current)
+    }
+    setCooldownRemaining(SUBMIT_COOLDOWN_MS)
+    cooldownTimerRef.current = setInterval(() => {
+      setCooldownRemaining((prev) => {
+        if (prev <= 100) {
+          if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current)
+            cooldownTimerRef.current = null
+          }
+          return 0
+        }
+        return prev - 100
+      })
+    }, 100)
+  }, [])
+
   const validateAndSubmitMessage = useCallback(
     (text: string) => {
-      if (!text.trim() || submittingRef.current) return
+      const trimmed = text.trim()
+      if (!trimmed) return
+
+      // Prevent rapid-fire submissions
+      if (submittingRef.current) return
+
+      const now = Date.now()
+      const elapsed = now - lastSubmitTime.current
+      if (elapsed < SUBMIT_COOLDOWN_MS) {
+        // Still in cooldown — don't submit
+        return
+      }
+
       submittingRef.current = true
-      sendMessage({ text }, { body: { modelId, reasoningEffort } })
+      lastSubmitTime.current = now
+      sendMessage({ text: trimmed }, { body: { modelId, reasoningEffort } })
       setInput('')
+      startCooldown()
     },
-    [sendMessage, modelId, setInput, reasoningEffort]
+    [sendMessage, modelId, setInput, reasoningEffort, startCooldown]
   )
 
   useEffect(() => {
@@ -103,6 +179,18 @@ export function Chat({ className }: Props) {
   }, [searchParams, status, messages.length, projectId, validateAndSubmitMessage])
 
   const isBusy = status === 'streaming' || status === 'submitted'
+  const isOnCooldown = cooldownRemaining > 0
+
+  // Detect rate-limit errors for a special UI treatment
+  const isRateLimitError =
+    error &&
+    (String(error).includes('429') ||
+      String(error).includes('Rate limit') ||
+      String(error).includes('rate limit') ||
+      String(error).includes('Too Many Requests') ||
+      String(error).includes('TPM'))
+
+  const showThinking = (isBusy || !!isRateLimitError) && messages.length > 0 && messages[messages.length - 1].role === 'user'
 
   return (
     <Panel className={className}>
@@ -140,7 +228,10 @@ export function Chat({ className }: Props) {
                   {TEST_PROMPTS.map((prompt, idx) => (
                     <li
                       key={idx}
-                      className="px-4 py-2 rounded-sm border border-dashed shadow-sm cursor-pointer border-border hover:bg-secondary/50 hover:text-primary"
+                      className={cn(
+                        "px-4 py-2 rounded-sm border border-dashed shadow-sm shadow-black cursor-pointer border-border hover:bg-secondary/50 hover:text-primary transition-opacity",
+                        (isBusy || isOnCooldown) && "opacity-50 pointer-events-none"
+                      )}
                       onClick={() => validateAndSubmitMessage(prompt)}
                     >
                       {prompt}
@@ -159,13 +250,32 @@ export function Chat({ className }: Props) {
               .map((message) => (
                 <Message key={message.id} message={message} />
               ))}
+            {showThinking && <ThinkingBubble isRateLimited={!!isRateLimitError} />}
           </ConversationContent>
           <ConversationScrollButton />
         </Conversation>
       )}
 
-      {error && (
-        <div className="flex flex-col items-center justify-center p-3 mb-2 mx-3 rounded-lg border border-destructive/50 bg-destructive/10 text-destructive text-sm font-mono">
+
+      {/* Rate Limit Error — special treatment with countdown */}
+      {isRateLimitError && (
+        <div className="flex flex-col items-center justify-center p-3 mb-2 mx-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-200 text-sm font-mono animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 animate-pulse" />
+            <span>Rate limit reached. The AI will automatically retry — please wait a moment.</span>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => regenerate()}>
+              <RefreshCw className="w-3 h-3 mr-2" />
+              Retry Now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Generic Error — non-rate-limit errors */}
+      {error && !isRateLimitError && (
+        <div className="flex flex-col items-center justify-center p-3 mb-2 mx-3 rounded-lg border border-destructive/50 bg-destructive/10 text-destructive text-sm font-mono animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 mb-2">
             <AlertCircle className="w-4 h-4" />
             <span>Connection lost or error occurred.</span>
@@ -196,19 +306,27 @@ export function Chat({ className }: Props) {
           className="w-full font-mono text-sm rounded-lg border border-border/50 bg-background shadow-inner focus-visible:ring-1 focus-visible:ring-primary/50"
           disabled={isBusy}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={isBusy ? 'Waiting for AI response...' : 'Type your message...'}
+          placeholder={
+            isBusy
+              ? 'Waiting for AI response...'
+              : isOnCooldown
+                ? `Cooldown... ${Math.ceil(cooldownRemaining / 1000)}s`
+                : 'Type your message...'
+          }
           value={input}
         />
         <Button
           className={cn(
             'rounded-lg shadow-sm transition-all',
-            isBusy && 'opacity-70 cursor-not-allowed'
+            (isBusy || isOnCooldown) && 'opacity-70 cursor-not-allowed'
           )}
           type="submit"
-          disabled={status !== 'ready' || !input.trim()}
+          disabled={status !== 'ready' || !input.trim() || isOnCooldown}
         >
           {isBusy ? (
             <Loader2 className="w-4 h-4 animate-spin" />
+          ) : isOnCooldown ? (
+            <Clock className="w-4 h-4 animate-pulse" />
           ) : (
             <SendIcon className="w-4 h-4" />
           )}

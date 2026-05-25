@@ -55,9 +55,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const message = (error && (error as any).message) || String(error)
         const statusCode = (error && (error as any).statusCode) as number | undefined
 
-        if (statusCode === 429 || message?.includes?.('Too Many Requests')) {
-          toast.error('AI rate limit reached. Please try again in a moment.')
+        if (statusCode === 429 || message?.includes?.('Too Many Requests') || message?.includes?.('Rate limit') || message?.includes?.('rate limit') || message?.includes?.('TPM')) {
+          // Try to extract retry-after time from the error message
+          const retryMatch = message.match(/(?:try again in|retry.?after[:\s]*)([\d.]+)\s*s/i)
+          const waitTime = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 30
+          toast.error(`Rate limit reached. Please wait ~${waitTime}s before trying again.`, {
+            duration: Math.min(waitTime * 1000, 15000),
+          })
           console.debug('AI rate limit error:', error)
+        } else if (message?.includes?.('Failed after') && message?.includes?.('attempts')) {
+          toast.error('AI is temporarily busy. Please wait a moment and try again.')
+          console.warn('Retry exhaustion error:', error)
         } else if (message?.includes?.('401') || message?.includes?.('Unauthorized')) {
           toast.error('Authentication failed. Check your API key.')
           console.error('Auth error:', error)

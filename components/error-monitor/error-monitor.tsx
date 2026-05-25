@@ -29,45 +29,56 @@ export function ErrorMonitor({ children, debounceTimeMs = 10000 }: Props) {
   const { errors } = useCommandErrorsLogs()
   const { fixErrors } = useSettings()
   const { chat } = useSharedChatContext()
-  const lastMessagesRef = useRef<ChatUIMessage[] | undefined>(undefined)
+  const lastMessagesRef = useRef<ChatUIMessage[]>([])
   const lastMessagesKeyRef = useRef<string | undefined>(undefined)
   const getMessagesSnapshot = useCallback(() => {
     const current = chat.messages
     const last = current[current.length - 1]
     const key = `${current.length}:${last ? (last.id ?? JSON.stringify(last)) : ''}`
     if (lastMessagesKeyRef.current === key && lastMessagesRef.current) {
-      return lastMessagesRef.current as ChatUIMessage[]
+      return lastMessagesRef.current
     }
     lastMessagesKeyRef.current = key
     lastMessagesRef.current = current
-    return lastMessagesRef.current as ChatUIMessage[]
+    return lastMessagesRef.current
   }, [chat])
+
+  // getServerSnapshot must return a referentially stable value to avoid
+  // the "getServerSnapshot should be cached" infinite-loop error.
+  const getMessagesServerSnapshot = useCallback(
+    () => lastMessagesRef.current,
+    [],
+  )
 
   const messages = useSyncExternalStore<ChatUIMessage[]>(
     (onChange: () => void) => chat['~registerMessagesCallback'](onChange),
     getMessagesSnapshot,
-    () => lastMessagesRef.current ?? [],
+    getMessagesServerSnapshot,
   )
 
-  const lastStatusRef = useRef<'ready' | 'submitted' | 'streaming' | 'error' | undefined>(
-    undefined,
-  )
+  type ChatStatusType = 'ready' | 'submitted' | 'streaming' | 'error'
+  const lastStatusRef = useRef<ChatStatusType>('ready')
   const lastStatusKeyRef = useRef<string | undefined>(undefined)
-  const getStatusSnapshot = useCallback(() => {
+  const getStatusSnapshot = useCallback((): ChatStatusType => {
     const current = chat.status
     const key = String(current)
-    if (lastStatusKeyRef.current === key && lastStatusRef.current) {
-      return lastStatusRef.current as 'ready' | 'submitted' | 'streaming' | 'error'
+    if (lastStatusKeyRef.current === key) {
+      return lastStatusRef.current
     }
     lastStatusKeyRef.current = key
     lastStatusRef.current = current
-    return lastStatusRef.current as 'ready' | 'submitted' | 'streaming' | 'error'
+    return lastStatusRef.current
   }, [chat])
 
-  const chatStatus = useSyncExternalStore<'ready' | 'submitted' | 'streaming' | 'error'>(
+  const getStatusServerSnapshot = useCallback(
+    (): ChatStatusType => lastStatusRef.current,
+    [],
+  )
+
+  const chatStatus = useSyncExternalStore<ChatStatusType>(
     (onChange: () => void) => chat['~registerStatusCallback'](onChange),
     getStatusSnapshot,
-    () => lastStatusRef.current ?? 'ready',
+    getStatusServerSnapshot,
   )
 
   const submitTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -90,50 +101,50 @@ export function ErrorMonitor({ children, debounceTimeMs = 10000 }: Props) {
       ? 'pending'
       : 'ready'
 
-  const getErrorKey = (error: Line) => {
-    return `${error.command}-${error.args.join(' ')}-${error.data.slice(
-      0,
-      100
-    )}`
-  }
+  const getErrorKey = useCallback((error: Line) => {
+    return `${error.command}-${error.args.join(' ')}-${error.data.slice(0, 100)}`
+  }, [])
 
-  const handleErrors = (errors: Line[], prev: Line[]) => {
-    const now = Date.now()
-    const timeSinceLastReport = now - lastErrorReportTime.current
+  const handleErrors = useCallback(
+    (errorsToHandle: Line[], prev: Line[]) => {
+      const now = Date.now()
+      const timeSinceLastReport = now - lastErrorReportTime.current
 
-    if (timeSinceLastReport < 60000) {
-      return
-    }
-
-    const errorKeys = errors.map(getErrorKey)
-    const uniqueErrorKeys = [...new Set(errorKeys)]
-
-    const newErrors = uniqueErrorKeys.filter((key) => {
-      const count = errorReportCount.current.get(key) || 0
-      return count < 1
-    })
-
-    if (newErrors.length === 0) {
-      return
-    }
-
-    startTransition(async () => {
-      const summary = await getSummary(errors, prev)
-      if (summary.shouldBeFixed) {
-        newErrors.forEach((key) => {
-          errorReportCount.current.set(key, 1)
-        })
-
-        lastReportedErrors.current = newErrors
-        lastErrorReportTime.current = Date.now()
-
-        chat.sendMessage({
-          role: 'user' as const,
-          parts: [{ type: 'data-report-errors', data: summary }],
-        })
+      if (timeSinceLastReport < 60000) {
+        return
       }
-    })
-  }
+
+      const errorKeys = errorsToHandle.map(getErrorKey)
+      const uniqueErrorKeys = [...new Set(errorKeys)]
+
+      const newErrors = uniqueErrorKeys.filter((key) => {
+        const count = errorReportCount.current.get(key) || 0
+        return count < 1
+      })
+
+      if (newErrors.length === 0) {
+        return
+      }
+
+      startTransition(async () => {
+        const summary = await getSummary(errorsToHandle, prev)
+        if (summary.shouldBeFixed) {
+          newErrors.forEach((key) => {
+            errorReportCount.current.set(key, 1)
+          })
+
+          lastReportedErrors.current = newErrors
+          lastErrorReportTime.current = Date.now()
+
+          chat.sendMessage({
+            role: 'user' as const,
+            parts: [{ type: 'data-report-errors', data: summary }],
+          })
+        }
+      })
+    },
+    [chat, getErrorKey, startTransition],
+  )
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -146,20 +157,19 @@ export function ErrorMonitor({ children, debounceTimeMs = 10000 }: Props) {
   useEffect(() => {
     if (status === 'ready' && inspectedErrors.current < errors.length) {
       const prev = errors.slice(0, cursor)
-      const pending = errors.slice(cursor)
+      const pendingErrors = errors.slice(cursor)
       inspectedErrors.current = errors.length
       setScheduled(true)
       clearSubmitTimeout()
       submitTimeout.current = setTimeout(() => {
         setScheduled(false)
         setCursor(errors.length)
-        handleErrors(pending, prev)
+        handleErrors(pendingErrors, prev)
       }, debounceTimeMs)
     } else if (status === 'disabled') {
       clearSubmitTimeout()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- This is fine
-  }, [clearSubmitTimeout, cursor, errors, status])
+  }, [clearSubmitTimeout, cursor, debounceTimeMs, errors, handleErrors, setCursor, setScheduled, status])
 
   return <Context.Provider value={{ status }}>{children}</Context.Provider>
 }

@@ -19,6 +19,101 @@ interface BodyData {
   reasoningEffort?: 'low' | 'medium'
 }
 
+/** Parse a "retry after X seconds" hint from an error message/object. */
+function getRetryAfterMs(error: unknown): number {
+  const msg = error instanceof Error ? error.message : String(error)
+  // Match patterns like "Please try again in 18.705s" or "retry-after: 20"
+  const match = msg.match(/(?:try again in|retry.?after[:\s]*)([\d.]+)\s*s/i)
+  if (match) {
+    return Math.ceil(parseFloat(match[1]) * 1000)
+  }
+  return 0
+}
+
+/** Check if an error is a rate-limit (429) error */
+function isRateLimitError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error)
+  return (
+    msg.includes('429') ||
+    msg.includes('Too Many Requests') ||
+    msg.includes('Rate limit') ||
+    msg.includes('rate limit') ||
+    msg.includes('TPM') ||
+    msg.includes('tokens per minute')
+  )
+}
+
+/** Sleep for a given number of milliseconds */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Attempt to stream a model response with automatic retry on rate-limit errors.
+ * Uses exponential backoff: 3s → 8s → 20s (with jitter).
+ */
+async function streamWithRetry(opts: {
+  modelId: string
+  reasoningEffort?: 'low' | 'medium'
+  systemPrompt: string
+  formattedMessages: Awaited<ReturnType<typeof convertToModelMessages>>
+  writer: Parameters<Parameters<typeof createUIMessageStream>[0]['execute']>[0]['writer']
+  maxRetries?: number
+}): Promise<void> {
+  const { modelId, reasoningEffort, systemPrompt, formattedMessages, writer, maxRetries = 3 } = opts
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = streamText({
+        ...getModelOptions(modelId, { reasoningEffort }),
+        system: systemPrompt,
+        messages: formattedMessages,
+        stopWhen: stepCountIs(10),
+        tools: tools({ modelId, writer }),
+        onError: (error) => {
+          console.error(`Model ${modelId} attempt ${attempt + 1} error:`, error)
+        },
+      })
+
+      const uiStream = result.toUIMessageStream({
+        sendReasoning: true,
+        sendStart: false,
+        messageMetadata: () => ({
+          model: MODEL_NAMES[modelId] ?? modelId,
+        }),
+      })
+
+      const [stream1, stream2] = uiStream.tee()
+      const reader = stream1.getReader()
+      await reader.read()
+      reader.releaseLock()
+
+      await writer.merge(stream2 as any)
+      return // Success — exit retry loop
+    } catch (error) {
+      const isLast = attempt === maxRetries - 1
+
+      if (isRateLimitError(error) && !isLast) {
+        // Calculate backoff: use server-suggested retry-after, or exponential backoff
+        const retryAfter = getRetryAfterMs(error)
+        const exponentialBackoff = Math.min(3000 * Math.pow(2.5, attempt), 30000)
+        const jitter = Math.random() * 1000
+        const waitMs = Math.max(retryAfter, exponentialBackoff) + jitter
+
+        console.warn(
+          `Rate limit hit for ${modelId} (attempt ${attempt + 1}/${maxRetries}). ` +
+          `Waiting ${Math.round(waitMs)}ms before retry...`
+        )
+        await sleep(waitMs)
+        continue
+      }
+
+      // Non-rate-limit error or last attempt — rethrow
+      throw error
+    }
+  }
+}
+
 export async function POST(req: Request) {
   const { messages, modelId = DEFAULT_MODEL, reasoningEffort } = await req.json() as BodyData
 
@@ -75,75 +170,65 @@ export async function POST(req: Request) {
           })
         )
 
-        // Add small delay when using Groq to prevent rate-limit issues with fast responses
+        // Add delay when using Groq to respect TPM limits on free tier (12K TPM).
+        // Groq is extremely fast, so without throttling it burns through the token
+        // budget in seconds and triggers 429s on follow-up tool calls.
         if (modelId === Models.GroqLlama) {
-          await new Promise((r) => setTimeout(r, 500))
+          await sleep(2000)
         }
 
         try {
-          // Attempt selected model (NVIDIA or selected fallback)
-          const result = streamText({
-            ...getModelOptions(modelId, { reasoningEffort }),
-            system: prompt,
-            messages: formattedMessages,
-            stopWhen: stepCountIs(10),
-            tools: tools({ modelId, writer }),
-            onError: (error) => {
-              console.error('Primary model API call failed, will trigger catch block:', error)
-            },
+          await streamWithRetry({
+            modelId,
+            reasoningEffort,
+            systemPrompt: prompt,
+            formattedMessages,
+            writer,
           })
-
-          const uiStream = result.toUIMessageStream({
-            sendReasoning: true,
-            sendStart: false,
-            messageMetadata: () => ({
-              model: MODEL_NAMES[modelId] ?? modelId,
-            }),
-          })
-          
-          const [stream1, stream2] = uiStream.tee()
-          const reader = stream1.getReader()
-          await reader.read()
-          reader.releaseLock()
-
-          await writer.merge(stream2 as any)
         } catch (error) {
-          console.warn('Selected model failed or rate-limited. Falling back to Groq Llama 3.3...', error)
-          
-          try {
-            const fallbackModel = Models.GroqLlama
-            const fallbackResult = streamText({
-              ...getModelOptions(fallbackModel, { reasoningEffort }),
-              system: prompt,
-              messages: formattedMessages,
-              stopWhen: stepCountIs(10),
-              tools: tools({ modelId: fallbackModel, writer }),
-              onError: (err) => {
-                console.error('Fallback model failed too:', err)
-              },
-            })
+          console.warn(`Selected model ${modelId} failed. Attempting cascade fallbacks...`, error)
 
-            const fallbackUiStream = fallbackResult.toUIMessageStream({
-              sendReasoning: true,
-              sendStart: false,
-              messageMetadata: () => ({
-                model: MODEL_NAMES[fallbackModel] ?? fallbackModel,
-              }),
-            })
-            
-            const [fallbackStream1, fallbackStream2] = fallbackUiStream.tee()
-            const fallbackReader = fallbackStream1.getReader()
-            await fallbackReader.read()
-            fallbackReader.releaseLock()
+          // Determine the order of fallbacks
+          const fallbackOrder: string[] = []
+          if (modelId === Models.FreeModelGPT) {
+            fallbackOrder.push(Models.NvidiaMistral, Models.GroqLlama)
+          } else if (modelId === Models.GroqLlama) {
+            fallbackOrder.push(Models.FreeModelGPT, Models.NvidiaMistral)
+          } else {
+            // Selected was Nvidia Mistral or Qwen
+            fallbackOrder.push(Models.FreeModelGPT, Models.GroqLlama)
+          }
 
-            await writer.merge(fallbackStream2 as any)
-          } catch (fallbackError) {
-            console.error('All models failed:', fallbackError)
+          let succeeded = false
+          for (const fallbackModel of fallbackOrder) {
+            try {
+              console.info(`Attempting fallback to ${fallbackModel}...`)
+              // Add a short delay before trying the fallback to let rate limits settle
+              await sleep(1500)
+
+              await streamWithRetry({
+                modelId: fallbackModel,
+                reasoningEffort,
+                systemPrompt: prompt,
+                formattedMessages,
+                writer,
+                maxRetries: 2,
+              })
+              succeeded = true
+              break
+            } catch (fallbackError) {
+              console.error(`Fallback to ${fallbackModel} failed:`, fallbackError)
+            }
+          }
+
+          if (!succeeded) {
+            console.error('All fallback models failed.')
             writer.write({
               id: 'error-' + Date.now(),
               type: 'data-report-errors',
               data: {
-                summary: 'All API routes (NVIDIA and Groq) failed to respond. Please check your credentials and rate limits.',
+                summary:
+                  'All AI models are currently rate-limited or unavailable. Please wait 30-60 seconds and try again, or switch to a different model.',
               },
             })
           }

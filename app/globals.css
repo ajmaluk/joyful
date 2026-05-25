@@ -213,3 +213,36 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+@keyframes wave-bounce {
+  0%, 100% {
+    transform: translateY(0);
+    background-color: var(--primary);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-6px);
+    background-color: var(--ring);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px var(--ring));
+  }
+}
+
+.thinking-wave-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: wave-bounce 1.4s infinite ease-in-out;
+}
+
+.thinking-wave-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+.thinking-wave-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.thinking-wave-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+

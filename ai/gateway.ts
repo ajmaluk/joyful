@@ -20,6 +20,15 @@ const groq = createOpenAI({
   baseURL: groqBaseUrl,
 })
 
+const freeModelBaseUrl = process.env.FREEMODEL_INVOKE_URL
+  ? process.env.FREEMODEL_INVOKE_URL.replace(/\/chat\/completions$/, '')
+  : 'https://api.freemodel.dev/v1'
+
+const freeModel = createOpenAI({
+  apiKey: process.env.FREEMODEL_API_KEY,
+  baseURL: freeModelBaseUrl,
+})
+
 export interface ModelOptions {
   model: LanguageModelV3
   topP?: number
@@ -35,12 +44,24 @@ export function getModelOptions(
   const frequencyPenalty = 0
   const presencePenalty = 0
 
+  if (modelId === Models.FreeModelGPT) {
+    return {
+      model: freeModel.chat(process.env.FREEMODEL_MODEL || 'gpt-5.5'),
+      topP,
+      temperature,
+      maxTokens: 1000,
+      frequencyPenalty,
+      presencePenalty,
+    }
+  }
+
   if (modelId === Models.GroqLlama) {
     return {
       model: groq.chat(process.env.GROQ_API_MODEL || 'llama-3.3-70b-versatile'),
       topP,
       temperature,
-      maxTokens,
+      // Lower maxTokens for Groq free tier (12K TPM) to avoid rate-limit exhaustion.
+      maxTokens: 1024,
       frequencyPenalty,
       presencePenalty,
     }
@@ -67,4 +88,3 @@ export function getModelOptions(
     presencePenalty,
   }
 }
-

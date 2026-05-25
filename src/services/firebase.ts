@@ -15,6 +15,8 @@ import {
   type UserCredential,
 } from 'firebase/auth';
 import { getAuth } from 'firebase/auth';
+import { setAuthenticated } from './storage';
+
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -190,6 +192,7 @@ export async function signInWithGithub() {
 }
 
 export function signOutUser() {
+  setAuthenticated(false);
   if (!isFirebaseConfigReady() || !auth) return Promise.resolve();
   return signOut(auth);
 }

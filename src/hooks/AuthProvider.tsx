@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { User, UserCredential } from 'firebase/auth';
-import { handleRedirectResult, observeAuthState } from '@/services/firebase';
+import { firebaseApp, handleRedirectResult, observeAuthState } from '@/services/firebase';
 import { AuthContext, type AuthContextValue } from '@/hooks/authContext';
 import * as storage from '@/services/storage';
 
@@ -28,6 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextUser);
       setIsAuthReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    if (!firebaseApp) {
+      setIsAuthReady(true);
+    }
   }, []);
 
   // Process any pending redirect result (e.g. from a previous redirect-based sign-in)

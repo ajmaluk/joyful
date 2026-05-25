@@ -17,9 +17,13 @@ import {
   Pause,
   Pencil,
   Plus,
+  LogOut,
   Search,
+  Settings,
+  ShieldCheck,
   Sparkles,
   Trash2,
+  User,
   Wand2,
   X,
 } from 'lucide-react';
@@ -30,6 +34,8 @@ import type { ChatAttachment, ChatMode, Project } from '@/types';
 import { mergeVoiceTranscript, useVoiceInput } from '@/hooks/useVoiceInput';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { readImageAttachment } from '@/services/attachments';
+import { useAuth } from '@/hooks/useAuth';
+import { signOutUser } from '@/services/firebase';
 
 interface DashboardPageProps {
   projects: Project[];
@@ -40,6 +46,53 @@ interface DashboardPageProps {
 
 const tabs = ['My projects', 'Recently viewed', 'Templates'] as const;
 
+const pageSections = [
+  {
+    title: 'Builder',
+    description: 'Core creation surfaces for starting and continuing work.',
+    pages: [
+      { label: 'Builder', path: '/builder' },
+      { label: 'Templates', path: '/templates' },
+      { label: 'Settings', path: '/settings' },
+    ],
+  },
+  {
+    title: 'Marketing',
+    description: 'Public pages that explain, promote, and demonstrate Joyful.',
+    pages: [
+      { label: 'Home', path: '/' },
+      { label: 'Docs', path: '/docs' },
+      { label: 'Pricing', path: '/pricing' },
+      { label: 'Blog', path: '/blog' },
+      { label: 'Guides', path: '/guides' },
+      { label: 'Examples', path: '/examples' },
+    ],
+  },
+  {
+    title: 'Trust',
+    description: 'Support, company, and legal surfaces for the product.',
+    pages: [
+      { label: 'Support', path: '/support' },
+      { label: 'About', path: '/about' },
+      { label: 'Security', path: '/security' },
+      { label: 'Contact', path: '/contact' },
+      { label: 'Status', path: '/status' },
+      { label: 'Privacy', path: '/privacy' },
+      { label: 'Terms', path: '/terms' },
+      { label: 'Cookies', path: '/cookies' },
+      { label: 'Licenses', path: '/licenses' },
+    ],
+  },
+  {
+    title: 'Auth',
+    description: 'Authentication routes and the Firebase-backed account flow.',
+    pages: [
+      { label: 'Log in', path: '/login' },
+      { label: 'Create account', path: '/signup' },
+    ],
+  },
+] as const;
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
 }
@@ -48,6 +101,7 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   const navigate = useNavigate();
   const location = useLocation();
   const meta = routeMeta[location.pathname] || routeMeta['/'];
+  const { user } = useAuth();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
@@ -60,6 +114,10 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>('My projects');
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useClickOutside(profileMenuRef, () => setProfileOpen(false), profileOpen);
 
   const sortedProjects = useMemo(
     () => [...projects].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -184,6 +242,52 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
       <section className="relative isolate overflow-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#ffffff_0%,#edf1ff_26%,#7890ff_50%,#d76cd1_69%,#f34f78_84%,#ff7748_100%)] dark:bg-[linear-gradient(180deg,#111214_0%,#1d2d50_28%,#586fe4_52%,#b656b7_70%,#d83e69_86%,#e9643d_100%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,1)_0%,rgba(255,255,255,0.88)_24%,rgba(255,255,255,0.26)_48%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.09),transparent_40%),linear-gradient(180deg,rgba(12,13,15,0.88)_0%,rgba(12,13,15,0.2)_45%,rgba(12,13,15,0)_100%)]" />
+
+        {/* Floating User Profile Button */}
+        <div className="absolute right-4 top-4 z-30 flex items-center gap-2">
+          <button
+            onClick={() => setProfileOpen((open) => !open)}
+            className="flex items-center justify-center h-9 w-9 rounded-full border border-gray-200 bg-white/80 text-gray-500 shadow-md backdrop-blur-sm transition-colors hover:bg-white hover:text-gray-950 dark:border-white/10 dark:bg-[#17181a]/80 dark:text-white dark:hover:bg-[#17181a]"
+            title="Profile"
+            aria-label="Open profile menu"
+          >
+            <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-300">
+              {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+            </div>
+          </button>
+          {profileOpen && (
+            <div ref={profileMenuRef} className="absolute right-0 top-10 z-50 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-xl dark:border-white/10 dark:bg-[#20211e]">
+              <div className="flex items-center gap-3 border-b border-gray-100 dark:border-white/8 px-4 py-3">
+                <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-sm font-bold text-indigo-600 dark:text-indigo-300">
+                  {(user?.displayName || user?.email || 'U')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{user?.displayName || 'User'}</p>
+                  {user?.email && <p className="truncate text-xs text-gray-500 dark:text-[#aaa69d]">{user.email}</p>}
+                </div>
+              </div>
+              <div className="p-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setProfileOpen(false); navigate('/settings', { state: { from: location.pathname } }); }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-[#f6f2ea] hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-gray-500 dark:text-[#aaa69d]" /> Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    void signOutUser().then(() => navigate('/'));
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Sign out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center justify-center py-4 text-center sm:min-h-[80vh] sm:py-6">
           <button
@@ -330,6 +434,258 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
 
       <section className="relative z-10 bg-[#f6f7fb] px-4 py-5 sm:px-6 lg:px-10 dark:bg-[#18191d]">
         <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-gray-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-5 dark:border-white/10 dark:bg-[#18191d] dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
+          <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-[1.5rem] border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 dark:border-white/8 dark:from-[#202226] dark:to-[#17181a]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-normal text-indigo-600 dark:text-[#8fa7ff]">All pages</p>
+                  <h2 className="mt-1 text-2xl font-bold text-gray-950 dark:text-white">Everything in one builder hub</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
+                    Jump straight into any public page, account screen, or trust page without leaving the builder area.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/templates')}
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:text-gray-950 dark:border-white/10 dark:bg-white/[0.04] dark:text-[#d8d3ca] dark:hover:text-white"
+                >
+                  Browse templates
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {pageSections.map((section) => (
+                  <div key={section.title} className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-white/8 dark:bg-white/[0.03]">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-950 dark:text-white">{section.title}</h3>
+                      <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-[#aaa69d]">{section.description}</p>
+                    </div>
+
+                    <div className="mt-3 space-y-1.5">
+                      {section.pages.map((page) => (
+                        <button
+                          key={page.path}
+                          type="button"
+                          onClick={() => navigate(page.path)}
+                          className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-xs font-semibold text-gray-800 transition-colors hover:border-[#6387ff]/25 hover:bg-white hover:text-gray-950 dark:border-white/8 dark:bg-white/[0.04] dark:text-[#d8d3ca] dark:hover:bg-white/[0.08] dark:hover:text-white"
+                        >
+                          <span>{page.label}</span>
+                          <ArrowRight className="h-3.5 w-3.5 text-gray-400 dark:text-white/35" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-gray-200 bg-gradient-to-br from-[#f8fbff] to-white p-4 dark:border-white/8 dark:from-[#17191f] dark:to-[#1d1f1d]">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-[#6387ff]" />
+                <h2 className="text-lg font-bold text-gray-950 dark:text-white">Firebase auth</h2>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
+                Google, GitHub, and email/password auth are wired through Firebase. Use the account screens to sign in, create an account, or return to the workspace.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 dark:border-white/8 dark:bg-white/[0.03]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-normal text-gray-500 dark:text-[#aaa69d]">Account</p>
+                    <p className="mt-1 text-sm font-bold text-gray-950 dark:text-white">
+                      {user ? 'Signed in' : 'Ready to sign in'}
+                    </p>
+                  </div>
+                  <div className={`rounded-full px-3 py-1 text-[11px] font-semibold ${user ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-600 dark:text-amber-300'}`}>
+                    {user ? 'Connected' : 'Not signed in'}
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs leading-5 text-gray-600 dark:border-white/8 dark:bg-white/[0.03] dark:text-[#d8d3ca]">
+                  {user ? (
+                    <>
+                      <div className="font-semibold text-gray-950 dark:text-white">{user.displayName || user.email || 'Joyful account'}</div>
+                      <div className="mt-1">Firebase is configured in <span className="font-semibold">.env</span> and ready for the builder screens.</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-semibold text-gray-950 dark:text-white">Firebase setup is ready.</div>
+                      <div className="mt-1">Use the login and signup pages to connect the Firebase project and start building.</div>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.01] dark:bg-[#f5f2ea] dark:text-[#171816]"
+                  >
+                    Log in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/signup')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
+                  >
+                    Create account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white dark:hover:bg-white/[0.06]"
+                  >
+                    Open settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void signOutUser().then(() => navigate('/'))}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600 transition-colors hover:bg-red-500/15 dark:border-red-500/20 dark:text-red-300"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50/60 p-4 text-xs leading-5 text-gray-600 dark:border-white/10 dark:bg-white/[0.02] dark:text-[#aaa69d]">
+                Firebase auth env keys are expected in <span className="font-semibold">.env</span> and <span className="font-semibold">.env.example</span>. Verify Google, GitHub, and email/password providers are enabled in the Firebase console, then keep the authorized domains in sync with your deployment URLs.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 bg-[#f6f7fb] px-4 py-5 sm:px-6 lg:px-10 dark:bg-[#18191d]">
+        <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-gray-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-5 dark:border-white/10 dark:bg-[#18191d] dark:shadow-[0_24px_70px_rgba(0,0,0,0.36)]">
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
+            <div className="rounded-[1.5rem] border border-gray-200 bg-gradient-to-br from-white via-white to-[#f3f5ff] p-4 shadow-sm dark:border-white/10 dark:from-[#1f2024] dark:via-[#1d1e22] dark:to-[#131416]">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#2f5bff]/15 bg-[#2f5bff]/8 px-3 py-1 text-[11px] font-semibold text-[#2f5bff]">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    All pages, one workspace
+                  </div>
+                  <h2 className="mt-3 text-2xl font-bold tracking-normal text-gray-950 dark:text-white">Browse every Joyful surface from the builder.</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
+                    The builder hub now links the full product together: marketing pages, trust pages, and auth screens all sit beside the workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/builder')}
+                  className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:bg-white/[0.08]"
+                >
+                  Open workspace
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {pageSections.map((section) => (
+                  <div
+                    key={section.title}
+                    className="rounded-[1.1rem] border border-gray-200 bg-white p-4 dark:border-white/8 dark:bg-white/[0.03]"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-950 dark:text-white">{section.title}</h3>
+                        <p className="mt-1 text-[11px] leading-4 text-gray-500 dark:text-[#aaa69d]">{section.description}</p>
+                      </div>
+                      <Grid3X3 className="h-4 w-4 text-[#6387ff]" />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {section.pages.map((page) => (
+                        <button
+                          key={page.path}
+                          type="button"
+                          onClick={() => navigate(page.path)}
+                          className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:border-[#6387ff]/35 hover:bg-[#6387ff]/8 hover:text-gray-950 dark:border-white/10 dark:bg-white/[0.03] dark:text-[#d8d3ca] dark:hover:bg-white/[0.07] dark:hover:text-white"
+                        >
+                          {page.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-gray-200 bg-[#0f1115] p-4 text-white shadow-sm dark:border-white/10">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-[#d8d3ca]">
+                <User className="h-3.5 w-3.5" />
+                Firebase auth setup
+              </div>
+              <h3 className="mt-3 text-xl font-bold tracking-normal text-white">Google, GitHub, and email/password are wired through Firebase.</h3>
+              <p className="mt-2 text-sm leading-6 text-[#aaa69d]">
+                The app reads Firebase from the Vite env variables you provided, and the login/signup screens already point at those providers.
+              </p>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#8fa7ff]">Account status</p>
+                    <p className="mt-1 text-sm font-semibold text-white">
+                      {user ? `Signed in as ${user.displayName || user.email || 'Firebase user'}` : 'Ready for Firebase sign-in'}
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-[#d8d3ca]">
+                    {user ? 'Authenticated' : 'Not signed in'}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {user ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/settings', { state: { from: location.pathname } })}
+                        className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-100"
+                      >
+                        Open settings
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void signOutUser().then(() => navigate('/'))}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                      >
+                        Sign out
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/login')}
+                        className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-100"
+                      >
+                        Log in
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/signup')}
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                      >
+                        Create account
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 text-xs text-[#aaa69d] sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="font-semibold text-white">Firebase env</p>
+                  <p className="mt-1 leading-5">Configured in `.env` and documented in `.env.example`.</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                  <p className="font-semibold text-white">Provider scope</p>
+                  <p className="mt-1 leading-5">Email/password, Google, and GitHub are already wired into the auth screens.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1 dark:border-white/10 dark:bg-white/[0.03]">
               {tabs.map((tab) => (
@@ -511,6 +867,47 @@ export function DashboardPage({ projects, onCreateProject, onDeleteProject, onSt
               ))}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Site Directory / All Pages Section */}
+      <section className="relative z-10 bg-[#f6f7fb] dark:bg-[#18191d] px-4 py-10 sm:px-6 lg:px-10">
+        <div className="mx-auto w-full max-w-7xl rounded-[2rem] border border-gray-200 bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.04)] sm:p-8 dark:border-white/10 dark:bg-[#18191d] dark:shadow-[0_24px_70px_rgba(0,0,0,0.26)]">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-gray-950 dark:text-white">All Application Pages</h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-[#aaa69d]">
+              Explore all components, public pages, and auth routing available in the Joyful workspace.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {pageSections.map((section) => (
+              <div
+                key={section.title}
+                className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 dark:border-white/5 dark:bg-white/[0.02]"
+              >
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#2f5bff] dark:text-[#8fa7ff]">
+                  {section.title}
+                </h3>
+                <p className="mt-1.5 text-xs text-gray-500 dark:text-[#aaa69d] leading-snug">
+                  {section.description}
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {section.pages.map((page) => (
+                    <li key={page.path}>
+                      <button
+                        onClick={() => navigate(page.path)}
+                        className="group flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm ring-1 ring-black/5 transition-all hover:bg-gray-50 hover:text-gray-950 dark:bg-[#20211e] dark:text-[#d8d3ca] dark:ring-white/5 dark:hover:bg-white/5 dark:hover:text-white"
+                      >
+                        <span>{page.label}</span>
+                        <ArrowRight className="h-3 w-3 text-gray-400 transition-transform group-hover:translate-x-0.5 dark:text-[#aaa69d]" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

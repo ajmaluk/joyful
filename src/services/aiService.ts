@@ -1944,7 +1944,7 @@ export default function ContactPage() {
     setIsSubmitting(true);
     // Simulate form submission — replace with actual API call
     setTimeout(() => {
-      toast.success('Message sent! We\'ll get back to you soon.');
+      toast.success("Message sent! We'll get back to you soon.");
       setFormData({ name: '', email: '', message: '' });
       setIsSubmitting(false);
     }, 800);

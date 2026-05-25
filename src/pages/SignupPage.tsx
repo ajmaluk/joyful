@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { routeMeta } from '@/lib/seo';
 import { AlertCircle } from 'lucide-react';
 import { AuthShell, GithubMarker, GoogleMarker, ProviderButton } from '@/components/auth/AuthShell';
-import { createAccountWithEmail, getFriendlyFirebaseAuthError, isGmailAddress, signInWithGithub, signInWithGoogle } from '@/services/firebase';
+import { createAccountWithEmail, getFriendlyFirebaseAuthError, signInWithGithub, signInWithGoogle } from '@/services/firebase';
 import { useAuth } from '@/hooks/useAuth';
 
 export function SignupPage() {
@@ -22,7 +22,6 @@ export function SignupPage() {
     if (!name.trim()) newErrors.name = 'Name is required';
     if (!email.trim()) newErrors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Enter a valid email';
-    else if (!isGmailAddress(email)) newErrors.email = 'Use a @gmail.com email address';
     if (!password) newErrors.password = 'Password is required';
     else if (password.length < 8) newErrors.password = 'Use at least 8 characters';
     setErrors(newErrors);

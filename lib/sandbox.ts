@@ -60,8 +60,16 @@ export class Command {
   }
 }
 
-// Global in-memory map of active sandboxes
-export const sandboxes = new Map<string, MockSandbox>()
+// Global in-memory map of active sandboxes persisted in globalThis to survive HMR reloads
+const globalForSandboxes = globalThis as unknown as {
+  __sandboxes__?: Map<string, MockSandbox>
+}
+
+export const sandboxes = globalForSandboxes.__sandboxes__ ?? new Map<string, MockSandbox>()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForSandboxes.__sandboxes__ = sandboxes
+}
 
 export class MockSandbox {
   sandboxId: string
@@ -140,18 +148,32 @@ export class MockSandbox {
         const block = fileBlocks[i]
         const lines = block.split('\n')
         const filePath = lines[0].trim().replace(/['"]/g, '')
-        
+
         const contentLines: string[] = []
+        // Check if there are any lines starting with '+' that look like additions
+        const hasPlusPrefixes = lines.slice(1).some(line => line.startsWith('+') && !line.startsWith('+++'))
+
         for (let j = 1; j < lines.length; j++) {
           const line = lines[j]
-          if (line.startsWith('***') || line.includes('*** End Patch')) {
+          if (line.startsWith('***') || line.includes('*** End Patch') || line.startsWith('PATCH')) {
             break
           }
-          if (line.startsWith('+')) {
-            contentLines.push(line.substring(1))
+          
+          if (hasPlusPrefixes) {
+            if (line.startsWith('+')) {
+              contentLines.push(line.substring(1))
+            } else if (line.startsWith(' ')) {
+              contentLines.push(line.substring(1))
+            } else if (!line.startsWith('-')) {
+              // Fallback for lines where prefix was missed
+              contentLines.push(line)
+            }
+          } else {
+            // Fallback: no '+' prefixes in the block, just capture raw text lines
+            contentLines.push(line)
           }
         }
-        
+
         if (filePath) {
           filesToWrite.push({
             path: filePath,

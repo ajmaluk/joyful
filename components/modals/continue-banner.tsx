@@ -6,6 +6,7 @@ import { Loader2, PlayIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSharedChatContext } from '@/lib/chat-context'
 import { useChat } from '@ai-sdk/react'
+import { useSettings } from '@/components/settings/use-settings'
 
 const CHAT_STORAGE_PREFIX = 'vibe-chat-'
 
@@ -17,6 +18,7 @@ export function ContinueBanner() {
 
   const { chat } = useSharedChatContext()
   const { resumeStream, regenerate, status } = useChat({ chat })
+  const { modelId, reasoningEffort } = useSettings()
 
   useEffect(() => {
     if (!projectId) return
@@ -59,19 +61,27 @@ export function ContinueBanner() {
         size="sm"
         variant="outline"
         className="border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
-        onClick={() => {
+        onClick={async () => {
           setShow(false)
           if (typeof resumeStream === 'function') {
             try {
-              resumeStream()
+              await resumeStream({ body: { modelId, reasoningEffort } })
             } catch (e) {
-              console.error('Failed to resume stream, falling back to regenerate', e)
+              console.warn('Failed to resume stream, falling back to regenerate:', e)
               if (typeof regenerate === 'function') {
-                regenerate()
+                try {
+                  await regenerate({ body: { modelId, reasoningEffort } })
+                } catch (re) {
+                  console.error('Failed to regenerate:', re)
+                }
               }
             }
           } else if (typeof regenerate === 'function') {
-            regenerate()
+            try {
+              await regenerate({ body: { modelId, reasoningEffort } })
+            } catch (re) {
+              console.error('Failed to regenerate:', re)
+            }
           }
         }}
       >

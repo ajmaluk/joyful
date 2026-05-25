@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox, APIError } from '@/lib/sandbox'
 
-export const runtime = 'edge'
 
 
 /**

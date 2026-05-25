@@ -51,30 +51,41 @@ export function useCommandErrorsLogs() {
 export async function syncProjectFiles(projectId: string, sandboxId: string, filePaths: string[]) {
   if (typeof window === 'undefined') return
   try {
-    const existing = JSON.parse(localStorage.getItem(`joyful_project_${projectId}`) || 'null')
-    if (!existing) return
-
-    const updatedFiles = [...existing.files]
-
-    await Promise.all(
+    // 1. Fetch all file contents in parallel without touching localStorage (preventing race conditions)
+    const fetchedResults = await Promise.all(
       filePaths.map(async (path) => {
         const cleanPath = path.startsWith('/') ? path.substring(1) : path
         try {
           const res = await fetch(`/api/sandboxes/${sandboxId}/files?path=${encodeURIComponent(cleanPath)}`)
           if (res.ok) {
             const content = await res.text()
-            const idx = updatedFiles.findIndex((f: any) => f.path === path)
-            if (idx >= 0) {
-              updatedFiles[idx] = { path, content }
-            } else {
-              updatedFiles.push({ path, content })
-            }
+            return { path, content }
           }
         } catch (err) {
           console.warn(`Failed to fetch file content for ${path}:`, err)
         }
+        return null
       })
     )
+
+    const validResults = fetchedResults.filter((r): r is { path: string; content: string } => r !== null)
+    if (validResults.length === 0) return
+
+    // 2. Re-read the ABSOLUTE LATEST project state from localStorage atomically right before writing
+    const existing = JSON.parse(localStorage.getItem(`joyful_project_${projectId}`) || 'null')
+    if (!existing) return
+
+    const updatedFiles = [...existing.files]
+
+    // 3. Merge the newly fetched contents into the latest files array
+    for (const result of validResults) {
+      const idx = updatedFiles.findIndex((f: any) => f.path === result.path)
+      if (idx >= 0) {
+        updatedFiles[idx] = result
+      } else {
+        updatedFiles.push(result)
+      }
+    }
 
     existing.files = updatedFiles
     existing.updatedAt = new Date().toISOString()

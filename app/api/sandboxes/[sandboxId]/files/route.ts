@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { Sandbox } from '@/lib/sandbox'
 import z from 'zod'
 
-export const runtime = 'edge'
 
 
 const FileParamsSchema = z.object({

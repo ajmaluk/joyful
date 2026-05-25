@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { Sandbox } from '@/lib/sandbox'
 
-export const runtime = 'edge'
 
 
 interface Params {

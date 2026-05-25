@@ -1,7 +1,6 @@
 import { MODEL_NAMES, SUPPORTED_MODELS } from '@/ai/constants'
 import { NextResponse } from 'next/server'
 
-export const runtime = 'edge'
 
 
 export async function GET() {

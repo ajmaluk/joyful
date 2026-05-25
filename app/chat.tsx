@@ -302,7 +302,15 @@ export function Chat({ className }: Props) {
               <RefreshCw className="w-3 h-3 mr-2" />
               Retry Last Message
             </Button>
-            <Button size="sm" onClick={() => resumeStream({ body: { modelId, reasoningEffort } })}>
+            <Button
+              size="sm"
+              onClick={() => {
+                sendMessage(
+                  { text: 'Continue generating from where you left off. Start exactly at the next character without repeating any previous parts. Make sure to generate complete and valid files.' },
+                  { body: { modelId, reasoningEffort } }
+                )
+              }}
+            >
               <PlayIcon className="w-3 h-3 mr-2" />
               Continue
             </Button>

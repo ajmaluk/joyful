@@ -134,6 +134,31 @@ export class MockSandbox {
           content: Buffer.from(fileContent, 'utf8')
         })
       }
+    } else if (fullCmd.includes('apply_patch') || fullCmd.includes('patch')) {
+      const fileBlocks = fullCmd.split(/\*\*\*\s+(?:Add|Modify)\s+File:\s*/i)
+      for (let i = 1; i < fileBlocks.length; i++) {
+        const block = fileBlocks[i]
+        const lines = block.split('\n')
+        const filePath = lines[0].trim().replace(/['"]/g, '')
+        
+        const contentLines: string[] = []
+        for (let j = 1; j < lines.length; j++) {
+          const line = lines[j]
+          if (line.startsWith('***') || line.includes('*** End Patch')) {
+            break
+          }
+          if (line.startsWith('+')) {
+            contentLines.push(line.substring(1))
+          }
+        }
+        
+        if (filePath) {
+          filesToWrite.push({
+            path: filePath,
+            content: Buffer.from(contentLines.join('\n'), 'utf8')
+          })
+        }
+      }
     }
 
     if (filesToWrite.length > 0) {

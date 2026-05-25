@@ -1,6 +1,5 @@
-import { Readable } from 'stream'
-
 export class APIError extends Error {
+
   json: any
   text?: string
 
@@ -88,14 +87,59 @@ export class MockSandbox {
     if (content === undefined) {
       return null
     }
-    const buffer = Buffer.from(content, 'utf8')
-    return Readable.from(buffer)
+    return Buffer.from(content, 'utf8')
   }
+
 
   async runCommand(options: RunCommandOptions) {
     const cmdId = 'cmd_' + Math.random().toString(36).substring(2, 8)
     const cmd = new Command(cmdId, options.cmd, options.args ?? [])
     this.commands.set(cmdId, cmd)
+
+    // Intercept file creations in mock commands
+    const fullCmd = [options.cmd, ...(options.args ?? [])].join(' ')
+    const filesToWrite: { path: string; content: Buffer }[] = []
+
+    if (fullCmd.includes('files = {') || fullCmd.includes('files={')) {
+      const fileRegex = /['"]([^'"]+)['"]\s*:\s*(?:r?'''([\s\S]*?)'''|r?["']([\s\S]*?)["'])/g
+      let match
+      while ((match = fileRegex.exec(fullCmd)) !== null) {
+        const filePath = match[1].trim()
+        const fileContent = match[2] || match[3] || ''
+        filesToWrite.push({
+          path: filePath,
+          content: Buffer.from(fileContent, 'utf8')
+        })
+      }
+    } else if (fullCmd.includes('cat <<') || fullCmd.includes('cat  <<') || fullCmd.includes('cat >') || fullCmd.includes('cat  >')) {
+      // Loop for: cat <<'EOF' > filepath
+      const catRegexA = /cat\s*<<\s*['"]?(\w+)['"]?\s*>\s*(\S+)\s*\n([\s\S]*?)\n\1/g
+      let match
+      while ((match = catRegexA.exec(fullCmd)) !== null) {
+        const filePath = match[2].trim().replace(/['"]/g, '')
+        const fileContent = match[3] || ''
+        filesToWrite.push({
+          path: filePath,
+          content: Buffer.from(fileContent, 'utf8')
+        })
+      }
+
+      // Loop for: cat > filepath <<'EOF'
+      const catRegexB = /cat\s*>\s*(\S+)\s*<<\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\2/g
+      while ((match = catRegexB.exec(fullCmd)) !== null) {
+        const filePath = match[1].trim().replace(/['"]/g, '')
+        const fileContent = match[3] || ''
+        filesToWrite.push({
+          path: filePath,
+          content: Buffer.from(fileContent, 'utf8')
+        })
+      }
+    }
+
+    if (filesToWrite.length > 0) {
+      await this.writeFiles(filesToWrite)
+    }
+
     return cmd
   }
 

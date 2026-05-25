@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useSandboxStore } from '@/app/state'
+import { useSandboxStore, syncProjectFiles } from '@/app/state'
 import stripAnsi from 'strip-ansi'
 import z from 'zod'
 
@@ -11,7 +11,7 @@ type StreamingCommandLogs = Record<
 >
 
 export function CommandLogsStream() {
-  const { sandboxId, commands, addLog, upsertCommand } = useSandboxStore()
+  const { sandboxId, commands, addLog, upsertCommand, addPaths } = useSandboxStore()
   const ref = useRef<StreamingCommandLogs>({})
 
   useEffect(() => {
@@ -40,12 +40,28 @@ export function CommandLogsStream() {
                 command: command.command,
                 args: command.args,
               })
+
+              try {
+                const res = await fetch(`/api/sandboxes/${sandboxId}/files`)
+                if (res.ok) {
+                  const data = await res.json()
+                  if (data.paths) {
+                    addPaths(data.paths)
+                    const pid = useSandboxStore.getState().projectId
+                    if (pid) {
+                      syncProjectFiles(pid, sandboxId, data.paths)
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn('Failed to sync files after command:', e)
+              }
             }
           })()
         }
       }
     }
-  }, [sandboxId, commands, addLog, upsertCommand])
+  }, [sandboxId, commands, addLog, upsertCommand, addPaths])
 
   return null
 }
@@ -57,32 +73,45 @@ const logSchema = z.object({
 })
 
 async function* getCommandLogs(sandboxId: string, cmdId: string) {
-  const response = await fetch(
-    `/api/sandboxes/${sandboxId}/cmds/${cmdId}/logs`,
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  try {
+    const response = await fetch(
+      `/api/sandboxes/${sandboxId}/cmds/${cmdId}/logs`,
+      { headers: { 'Content-Type': 'application/json' } }
+    )
 
-  const reader = response.body!.getReader()
-  const decoder = new TextDecoder()
-  let line = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+    if (!response.ok || !response.body) {
+      console.warn('getCommandLogs failed', response.status)
+      return
+    }
 
-    line += decoder.decode(value, { stream: true })
-    const lines = line.split('\n')
-    for (let i = 0; i < lines.length - 1; i++) {
-      if (lines[i]) {
-        const logEntry = JSON.parse(lines[i])
-        const parsed = logSchema.parse(logEntry)
-        yield {
-          data: stripAnsi(parsed.data),
-          stream: parsed.stream,
-          timestamp: parsed.timestamp,
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let line = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      line += decoder.decode(value, { stream: true })
+      const lines = line.split('\n')
+      for (let i = 0; i < lines.length - 1; i++) {
+        if (lines[i]) {
+          try {
+            const logEntry = JSON.parse(lines[i])
+            const parsed = logSchema.parse(logEntry)
+            yield {
+              data: stripAnsi(parsed.data),
+              stream: parsed.stream,
+              timestamp: parsed.timestamp,
+            }
+          } catch (parseErr) {
+            console.warn('Failed to parse log entry line', parseErr)
+          }
         }
       }
+      line = lines[lines.length - 1]
     }
-    line = lines[lines.length - 1]
+  } catch (err) {
+    console.error('getCommandLogs connection error', err)
   }
 }
 

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox, APIError } from '@/lib/sandbox'
 
+export const runtime = 'edge'
+
+
 /**
  * We must change the SDK to add data to the instance and then
  * use it to retrieve the status of the Sandbox.

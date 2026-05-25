@@ -15,7 +15,7 @@ import { useMemo } from 'react'
 import { useAvailableModels } from './use-available-models'
 import { useModelId } from './use-settings'
 
-export function ModelSelector({ className }: { className?: string }) {
+export function ModelSelector({ className, disabled }: { className?: string; disabled?: boolean }) {
   const [modelId, setModelId] = useModelId()
   const { models: available, isLoading, error } = useAvailableModels()
   const models = useMemo(
@@ -27,7 +27,7 @@ export function ModelSelector({ className }: { className?: string }) {
     <Select
       value={modelId}
       onValueChange={setModelId}
-      disabled={isLoading || !!error || !models?.length}
+      disabled={disabled || isLoading || !!error || !models?.length}
     >
       <SelectTrigger className={cn('bg-background', className)}>
         {isLoading ? (

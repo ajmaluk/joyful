@@ -118,6 +118,8 @@ export function deleteProject(projectId: string): void {
   localStorage.removeItem(`${STORAGE_KEYS.PROJECT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
+  localStorage.removeItem(`vibe-sandbox-${projectId}`);
+  localStorage.removeItem(`vibe-file-explorer-${projectId}`);
   window.dispatchEvent(new CustomEvent('joyful_projects_changed'));
 }
 

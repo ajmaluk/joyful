@@ -70,8 +70,10 @@ export async function* getContents(
     )
 
     const files = items.files
-      .slice(generated.length, items.files.length - 2)
-      .map((file) => fileSchema.parse(file))
+      .slice(generated.length)
+      .filter((file): file is z.infer<typeof fileSchema> => {
+        return fileSchema.safeParse(file).success
+      })
 
     if (files.length > 0) {
       yield { files, paths, written }

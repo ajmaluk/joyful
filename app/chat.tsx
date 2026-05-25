@@ -2,7 +2,7 @@
 
 import type { ChatUIMessage } from '@/components/chat/types'
 import { TEST_PROMPTS } from '@/ai/constants'
-import { MessageCircleIcon, SendIcon, Loader2, AlertCircle, PlayIcon, RefreshCw, Clock } from 'lucide-react'
+import { MessageCircleIcon, SendIcon, Loader2, AlertCircle, PlayIcon, RefreshCw, Clock, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Conversation,
@@ -39,20 +39,21 @@ const statusLabels: Record<string, string> = {
 const SUBMIT_COOLDOWN_MS = 2000
 
 export function Chat({ className }: Props) {
-  const [mounted, setMounted] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
   const [input, setInput] = useLocalStorageValue('prompt-input')
   const { chat } = useSharedChatContext()
   const { modelId, reasoningEffort } = useSettings()
-  const { messages, sendMessage, status, regenerate, error, resumeStream } = useChat<ChatUIMessage>({ chat })
+  const { messages, sendMessage, status, regenerate, error, resumeStream, stop, setMessages } = useChat<ChatUIMessage>({ chat })
   const { setChatStatus } = useSandboxStore()
   const searchParams = useSearchParams()
   const params = useParams()
   const projectId = params?.projectId as string | undefined
-  const [hydrated, setHydrated] = useState(false)
   const submittingRef = useRef(false)
+  const initialSubmitRef = useRef(false)
   const lastSubmitTime = useRef(0)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
 
   const statusText = statusLabels[status] || ''
 
@@ -65,45 +66,42 @@ export function Chat({ className }: Props) {
     setChatStatus(status)
   }, [status, setChatStatus])
 
+  // Load messages from localStorage on client-side mount
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <Panel className={className}>
-        <PanelHeader>
-          <div className="flex items-center font-mono font-semibold uppercase">
-            <MessageCircleIcon className="mr-2 w-4" />
-            Chat
-          </div>
-        </PanelHeader>
-        <div className="flex-1 min-h-0">
-          <div className="flex flex-col justify-center items-center h-full font-mono text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading...
-            </div>
-          </div>
-        </div>
-      </Panel>
-    )
-  }
-
-
-  useEffect(() => {
-    if (projectId && messages.length > 0) {
-      setHydrated(true)
+    if (projectId) {
+      try {
+        const saved = localStorage.getItem(`vibe-chat-${projectId}`)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setMessages(parsed)
+        } else {
+          setMessages([])
+        }
+      } catch (e) {
+        console.warn('Failed to load chat messages from localStorage', e)
+      }
+    } else {
+      setMessages([])
     }
-  }, [projectId, messages.length])
+    setIsLoaded(true)
+  }, [projectId, setMessages])
 
   useEffect(() => {
-    if (hydrated) return
-    const initialPrompt = searchParams.get('prompt')?.trim()
-    if (initialPrompt && status === 'ready' && messages.length === 0 && projectId) {
-      setHydrated(true)
+    const handleBeforeUnload = () => {
+      if (projectId && messages.length > 0) {
+        try {
+          localStorage.setItem(`vibe-chat-${projectId}`, JSON.stringify(messages))
+        } catch (e) {
+          console.warn('Failed to save chat messages on unload', e)
+        }
+      }
     }
-  }, [hydrated, searchParams, status, messages.length, projectId])
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [projectId, messages])
+
 
   // Clean up cooldown timer on unmount
   useEffect(() => {
@@ -169,7 +167,16 @@ export function Chat({ className }: Props) {
       return
     }
 
+    if (initialSubmitRef.current) return
+    initialSubmitRef.current = true
+
+    // Prevent duplicate submission across multiple mounted Chat components (mobile + desktop layout)
+    const chatRaw = chat as any
+    if (chatRaw.__initialPromptSubmitted) return
+    chatRaw.__initialPromptSubmitted = true
+
     validateAndSubmitMessage(initialPrompt)
+
 
     const url = new URL(window.location.href)
     url.searchParams.delete('prompt')
@@ -177,6 +184,7 @@ export function Chat({ className }: Props) {
     const next = `${url.pathname}${url.search}${url.hash}`
     window.history.replaceState({}, '', next)
   }, [searchParams, status, messages.length, projectId, validateAndSubmitMessage])
+
 
   const isBusy = status === 'streaming' || status === 'submitted'
   const isOnCooldown = cooldownRemaining > 0
@@ -190,9 +198,27 @@ export function Chat({ className }: Props) {
       String(error).includes('Too Many Requests') ||
       String(error).includes('TPM'))
 
-  const showThinking = (isBusy || !!isRateLimitError) && messages.length > 0 && messages[messages.length - 1].role === 'user'
+  const lastMessage = messages[messages.length - 1]
+  const showThinking = (isBusy || !!isRateLimitError) && messages.length > 0
+  const thinkingMode = lastMessage?.role === 'user' ? 'thinking' : 'working'
+
+
+  if (!isLoaded) {
+    return (
+      <Panel className={className}>
+        <PanelHeader>
+          <div className="flex items-center font-mono font-semibold uppercase">
+            <MessageCircleIcon className="mr-2 w-4" />
+            Chat
+          </div>
+        </PanelHeader>
+        <div className="flex-1 min-h-0" />
+      </Panel>
+    )
+  }
 
   return (
+
     <Panel className={className}>
       <PanelHeader>
         <div className="flex items-center font-mono font-semibold uppercase">
@@ -214,32 +240,23 @@ export function Chat({ className }: Props) {
       {messages.length === 0 ? (
         <div className="flex-1 min-h-0">
           <div className="flex flex-col justify-center items-center h-full font-mono text-sm text-muted-foreground">
-            {!hydrated ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading...
-              </div>
-            ) : (
-              <>
-                <p className="flex items-center font-semibold">
-                  Click and try one of these prompts:
-                </p>
-                <ul className="p-4 space-y-1 text-center">
-                  {TEST_PROMPTS.map((prompt, idx) => (
-                    <li
-                      key={idx}
-                      className={cn(
-                        "px-4 py-2 rounded-sm border border-dashed shadow-sm shadow-black cursor-pointer border-border hover:bg-secondary/50 hover:text-primary transition-opacity",
-                        (isBusy || isOnCooldown) && "opacity-50 pointer-events-none"
-                      )}
-                      onClick={() => validateAndSubmitMessage(prompt)}
-                    >
-                      {prompt}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <p className="flex items-center font-semibold">
+              Click and try one of these prompts:
+            </p>
+            <ul className="p-4 space-y-1 text-center">
+              {TEST_PROMPTS.map((prompt, idx) => (
+                <li
+                  key={idx}
+                  className={cn(
+                    "px-4 py-2 rounded-sm border border-dashed shadow-sm shadow-black cursor-pointer border-border hover:bg-secondary/50 hover:text-primary transition-opacity",
+                    (isBusy || isOnCooldown) && "opacity-50 pointer-events-none"
+                  )}
+                  onClick={() => validateAndSubmitMessage(prompt)}
+                >
+                  {prompt}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       ) : (
@@ -250,7 +267,7 @@ export function Chat({ className }: Props) {
               .map((message) => (
                 <Message key={message.id} message={message} />
               ))}
-            {showThinking && <ThinkingBubble isRateLimited={!!isRateLimitError} />}
+            {showThinking && <ThinkingBubble isRateLimited={!!isRateLimitError} mode={thinkingMode} />}
           </ConversationContent>
           <ConversationScrollButton />
         </Conversation>
@@ -301,7 +318,7 @@ export function Chat({ className }: Props) {
         }}
       >
         <Settings />
-        <ModelSelector />
+        <ModelSelector disabled={isBusy} />
         <Input
           className="w-full font-mono text-sm rounded-lg border border-border/50 bg-background shadow-inner focus-visible:ring-1 focus-visible:ring-primary/50"
           disabled={isBusy}
@@ -315,22 +332,41 @@ export function Chat({ className }: Props) {
           }
           value={input}
         />
-        <Button
-          className={cn(
-            'rounded-lg shadow-sm transition-all',
-            (isBusy || isOnCooldown) && 'opacity-70 cursor-not-allowed'
-          )}
-          type="submit"
-          disabled={status !== 'ready' || !input.trim() || isOnCooldown}
-        >
-          {isBusy ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : isOnCooldown ? (
-            <Clock className="w-4 h-4 animate-pulse" />
-          ) : (
-            <SendIcon className="w-4 h-4" />
-          )}
-        </Button>
+        {isBusy ? (
+          <Button
+            className="rounded-lg shadow-sm transition-all bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            type="button"
+            onClick={() => {
+              console.log('Stopping chat stream manually...')
+              stop()
+              if (projectId) {
+                try {
+                  localStorage.setItem(`vibe-chat-${projectId}`, JSON.stringify(messages))
+                } catch (e) {
+                  console.warn('Failed to save chat messages on stop', e)
+                }
+              }
+            }}
+            title="Stop generating"
+          >
+            <Square className="w-4 h-4 fill-current" />
+          </Button>
+        ) : (
+          <Button
+            className={cn(
+              'rounded-lg shadow-sm transition-all',
+              isOnCooldown && 'opacity-70 cursor-not-allowed'
+            )}
+            type="submit"
+            disabled={status !== 'ready' || !input.trim() || isOnCooldown}
+          >
+            {isOnCooldown ? (
+              <Clock className="w-4 h-4 animate-pulse" />
+            ) : (
+              <SendIcon className="w-4 h-4" />
+            )}
+          </Button>
+        )}
       </form>
     </Panel>
   )

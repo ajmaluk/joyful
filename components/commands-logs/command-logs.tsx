@@ -26,14 +26,25 @@ export function CommandLogs({ command, onLog, onCompleted }: Props) {
         }
 
         const log = await getCommand(command.sandboxId, command.cmdId)
-        onCompleted({
-          sandboxId: log.sandboxId,
-          cmdId: log.cmdId,
-          startedAt: log.startedAt,
-          exitCode: log.exitCode ?? 0,
-          command: command.command,
-          args: command.args,
-        })
+        if (log) {
+          onCompleted({
+            sandboxId: log.sandboxId,
+            cmdId: log.cmdId,
+            startedAt: log.startedAt,
+            exitCode: log.exitCode ?? 0,
+            command: command.command,
+            args: command.args,
+          })
+        } else {
+          onCompleted({
+            sandboxId: command.sandboxId,
+            cmdId: command.cmdId,
+            startedAt: command.startedAt,
+            exitCode: 0,
+            command: command.command,
+            args: command.args,
+          })
+        }
       })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,27 +77,40 @@ const logSchema = z.object({
 })
 
 async function* getCommandLogs(sandboxId: string, cmdId: string) {
-  const response = await fetch(
-    `/api/sandboxes/${sandboxId}/cmds/${cmdId}/logs`,
-    { headers: { 'Content-Type': 'application/json' } }
-  )
+  try {
+    const response = await fetch(
+      `/api/sandboxes/${sandboxId}/cmds/${cmdId}/logs`,
+      { headers: { 'Content-Type': 'application/json' } }
+    )
 
-  const reader = response.body!.getReader()
-  const decoder = new TextDecoder()
-  let line = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    line += decoder.decode(value, { stream: true })
-    const lines = line.split('\n')
-    for (let i = 0; i < lines.length - 1; i++) {
-      if (lines[i]) {
-        const logEntry = JSON.parse(lines[i])
-        yield logSchema.parse(logEntry)
-      }
+    if (!response.ok || !response.body) {
+      console.warn('getCommandLogs failed', response.status)
+      return
     }
-    line = lines[lines.length - 1]
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let line = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      line += decoder.decode(value, { stream: true })
+      const lines = line.split('\n')
+      for (let i = 0; i < lines.length - 1; i++) {
+        if (lines[i]) {
+          try {
+            const logEntry = JSON.parse(lines[i])
+            yield logSchema.parse(logEntry)
+          } catch (parseErr) {
+            console.warn('Failed to parse log entry line in command-logs', parseErr)
+          }
+        }
+      }
+      line = lines[lines.length - 1]
+    }
+  } catch (err) {
+    console.error('getCommandLogs connection error', err)
   }
 }
 
@@ -98,7 +122,17 @@ const cmdSchema = z.object({
 })
 
 async function getCommand(sandboxId: string, cmdId: string) {
-  const response = await fetch(`/api/sandboxes/${sandboxId}/cmds/${cmdId}`)
-  const json = await response.json()
-  return cmdSchema.parse(json)
+  try {
+    const response = await fetch(`/api/sandboxes/${sandboxId}/cmds/${cmdId}`)
+    if (!response.ok) {
+      console.warn('getCommand failed', response.status)
+      return null
+    }
+    const text = await response.text()
+    if (!text) return null
+    return cmdSchema.parse(JSON.parse(text))
+  } catch (err) {
+    console.warn('getCommand failed for', cmdId, err)
+    return null
+  }
 }

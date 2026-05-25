@@ -2,6 +2,7 @@ import type { ReasoningUIPart } from 'ai'
 import { MessageSpinner } from '../message-spinner'
 import { useReasoningContext } from '../message'
 import { Streamdown } from 'streamdown'
+import { escapeHtmlOutsideCodeBlocks } from '@/lib/utils'
 
 export function Reasoning({
   part,
@@ -37,7 +38,7 @@ export function Reasoning({
       <div className="px-3 py-2">
         <div className="text-secondary-foreground font-mono leading-normal">
           {isExpanded || !hasMoreContent ? (
-            <Streamdown>{text}</Streamdown>
+            <Streamdown>{escapeHtmlOutsideCodeBlocks(text)}</Streamdown>
           ) : (
             <div className="overflow-hidden">{firstLine}</div>
           )}

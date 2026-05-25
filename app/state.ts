@@ -48,11 +48,48 @@ export function useCommandErrorsLogs() {
   return { errors }
 }
 
+export async function syncProjectFiles(projectId: string, sandboxId: string, filePaths: string[]) {
+  if (typeof window === 'undefined') return
+  try {
+    const existing = JSON.parse(localStorage.getItem(`joyful_project_${projectId}`) || 'null')
+    if (!existing) return
+
+    const updatedFiles = [...existing.files]
+
+    await Promise.all(
+      filePaths.map(async (path) => {
+        const cleanPath = path.startsWith('/') ? path.substring(1) : path
+        try {
+          const res = await fetch(`/api/sandboxes/${sandboxId}/files?path=${encodeURIComponent(cleanPath)}`)
+          if (res.ok) {
+            const content = await res.text()
+            const idx = updatedFiles.findIndex((f: any) => f.path === path)
+            if (idx >= 0) {
+              updatedFiles[idx] = { path, content }
+            } else {
+              updatedFiles.push({ path, content })
+            }
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch file content for ${path}:`, err)
+        }
+      })
+    )
+
+    existing.files = updatedFiles
+    existing.updatedAt = new Date().toISOString()
+    saveProject(existing)
+  } catch (e) {
+    console.warn('Failed to sync project files:', e)
+  }
+}
+
 export const useSandboxStore = create<SandboxStore>()((set) => ({
   addGeneratedFiles: (files) =>
     set((state) => {
       const updated = new Set([...state.generatedFiles, ...files])
       const pid = state.projectId
+      const sandboxId = state.sandboxId
       if (pid && files.length > 0) {
         try {
           const existing = JSON.parse(localStorage.getItem(`joyful_project_${pid}`) || 'null')
@@ -67,6 +104,10 @@ export const useSandboxStore = create<SandboxStore>()((set) => ({
           }
         } catch (e) {
           console.warn('Failed to load project for file update', pid, e)
+        }
+
+        if (sandboxId) {
+          syncProjectFiles(pid, sandboxId, files)
         }
       }
       return { generatedFiles: updated }
@@ -127,6 +168,26 @@ export const useSandboxStore = create<SandboxStore>()((set) => ({
   setSandboxId: (sandboxId) =>
     set((state) => {
       if (state.sandboxId === sandboxId) return {}
+
+      const pid = state.projectId
+      if (pid && sandboxId) {
+        try {
+          const savedProject = localStorage.getItem(`joyful_project_${pid}`)
+          if (savedProject) {
+            const project = JSON.parse(savedProject)
+            if (project.files && project.files.length > 0) {
+              fetch(`/api/sandboxes/${sandboxId}/files`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: project.files }),
+              }).catch((err) => console.warn('Failed to sync files on sandbox set:', err))
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to read project for sync on sandbox set', e)
+        }
+      }
+
       if (state.sandboxId && state.sandboxId !== sandboxId) {
         return {
           sandboxId,
@@ -234,12 +295,14 @@ export function useProjectPersistence(projectId?: string) {
     const sandboxKey = `vibe-sandbox-${projectId}`
     const fileExplorerKey = `vibe-file-explorer-${projectId}`
 
-    // Load initial state
     try {
       const savedSandbox = localStorage.getItem(sandboxKey)
+      let sandboxIdToSync: string | undefined
       if (savedSandbox) {
         const parsed = JSON.parse(savedSandbox)
+        sandboxIdToSync = parsed.sandboxId
         useSandboxStore.setState({
+          projectId,
           commands: parsed.commands || [],
           paths: parsed.paths || [],
           sandboxId: parsed.sandboxId,
@@ -249,6 +312,33 @@ export function useProjectPersistence(projectId?: string) {
           generatedFiles: new Set(parsed.generatedFiles || []),
           chatStatus: parsed.chatStatus || 'ready',
         })
+      } else {
+        useSandboxStore.setState({
+          projectId,
+          commands: [],
+          paths: [],
+          sandboxId: undefined,
+          status: undefined,
+          url: undefined,
+          urlUUID: undefined,
+          generatedFiles: new Set(),
+          chatStatus: 'ready',
+        })
+      }
+
+      if (sandboxIdToSync) {
+        const projectKey = `joyful_project_${projectId}`
+        const savedProject = localStorage.getItem(projectKey)
+        if (savedProject) {
+          const project = JSON.parse(savedProject)
+          if (project.files && project.files.length > 0) {
+            fetch(`/api/sandboxes/${sandboxIdToSync}/files`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files: project.files }),
+            }).catch((err) => console.warn('Failed to sync files on load:', err))
+          }
+        }
       }
 
       const savedFileExplorer = localStorage.getItem(fileExplorerKey)
@@ -257,7 +347,16 @@ export function useProjectPersistence(projectId?: string) {
         useFileExplorerStore.setState({
           paths: parsed.paths || [],
         })
+      } else {
+        useFileExplorerStore.setState({
+          paths: [],
+        })
       }
+
+      useMonitorState.setState({
+        cursor: 0,
+        scheduled: false,
+      })
     } catch (e) {
       console.error('Failed to load project state', e)
     }
@@ -291,10 +390,30 @@ export function useProjectPersistence(projectId?: string) {
       })
     })
 
+    const handleUnloadSave = () => {
+      const state = useSandboxStore.getState()
+      const fileState = useFileExplorerStore.getState()
+      const toSave = {
+        commands: state.commands,
+        paths: state.paths,
+        sandboxId: state.sandboxId,
+        status: state.status,
+        url: state.url,
+        urlUUID: state.urlUUID,
+        generatedFiles: Array.from(state.generatedFiles),
+        chatStatus: state.chatStatus,
+      }
+      localStorage.setItem(sandboxKey, JSON.stringify(toSave))
+      localStorage.setItem(fileExplorerKey, JSON.stringify({ paths: fileState.paths }))
+    }
+
+    window.addEventListener('beforeunload', handleUnloadSave)
+
     return () => {
       if (saveTimeout) clearTimeout(saveTimeout)
       unsubSandbox()
       unsubFileExplorer()
+      window.removeEventListener('beforeunload', handleUnloadSave)
     }
   }, [projectId, setProjectId, setChatStatus])
 }

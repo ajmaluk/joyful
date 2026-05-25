@@ -3,6 +3,7 @@ import { BugIcon } from 'lucide-react'
 import { ToolHeader } from '../tool-header'
 import { ToolMessage } from '../tool-message'
 import { Streamdown } from 'streamdown'
+import { escapeHtmlOutsideCodeBlocks } from '@/lib/utils'
 
 export function ReportErrors({
   message,
@@ -16,7 +17,7 @@ export function ReportErrors({
         <span>Auto-detected errors</span>
       </ToolHeader>
       <div className="relative min-h-5">
-        <Streamdown>{message.summary}</Streamdown>
+        <Streamdown>{escapeHtmlOutsideCodeBlocks(message.summary)}</Streamdown>
       </div>
     </ToolMessage>
   )

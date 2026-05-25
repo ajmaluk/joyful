@@ -1,4 +1,7 @@
 import { type ChatUIMessage } from '@/components/chat/types'
+
+export const runtime = 'edge'
+
 import {
   convertToModelMessages,
   createUIMessageStream,

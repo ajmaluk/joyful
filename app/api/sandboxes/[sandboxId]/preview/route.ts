@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox } from '@/lib/sandbox'
 
+export const runtime = 'edge'
+
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ sandboxId: string }> }

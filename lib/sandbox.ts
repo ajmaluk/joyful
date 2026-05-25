@@ -1,0 +1,134 @@
+import { Readable } from 'stream'
+
+export class APIError extends Error {
+  json: any
+  text?: string
+
+  constructor(message: string, json: any, text?: string) {
+    super(message)
+    this.name = 'APIError'
+    this.json = json
+    this.text = text
+  }
+}
+
+export interface SandboxOptions {
+  timeout?: number
+  ports?: number[]
+}
+
+export interface RunCommandOptions {
+  cmd: string
+  args?: string[]
+  detached?: boolean
+  sudo?: boolean
+}
+
+export class Command {
+  cmdId: string
+  startedAt: number
+  exitCode: number | null = null
+  private _cmd: string
+  private _args: string[]
+
+  constructor(cmdId: string, cmd: string, args: string[]) {
+    this.cmdId = cmdId
+    this.startedAt = Date.now()
+    this._cmd = cmd
+    this._args = args
+  }
+
+  async wait() {
+    this.exitCode = 0
+    return {
+      exitCode: 0,
+      stdout: async () => `[mock-sandbox] Executing command: ${this._cmd} ${this._args.join(' ')}`,
+      stderr: async () => '',
+    }
+  }
+
+  async *logs() {
+    yield {
+      data: `[mock-sandbox] Starting process: ${this._cmd} ${this._args.join(' ')}\n`,
+      stream: 'stdout' as const,
+      timestamp: Date.now(),
+    }
+    yield {
+      data: `[mock-sandbox] Process completed successfully.\n`,
+      stream: 'stdout' as const,
+      timestamp: Date.now(),
+    }
+  }
+}
+
+// Global in-memory map of active sandboxes
+export const sandboxes = new Map<string, MockSandbox>()
+
+export class MockSandbox {
+  sandboxId: string
+  ports: number[]
+  files: Map<string, string> = new Map()
+  commands: Map<string, Command> = new Map()
+
+  constructor(sandboxId: string, ports: number[] = []) {
+    this.sandboxId = sandboxId
+    this.ports = ports
+  }
+
+  async writeFiles(files: { path: string; content: Buffer }[]) {
+    for (const f of files) {
+      const normalizedPath = f.path.startsWith('/') ? f.path : '/' + f.path
+      this.files.set(normalizedPath, f.content.toString('utf8'))
+    }
+  }
+
+  async readFile(options: { path: string }) {
+    const normalizedPath = options.path.startsWith('/') ? options.path : '/' + options.path
+    const content = this.files.get(normalizedPath)
+    if (content === undefined) {
+      return null
+    }
+    const buffer = Buffer.from(content, 'utf8')
+    return Readable.from(buffer)
+  }
+
+  async runCommand(options: RunCommandOptions) {
+    const cmdId = 'cmd_' + Math.random().toString(36).substring(2, 8)
+    const cmd = new Command(cmdId, options.cmd, options.args ?? [])
+    this.commands.set(cmdId, cmd)
+    return cmd
+  }
+
+  async getCommand(cmdId: string) {
+    const cmd = this.commands.get(cmdId)
+    if (!cmd) {
+      throw new Error(`Command not found: ${cmdId}`)
+    }
+    return cmd
+  }
+
+  async getURL(_port?: number) {
+    return `/api/sandboxes/${this.sandboxId}/preview`
+  }
+}
+
+export const Sandbox = {
+  async create(options: SandboxOptions = {}) {
+    const sandboxId = 'sb_' + Math.random().toString(36).substring(2, 10)
+    const sandbox = new MockSandbox(sandboxId, options.ports)
+    sandboxes.set(sandboxId, sandbox)
+    return sandbox
+  },
+
+  async get(options: { sandboxId: string }) {
+    let sandbox = sandboxes.get(options.sandboxId)
+    if (!sandbox) {
+      sandbox = new MockSandbox(options.sandboxId)
+      sandboxes.set(options.sandboxId, sandbox)
+    }
+    return sandbox
+  }
+}
+
+export type Sandbox = MockSandbox
+

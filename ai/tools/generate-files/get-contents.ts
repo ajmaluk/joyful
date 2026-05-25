@@ -1,5 +1,6 @@
 import { streamText, Output, type ModelMessage } from 'ai'
 import { getModelOptions } from '@/ai/gateway'
+import { Models } from '@/ai/constants'
 import { Deferred } from '@/lib/deferred'
 import z from 'zod'
 
@@ -33,66 +34,97 @@ interface FileContentChunk {
 export async function* getContents(
   params: Params
 ): AsyncGenerator<FileContentChunk> {
-  const generated: z.infer<typeof fileSchema>[] = []
-  const deferred = new Deferred<void>()
-  const result = streamText({
-    ...getModelOptions(params.modelId, { reasoningEffort: 'low' }),
-    maxOutputTokens: 64000,
-    system:
-      'You are a file content generator. You must generate files based on the conversation history and the provided paths. NEVER generate lock files (pnpm-lock.yaml, package-lock.json, yarn.lock) - these are automatically created by package managers.',
-    messages: [
-      ...params.messages,
-      {
-        role: 'user',
-        content: `Generate the content of the following files according to the conversation: ${params.paths.map(
-          (path) => `\n - ${path}`
-        )}`,
-      },
-    ],
-    output: Output.object({ schema: z.object({ files: z.array(fileSchema) }) }),
-    onError: (error) => {
-      deferred.reject(error)
-      console.error('Error communicating with AI')
-      console.error(JSON.stringify(error, null, 2))
-    },
-  })
+  const fallbackOrder: string[] = []
+  if (params.modelId === Models.FreeModelGPT) {
+    fallbackOrder.push(Models.NvidiaMistral, Models.GroqLlama)
+  } else if (params.modelId === Models.GroqLlama) {
+    fallbackOrder.push(Models.FreeModelGPT, Models.NvidiaMistral)
+  } else {
+    fallbackOrder.push(Models.FreeModelGPT, Models.GroqLlama)
+  }
+  const modelsToTry = [params.modelId, ...fallbackOrder]
 
-  for await (const items of result.partialOutputStream) {
-    if (!Array.isArray(items?.files)) {
-      continue
-    }
+  let lastError: unknown
 
-    const written = generated.map((file) => file.path)
-    const paths = written.concat(
-      items.files
-        .slice(generated.length, items.files.length - 1)
-        .flatMap((f) => (f?.path ? [f.path] : []))
-    )
-
-    const files = items.files
-      .slice(generated.length)
-      .filter((file): file is z.infer<typeof fileSchema> => {
-        return fileSchema.safeParse(file).success
+  for (const modelId of modelsToTry) {
+    const generated: z.infer<typeof fileSchema>[] = []
+    const deferred = new Deferred<void>()
+    
+    try {
+      const result = streamText({
+        ...getModelOptions(modelId, { reasoningEffort: 'low' }),
+        maxOutputTokens: 64000,
+        system:
+          'You are a file content generator. You must generate files based on the conversation history and the provided paths. NEVER generate lock files (pnpm-lock.yaml, package-lock.json, yarn.lock) - these are automatically created by package managers.',
+        messages: [
+          ...params.messages,
+          {
+            role: 'user',
+            content: `Generate the content of the following files according to the conversation: ${params.paths.map(
+              (path) => `\n - ${path}`
+            )}`,
+          },
+        ],
+        output: Output.object({ schema: z.object({ files: z.array(fileSchema) }) }),
+        onError: (error) => {
+          deferred.reject(error)
+          console.error(`Error communicating with AI (${modelId})`)
+          console.error(JSON.stringify(error, null, 2))
+        },
       })
 
-    if (files.length > 0) {
-      yield { files, paths, written }
-      generated.push(...files)
-    } else {
-      yield { files: [], written, paths }
+      for await (const items of result.partialOutputStream) {
+        if (!Array.isArray(items?.files)) {
+          continue
+        }
+
+        const written = generated.map((file) => file.path)
+        const paths = written.concat(
+          items.files
+            .slice(generated.length, items.files.length - 1)
+            .flatMap((f) => (f?.path ? [f.path] : []))
+        )
+
+        const files = items.files
+          .slice(generated.length)
+          .filter((file): file is z.infer<typeof fileSchema> => {
+            return fileSchema.safeParse(file).success
+          })
+
+        if (files.length > 0) {
+          yield { files, paths, written }
+          generated.push(...files)
+        } else {
+          yield { files: [], written, paths }
+        }
+      }
+
+      const raceResult = await Promise.race([result.output, deferred.promise])
+      if (!raceResult) {
+        throw new Error('Unexpected Error: Deferred was resolved before the result')
+      }
+
+      const written = generated.map((file) => file.path)
+      const files = raceResult.files.slice(generated.length)
+      const paths = written.concat(files.map((file) => file.path))
+      if (files.length > 0) {
+        yield { files, written, paths }
+        generated.push(...files)
+      }
+
+      // If we reach here successfully, we're done and can exit the fallback loop.
+      return
+    } catch (error) {
+      lastError = error
+      if (generated.length > 0) {
+        // If we already yielded parts of the files, we cannot cleanly fall back to another model.
+        throw error
+      }
+      console.warn(`Model ${modelId} failed in getContents. Attempting fallback...`)
+      // Wait a moment before retrying
+      await new Promise((resolve) => setTimeout(resolve, 1500))
     }
   }
 
-  const raceResult = await Promise.race([result.output, deferred.promise])
-  if (!raceResult) {
-    throw new Error('Unexpected Error: Deferred was resolved before the result')
-  }
-
-  const written = generated.map((file) => file.path)
-  const files = raceResult.files.slice(generated.length)
-  const paths = written.concat(files.map((file) => file.path))
-  if (files.length > 0) {
-    yield { files, written, paths }
-    generated.push(...files)
-  }
+  throw lastError
 }

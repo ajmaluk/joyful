@@ -72,6 +72,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         } else if (message?.includes?.('timeout') || message?.includes?.('timed out')) {
           toast.error('AI request timed out. Please try a shorter prompt.')
           console.error('Timeout error:', error)
+        } else if (message?.includes?.('Tool result is missing')) {
+          toast.error('The AI response was interrupted mid-stream. Please try again.')
+          console.warn('Tool result missing - stream interrupted:', error)
         } else {
           toast.error(`Communication error: ${message}`)
           console.error('Error sending message:', error)

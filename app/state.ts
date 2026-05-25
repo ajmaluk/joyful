@@ -9,7 +9,7 @@ import { create } from 'zustand'
 import { saveProject, safeSetItem } from '@/lib/services/storage'
 
 interface SandboxStore {
-  addGeneratedFiles: (files: string[]) => void
+  addGeneratedFiles: (files: { path: string; content: string }[]) => void
   addLog: (data: { sandboxId: string; cmdId: string; log: CommandLog }) => void
   addPaths: (paths: string[]) => void
   chatStatus: ChatStatus
@@ -98,27 +98,28 @@ export async function syncProjectFiles(projectId: string, sandboxId: string, fil
 export const useSandboxStore = create<SandboxStore>()((set) => ({
   addGeneratedFiles: (files) =>
     set((state) => {
-      const updated = new Set([...state.generatedFiles, ...files])
+      const filePaths = files.map((f) => f.path)
+      const updated = new Set([...state.generatedFiles, ...filePaths])
       const pid = state.projectId
-      const sandboxId = state.sandboxId
       if (pid && files.length > 0) {
         try {
           const existing = JSON.parse(localStorage.getItem(`joyful_project_${pid}`) || 'null')
           if (existing) {
-            const existingPaths = new Set(existing.files.map((f: any) => f.path))
-            const newFiles = files.filter((f: string) => !existingPaths.has(f)).map((path: string) => ({ path, content: '' }))
-            if (newFiles.length > 0) {
-              existing.files = [...existing.files, ...newFiles]
-              existing.updatedAt = new Date().toISOString()
-              saveProject(existing)
+            const updatedFiles = [...existing.files]
+            for (const file of files) {
+              const idx = updatedFiles.findIndex((f: any) => f.path === file.path)
+              if (idx >= 0) {
+                updatedFiles[idx] = file
+              } else {
+                updatedFiles.push(file)
+              }
             }
+            existing.files = updatedFiles
+            existing.updatedAt = new Date().toISOString()
+            saveProject(existing)
           }
         } catch (e) {
           console.warn('Failed to load project for file update', pid, e)
-        }
-
-        if (sandboxId) {
-          syncProjectFiles(pid, sandboxId, files)
         }
       }
       return { generatedFiles: updated }
@@ -246,7 +247,7 @@ export const useFileExplorerStore = create<FileExplorerStore>()((set) => ({
 }))
 
 export function useDataStateMapper() {
-  const { addPaths, setSandboxId, setUrl, upsertCommand, addGeneratedFiles, sandboxId } =
+  const { addPaths, setSandboxId, setUrl, upsertCommand, addGeneratedFiles, sandboxId, projectId } =
     useSandboxStore()
   const { errors } = useCommandErrorsLogs()
   const { setCursor } = useMonitorState()
@@ -265,7 +266,15 @@ export function useDataStateMapper() {
         if (data.data.status === 'uploaded') {
           setCursor(errors.length)
           addPaths(data.data.paths)
-          addGeneratedFiles(data.data.paths)
+          if (data.data.files && data.data.files.length > 0) {
+            addGeneratedFiles(data.data.files)
+          } else {
+            // Fallback for older messages
+            addGeneratedFiles(data.data.paths.map((p) => ({ path: p, content: '' })))
+            if (sandboxId) {
+              syncProjectFiles(projectId || '', sandboxId, data.data.paths)
+            }
+          }
         }
         break
       case 'data-run-command':

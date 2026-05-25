@@ -60,8 +60,9 @@ async function streamWithRetry(opts: {
   formattedMessages: Awaited<ReturnType<typeof convertToModelMessages>>
   writer: Parameters<Parameters<typeof createUIMessageStream>[0]['execute']>[0]['writer']
   maxRetries?: number
+  streamState: { hasSentData: boolean }
 }): Promise<void> {
-  const { modelId, reasoningEffort, systemPrompt, formattedMessages, writer, maxRetries = 3 } = opts
+  const { modelId, reasoningEffort, systemPrompt, formattedMessages, writer, maxRetries = 3, streamState } = opts
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -89,12 +90,14 @@ async function streamWithRetry(opts: {
       await reader.read()
       reader.releaseLock()
 
+      streamState.hasSentData = true
+
       await writer.merge(stream2 as any)
       return // Success — exit retry loop
     } catch (error) {
       const isLast = attempt === maxRetries - 1
 
-      if (isRateLimitError(error) && !isLast) {
+      if (isRateLimitError(error) && !isLast && !streamState.hasSentData) {
         // Calculate backoff: use server-suggested retry-after, or exponential backoff
         const retryAfter = getRetryAfterMs(error)
         const exponentialBackoff = Math.min(3000 * Math.pow(2.5, attempt), 30000)
@@ -178,6 +181,7 @@ export async function POST(req: Request) {
           await sleep(2000)
         }
 
+        const streamState = { hasSentData: false }
         try {
           await streamWithRetry({
             modelId,
@@ -185,9 +189,15 @@ export async function POST(req: Request) {
             systemPrompt: prompt,
             formattedMessages,
             writer,
+            streamState,
           })
         } catch (error) {
-          console.warn(`Selected model ${modelId} failed. Attempting cascade fallbacks...`, error)
+          if (streamState.hasSentData) {
+            console.error(`Model ${modelId} failed mid-stream after sending data. Rethrowing to let client retry...`, error)
+            throw error
+          }
+
+          console.warn(`Selected model ${modelId} failed before sending data. Attempting cascade fallbacks...`, error)
 
           // Determine the order of fallbacks
           const fallbackOrder: string[] = []
@@ -214,11 +224,16 @@ export async function POST(req: Request) {
                 formattedMessages,
                 writer,
                 maxRetries: 2,
+                streamState,
               })
               succeeded = true
               break
             } catch (fallbackError) {
-              console.error(`Fallback to ${fallbackModel} failed:`, fallbackError)
+              if (streamState.hasSentData) {
+                console.error(`Fallback model ${fallbackModel} failed mid-stream after sending data. Rethrowing...`, fallbackError)
+                throw fallbackError
+              }
+              console.error(`Fallback to ${fallbackModel} failed before sending data:`, fallbackError)
             }
           }
 

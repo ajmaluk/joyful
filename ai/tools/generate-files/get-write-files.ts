@@ -54,7 +54,15 @@ export function getWriteFiles({ sandbox, toolCallId, writer }: Params) {
     writer.write({
       id: toolCallId,
       type: 'data-generating-files',
-      data: { sandboxId: sandbox.sandboxId, paths, status: 'uploaded' },
+      data: {
+        sandboxId: sandbox.sandboxId,
+        paths,
+        status: 'uploaded',
+        files: params.files.map((file) => ({
+          path: file.path,
+          content: file.content,
+        })),
+      },
     })
   }
 }

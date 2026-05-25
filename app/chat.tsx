@@ -282,7 +282,7 @@ export function Chat({ className }: Props) {
             <span>Rate limit reached. The AI will automatically retry — please wait a moment.</span>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => regenerate()}>
+            <Button size="sm" variant="outline" onClick={() => regenerate({ body: { modelId, reasoningEffort } })}>
               <RefreshCw className="w-3 h-3 mr-2" />
               Retry Now
             </Button>
@@ -298,11 +298,11 @@ export function Chat({ className }: Props) {
             <span>Connection lost or error occurred.</span>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => regenerate()}>
+            <Button size="sm" variant="outline" onClick={() => regenerate({ body: { modelId, reasoningEffort } })}>
               <RefreshCw className="w-3 h-3 mr-2" />
               Retry Last Message
             </Button>
-            <Button size="sm" onClick={() => resumeStream()}>
+            <Button size="sm" onClick={() => resumeStream({ body: { modelId, reasoningEffort } })}>
               <PlayIcon className="w-3 h-3 mr-2" />
               Continue
             </Button>

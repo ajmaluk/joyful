@@ -17,7 +17,15 @@ export function ReportErrors({
         <span>Auto-detected errors</span>
       </ToolHeader>
       <div className="relative min-h-5">
-        <Streamdown>{escapeHtmlOutsideCodeBlocks(message.summary)}</Streamdown>
+        <Streamdown
+          components={{
+            p: ({ node, ...props }: any) => (
+              <div {...props} className={props.className || 'mb-4 last:mb-0'} />
+            ),
+          }}
+        >
+          {escapeHtmlOutsideCodeBlocks(message.summary)}
+        </Streamdown>
       </div>
     </ToolMessage>
   )

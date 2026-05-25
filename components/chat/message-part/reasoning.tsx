@@ -38,7 +38,15 @@ export function Reasoning({
       <div className="px-3 py-2">
         <div className="text-secondary-foreground font-mono leading-normal">
           {isExpanded || !hasMoreContent ? (
-            <Streamdown>{escapeHtmlOutsideCodeBlocks(text)}</Streamdown>
+            <Streamdown
+              components={{
+                p: ({ node, ...props }: any) => (
+                  <div {...props} className={props.className || 'mb-4 last:mb-0'} />
+                ),
+              }}
+            >
+              {escapeHtmlOutsideCodeBlocks(text)}
+            </Streamdown>
           ) : (
             <div className="overflow-hidden">{firstLine}</div>
           )}

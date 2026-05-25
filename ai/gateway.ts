@@ -49,7 +49,7 @@ export function getModelOptions(
       model: freeModel.chat(process.env.FREEMODEL_MODEL || 'gpt-5.5'),
       topP,
       temperature,
-      maxTokens: 1000,
+      maxTokens: 8192,
       frequencyPenalty,
       presencePenalty,
     }
@@ -60,8 +60,7 @@ export function getModelOptions(
       model: groq.chat(process.env.GROQ_API_MODEL || 'llama-3.3-70b-versatile'),
       topP,
       temperature,
-      // Lower maxTokens for Groq free tier (12K TPM) to avoid rate-limit exhaustion.
-      maxTokens: 1024,
+      maxTokens: 8192,
       frequencyPenalty,
       presencePenalty,
     }

@@ -16,7 +16,15 @@ export function Text({ part }: { part: TextUIPart }) {
 
   return (
     <div className="text-sm px-3.5 py-3 border bg-secondary/90 text-secondary-foreground border-gray-300 rounded-md font-mono">
-      <Streamdown>{escapeHtmlOutsideCodeBlocks(cleanedText)}</Streamdown>
+      <Streamdown
+        components={{
+          p: ({ node, ...props }: any) => (
+            <div {...props} className={props.className || 'mb-4 last:mb-0'} />
+          ),
+        }}
+      >
+        {escapeHtmlOutsideCodeBlocks(cleanedText)}
+      </Streamdown>
     </div>
   )
 }

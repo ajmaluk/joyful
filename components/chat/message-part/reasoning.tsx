@@ -1,8 +1,37 @@
 import type { ReasoningUIPart } from 'ai'
 import { MessageSpinner } from '../message-spinner'
 import { useReasoningContext } from '../message'
-import { Streamdown } from 'streamdown'
-import { escapeHtmlOutsideCodeBlocks } from '@/lib/utils'
+
+function renderInline(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, '<code class="rounded bg-black/10 px-1 text-xs">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline hover:text-blue-300">$1</a>')
+}
+
+function renderMarkdown(text: string): string {
+  const lines = text.split('\n')
+  const result: string[] = []
+  let inList = false
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      if (inList) { result.push('</ul>'); inList = false }
+      result.push('<br/>')
+      continue
+    }
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (!inList) { result.push('<ul class="list-disc pl-4 my-2">'); inList = true }
+      result.push(`<li>${line.slice(2)}</li>`)
+      continue
+    }
+    if (inList) { result.push('</ul>'); inList = false }
+    result.push(`<div class="mb-2 last:mb-0">${renderInline(line)}</div>`)
+  }
+  if (inList) result.push('</ul>')
+  return result.join('\n')
+}
 
 export function Reasoning({
   part,
@@ -38,26 +67,7 @@ export function Reasoning({
       <div className="px-3 py-2">
         <div className="text-secondary-foreground font-mono leading-normal">
           {isExpanded || !hasMoreContent ? (
-            <Streamdown
-              components={{
-                p: ({ node, ...props }: any) => (
-                  <div {...props} className={props.className || 'mb-4 last:mb-0'} />
-                ),
-                a: ({ node, href, children, ...props }: any) => (
-                  <a
-                    {...props}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 underline hover:text-blue-300"
-                  >
-                    {children}
-                  </a>
-                ),
-              }}
-            >
-              {escapeHtmlOutsideCodeBlocks(text)}
-            </Streamdown>
+            <div dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />
           ) : (
             <div className="overflow-hidden">{firstLine}</div>
           )}

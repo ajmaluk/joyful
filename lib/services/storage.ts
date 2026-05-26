@@ -1,4 +1,5 @@
 import type { Project, UserSettings, ChatMessage, UserSkill, SavedGenerationState } from '@/lib/types';
+import { Sandbox } from '@/lib/sandbox';
 import { joyfulProviderConfig } from '@/lib/services/joyfulProvider';
 
 const STORAGE_KEYS = {
@@ -114,19 +115,15 @@ export function saveProject(project: Project): void {
 export function deleteProject(projectId: string): void {
   if (typeof window === 'undefined') return;
 
-  // 1. Destroy the server-side sandbox via API (Sandbox.destroy called directly
-  //    in the client is a no-op since the sandbox map lives on the server)
   try {
-    const sandboxRaw = localStorage.getItem(`vibe-sandbox-${projectId}`);
+    const sandboxRaw = localStorage.getItem(`joyful-sandbox-${projectId}`);
     if (sandboxRaw) {
       const parsed = JSON.parse(sandboxRaw);
       if (parsed.sandboxId) {
-        fetch(`/api/sandboxes/${parsed.sandboxId}`, { method: 'DELETE' })
-          .catch((err) => console.warn('Failed to destroy sandbox on delete:', err))
+        Sandbox.destroy(parsed.sandboxId)
       }
     }
   } catch {
-    // ignore parse/cleanup errors
   }
 
   // 2. Remove all localStorage entries associated with this project
@@ -135,9 +132,9 @@ export function deleteProject(projectId: string): void {
   localStorage.removeItem(`${STORAGE_KEYS.PROJECT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.CHAT_PREFIX}${projectId}`);
   localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
-  localStorage.removeItem(`vibe-sandbox-${projectId}`);
-  localStorage.removeItem(`vibe-file-explorer-${projectId}`);
-  localStorage.removeItem(`vibe-chat-${projectId}`);
+  localStorage.removeItem(`joyful-sandbox-${projectId}`);
+  localStorage.removeItem(`joyful-file-explorer-${projectId}`);
+  localStorage.removeItem(`joyful-chat-${projectId}`);
   window.dispatchEvent(new CustomEvent('joyful_projects_changed'));
 }
 

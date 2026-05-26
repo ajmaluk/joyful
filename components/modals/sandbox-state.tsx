@@ -9,11 +9,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useSandboxStore } from '@/app/state'
+import { Sandbox } from '@/lib/sandbox'
 import { useEffect } from 'react'
-import useSWR from 'swr'
 
 export function SandboxState() {
   const { sandboxId, status, setStatus } = useSandboxStore()
+
+  useEffect(() => {
+    if (!sandboxId) return
+    const interval = setInterval(() => {
+      const alive = Sandbox.exists(sandboxId)
+      if (!alive) setStatus('stopped')
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [sandboxId, setStatus])
+
   if (status === 'stopped') {
     return (
       <Dialog open>
@@ -31,33 +41,6 @@ export function SandboxState() {
       </Dialog>
     )
   }
-
-  return sandboxId ? (
-    <DirtyChecker sandboxId={sandboxId} setStatus={setStatus} />
-  ) : null
-}
-
-interface DirtyCheckerProps {
-  sandboxId: string
-  setStatus: (status: 'running' | 'stopped') => void
-}
-
-function DirtyChecker({ sandboxId, setStatus }: DirtyCheckerProps) {
-  const content = useSWR<'ok' | 'stopped'>(
-    `/api/sandboxes/${sandboxId}`,
-    async (pathname: string, init: RequestInit) => {
-      const response = await fetch(pathname, init)
-      const { status } = await response.json()
-      return status
-    },
-    { refreshInterval: 1000 }
-  )
-
-  useEffect(() => {
-    if (content.data === 'stopped') {
-      setStatus('stopped')
-    }
-  }, [setStatus, content.data])
 
   return null
 }

@@ -3,8 +3,9 @@ import type { DataPart } from '../messages/data-parts'
 import { Sandbox } from '@/lib/sandbox'
 import { getRichError } from './get-rich-error'
 import { tool } from 'ai'
-import description from './create-sandbox.md'
 import z from 'zod'
+
+const description = `Create a new local mock sandbox development environment — an ephemeral, in-memory workspace for file generation and command execution. Use this tool once per session when starting a new project. After creation, you can upload files, run commands, and access generated previews.`
 
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>

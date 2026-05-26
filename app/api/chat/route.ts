@@ -7,12 +7,10 @@ import {
   stepCountIs,
   streamText,
 } from 'ai'
-import { DEFAULT_MODEL, MODEL_NAMES, SUPPORTED_MODELS, Models } from '@/ai/constants'
-import { NextResponse } from 'next/server'
+import { DEFAULT_MODEL, MODEL_NAMES, SUPPORTED_MODELS } from '@/ai/constants'
 import { getModelOptions } from '@/ai/gateway'
-import { checkBotId } from 'botid/server'
+import { NextResponse } from 'next/server'
 import { tools } from '@/ai/tools'
-import prompt from './prompt.md'
 
 interface BodyData {
   messages: ChatUIMessage[]
@@ -118,15 +116,55 @@ async function streamWithRetry(opts: {
   }
 }
 
+const SYSTEM_PROMPT = `You are the Joyful Builder Agent, a coding assistant integrated with an in-browser sandbox. Your primary objective is to help users build and run full applications within a secure, ephemeral sandbox environment.
+
+All actions occur inside a single sandbox, for which you are solely responsible. This includes initialization, environment setup, code creation, workflow execution, and preview management.
+
+If you are able to confidently infer user intent based on prior context, you should proactively take the necessary actions rather than holding back due to uncertainty.
+
+CRITICAL RULES TO PREVENT LOOPS:
+1. NEVER regenerate files that already exist unless the user explicitly asks you to update them
+2. If an error occurs after file generation, DO NOT automatically regenerate all files - only fix the specific issue
+3. Track what operations you've already performed in the conversation and don't repeat them
+4. If a command fails, analyze the error before taking action - don't just retry the same thing
+5. When fixing errors, make targeted fixes rather than regenerating entire projects
+
+When generating UIs, ensure that the output is visually sleek, modern, and beautiful. Apply contemporary design principles and prioritize aesthetic appeal alongside functionality. Always make sure the designs are responsive, adapting gracefully to different screen sizes and devices.
+
+Prefer using Next.js for all new projects unless the user explicitly requests otherwise.
+
+When generating Next.js projects, always use next@15.5.9 or later.
+
+CRITICAL Next.js Requirements:
+- Config file MUST be named next.config.js or next.config.mjs (NEVER next.config.ts)
+- Global styles should be in app/globals.css when using App Router
+- Use the App Router structure: app/layout.tsx, app/page.tsx, etc.
+- Import global styles in app/layout.tsx as './globals.css'
+- To start the dev server, use pnpm run dev
+
+Files that should NEVER be manually generated: pnpm-lock.yaml, package-lock.json, yarn.lock, .next/, node_modules/
+
+By default, unless the user asks otherwise, assume the request is for frontend development. Unless the user explicitly asks for a backend, avoid including backend-like features, including any that require environment variables.
+
+# ERROR HANDLING - CRITICAL TO PREVENT LOOPS
+When errors are reported:
+1. READ the error message carefully - identify the SPECIFIC issue
+2. DO NOT regenerate all files - only fix what's broken
+3. If a dependency is missing, install it - don't regenerate the project
+4. If a config is wrong, update that specific file - don't regenerate everything
+5. NEVER repeat the same fix attempt twice
+6. If you've already tried to fix something and it didn't work, try a DIFFERENT approach
+
+IMPORTANT - PERSISTENCE RULE:
+- When you fix one error and another error appears, CONTINUE FIXING until the application works
+- DO NOT stop after fixing just one error - keep going until the dev server runs successfully
+
+MINIMIZE REASONING: Avoid verbose reasoning blocks throughout the entire session. Think efficiently and act quickly. Before any significant tool call, state a brief summary in 1-2 sentences maximum. Keep all reasoning, planning, and explanatory text to an absolute minimum. After each tool call, proceed directly to the next action without verbose validation or explanation.
+
+When concluding, generate a brief, focused summary (2-3 lines) that recaps the session's key results, omitting the initial plan or checklist.`
+
 export async function POST(req: Request) {
   const { messages, modelId = DEFAULT_MODEL, reasoningEffort } = await req.json() as BodyData
-
-  if (process.env.NODE_ENV !== 'development') {
-    const checkResult = await checkBotId()
-    if (checkResult.isBot) {
-      return NextResponse.json({ error: `Bot detected` }, { status: 403 })
-    }
-  }
 
   if (!SUPPORTED_MODELS.includes(modelId)) {
     return NextResponse.json(
@@ -177,7 +215,7 @@ export async function POST(req: Request) {
         // Add delay when using Groq to respect TPM limits on free tier (12K TPM).
         // Groq is extremely fast, so without throttling it burns through the token
         // budget in seconds and triggers 429s on follow-up tool calls.
-        if (modelId === Models.GroqLlama) {
+        if (modelId === 'groq/llama-3.3-70b') {
           await sleep(2000)
         }
 
@@ -186,7 +224,7 @@ export async function POST(req: Request) {
           await streamWithRetry({
             modelId,
             reasoningEffort,
-            systemPrompt: prompt,
+            systemPrompt: SYSTEM_PROMPT,
             formattedMessages,
             writer,
             streamState,
@@ -199,15 +237,11 @@ export async function POST(req: Request) {
 
           console.warn(`Selected model ${modelId} failed before sending data. Attempting cascade fallbacks...`, error)
 
-          // Determine the order of fallbacks
           const fallbackOrder: string[] = []
-          if (modelId === Models.FreeModelGPT) {
-            fallbackOrder.push(Models.NvidiaMistral, Models.GroqLlama)
-          } else if (modelId === Models.GroqLlama) {
-            fallbackOrder.push(Models.FreeModelGPT, Models.NvidiaMistral)
+          if (modelId === 'groq/llama-3.3-70b') {
+            fallbackOrder.push('nvidia/mistral-large-3')
           } else {
-            // Selected was Nvidia Mistral or Qwen
-            fallbackOrder.push(Models.FreeModelGPT, Models.GroqLlama)
+            fallbackOrder.push('groq/llama-3.3-70b')
           }
 
           let succeeded = false
@@ -220,7 +254,7 @@ export async function POST(req: Request) {
               await streamWithRetry({
                 modelId: fallbackModel,
                 reasoningEffort,
-                systemPrompt: prompt,
+            systemPrompt: SYSTEM_PROMPT,
                 formattedMessages,
                 writer,
                 maxRetries: 2,

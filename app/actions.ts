@@ -1,18 +1,9 @@
-'use server'
-
-import { revalidatePath } from 'next/cache'
-import { cookies } from 'next/headers'
-import ms from 'ms'
+'use client'
 
 export async function hideBanner() {
-  const store = await cookies()
-
-  store.set('banner-hidden', 'true', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    expires: new Date(Date.now() + ms('30d')),
-    path: '/',
-  })
-
-  revalidatePath('/', 'layout')
+  try {
+    document.cookie = 'banner-hidden=true; path=/; max-age=2592000; SameSite=Lax'
+  } catch {
+    // Cookies may not be available in all static contexts
+  }
 }

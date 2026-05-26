@@ -35,12 +35,11 @@ const statusLabels: Record<string, string> = {
   error: 'Connection error',
 }
 
-/** Minimum time (ms) between user message submissions to prevent rapid-fire duplicates */
 const SUBMIT_COOLDOWN_MS = 2000
 
 export function Chat({ className }: Props) {
   const [isLoaded, setIsLoaded] = useState(false)
-  const [input, setInput] = useLocalStorageValue('prompt-input')
+  const [input, setInput] = useLocalStorageValue('joyful-prompt-input')
   const { chat } = useSharedChatContext()
   const { modelId, reasoningEffort } = useSettings()
   const { messages, sendMessage, status, regenerate, error, resumeStream, stop, setMessages } = useChat<ChatUIMessage>({ chat })
@@ -54,7 +53,6 @@ export function Chat({ className }: Props) {
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const cooldownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-
   const statusText = statusLabels[status] || ''
 
   const statusSyncedRef = useRef(false)
@@ -66,11 +64,10 @@ export function Chat({ className }: Props) {
     setChatStatus(status)
   }, [status, setChatStatus])
 
-  // Load messages from localStorage on client-side mount
   useEffect(() => {
     if (projectId) {
       try {
-        const saved = localStorage.getItem(`vibe-chat-${projectId}`)
+        const saved = localStorage.getItem(`joyful-chat-${projectId}`)
         if (saved) {
           const parsed = JSON.parse(saved)
           setMessages(parsed)
@@ -90,7 +87,7 @@ export function Chat({ className }: Props) {
     const handleBeforeUnload = () => {
       if (projectId && messages.length > 0) {
         try {
-          localStorage.setItem(`vibe-chat-${projectId}`, JSON.stringify(messages))
+          localStorage.setItem(`joyful-chat-${projectId}`, JSON.stringify(messages))
         } catch (e) {
           console.warn('Failed to save chat messages on unload', e)
         }
@@ -102,8 +99,6 @@ export function Chat({ className }: Props) {
     }
   }, [projectId, messages])
 
-
-  // Clean up cooldown timer on unmount
   useEffect(() => {
     return () => {
       if (cooldownTimerRef.current) {
@@ -135,16 +130,10 @@ export function Chat({ className }: Props) {
     (text: string) => {
       const trimmed = text.trim()
       if (!trimmed) return
-
-      // Prevent rapid-fire submissions
       if (submittingRef.current) return
-
       const now = Date.now()
       const elapsed = now - lastSubmitTime.current
-      if (elapsed < SUBMIT_COOLDOWN_MS) {
-        // Still in cooldown — don't submit
-        return
-      }
+      if (elapsed < SUBMIT_COOLDOWN_MS) return
 
       submittingRef.current = true
       lastSubmitTime.current = now
@@ -170,13 +159,11 @@ export function Chat({ className }: Props) {
     if (initialSubmitRef.current) return
     initialSubmitRef.current = true
 
-    // Prevent duplicate submission across multiple mounted Chat components (mobile + desktop layout)
     const chatRaw = chat as any
     if (chatRaw.__initialPromptSubmitted) return
     chatRaw.__initialPromptSubmitted = true
 
     validateAndSubmitMessage(initialPrompt)
-
 
     const url = new URL(window.location.href)
     url.searchParams.delete('prompt')
@@ -185,11 +172,9 @@ export function Chat({ className }: Props) {
     window.history.replaceState({}, '', next)
   }, [searchParams, status, messages.length, projectId, validateAndSubmitMessage])
 
-
   const isBusy = status === 'streaming' || status === 'submitted'
   const isOnCooldown = cooldownRemaining > 0
 
-  // Detect rate-limit errors for a special UI treatment
   const isRateLimitError =
     error &&
     (String(error).includes('429') ||
@@ -201,7 +186,6 @@ export function Chat({ className }: Props) {
   const lastMessage = messages[messages.length - 1]
   const showThinking = (isBusy || !!isRateLimitError) && messages.length > 0
   const thinkingMode = lastMessage?.role === 'user' ? 'thinking' : 'working'
-
 
   if (!isLoaded) {
     return (
@@ -218,7 +202,6 @@ export function Chat({ className }: Props) {
   }
 
   return (
-
     <Panel className={className}>
       <PanelHeader>
         <div className="flex items-center font-mono font-semibold uppercase">
@@ -236,19 +219,18 @@ export function Chat({ className }: Props) {
         </div>
       </PanelHeader>
 
-      {/* Messages Area */}
       {messages.length === 0 ? (
         <div className="flex-1 min-h-0">
-          <div className="flex flex-col justify-center items-center h-full font-mono text-sm text-muted-foreground">
-            <p className="flex items-center font-semibold">
-              Click and try one of these prompts:
+          <div className="flex flex-col justify-center items-center h-full font-mono text-sm text-muted-foreground p-4">
+            <p className="flex items-center font-semibold mb-3">
+              Try one of these prompts:
             </p>
-            <ul className="p-4 space-y-1 text-center">
+            <ul className="space-y-2 w-full max-w-sm">
               {TEST_PROMPTS.map((prompt, idx) => (
                 <li
                   key={idx}
                   className={cn(
-                    "px-4 py-2 rounded-sm border border-dashed shadow-sm shadow-black cursor-pointer border-border hover:bg-secondary/50 hover:text-primary transition-opacity",
+                    "px-4 py-3 rounded-lg border border-dashed border-border cursor-pointer hover:bg-secondary/50 hover:text-primary transition-all text-center",
                     (isBusy || isOnCooldown) && "opacity-50 pointer-events-none"
                   )}
                   onClick={() => validateAndSubmitMessage(prompt)}
@@ -273,13 +255,11 @@ export function Chat({ className }: Props) {
         </Conversation>
       )}
 
-
-      {/* Rate Limit Error — special treatment with countdown */}
       {isRateLimitError && (
         <div className="flex flex-col items-center justify-center p-3 mb-2 mx-3 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-200 text-sm font-mono animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="w-4 h-4 animate-pulse" />
-            <span>Rate limit reached. The AI will automatically retry — please wait a moment.</span>
+            <span>Rate limit reached. The AI will automatically retry.</span>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => regenerate({ body: { modelId, reasoningEffort } })}>
@@ -290,7 +270,6 @@ export function Chat({ className }: Props) {
         </div>
       )}
 
-      {/* Generic Error — non-rate-limit errors */}
       {error && !isRateLimitError && (
         <div className="flex flex-col items-center justify-center p-3 mb-2 mx-3 rounded-lg border border-destructive/50 bg-destructive/10 text-destructive text-sm font-mono animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 mb-2">
@@ -306,7 +285,7 @@ export function Chat({ className }: Props) {
               size="sm"
               onClick={() => {
                 sendMessage(
-                  { text: 'Continue generating from where you left off. Start exactly at the next character without repeating any previous parts. Make sure to generate complete and valid files.' },
+                  { text: 'Continue generating from where you left off.' },
                   { body: { modelId, reasoningEffort } }
                 )
               }}
@@ -345,11 +324,10 @@ export function Chat({ className }: Props) {
             className="rounded-lg shadow-sm transition-all bg-destructive text-destructive-foreground hover:bg-destructive/90"
             type="button"
             onClick={() => {
-              console.log('Stopping chat stream manually...')
               stop()
               if (projectId) {
                 try {
-                  localStorage.setItem(`vibe-chat-${projectId}`, JSON.stringify(messages))
+                  localStorage.setItem(`joyful-chat-${projectId}`, JSON.stringify(messages))
                 } catch (e) {
                   console.warn('Failed to save chat messages on stop', e)
                 }

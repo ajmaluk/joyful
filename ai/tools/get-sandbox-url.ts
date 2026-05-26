@@ -2,8 +2,9 @@ import type { UIMessageStreamWriter, UIMessage } from 'ai'
 import type { DataPart } from '../messages/data-parts'
 import { Sandbox } from '@/lib/sandbox'
 import { tool } from 'ai'
-import description from './get-sandbox-url.md'
 import z from 'zod'
+
+const description = `Get the URL to preview the application running in the sandbox. Retrieves a preview URL for the sandbox that allows users to see generated HTML/JS apps. The URL provides a live preview of the built application.`
 
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>

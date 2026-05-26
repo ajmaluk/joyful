@@ -23,7 +23,7 @@ function getInitialMessages(projectId: string): ChatUIMessage[] {
     return initialMessagesCache.get(projectId)!
   }
   try {
-    const saved = localStorage.getItem(`vibe-chat-${projectId}`)
+    const saved = localStorage.getItem(`joyful-chat-${projectId}`)
     if (saved) {
       const parsed = JSON.parse(saved)
       initialMessagesCache.set(projectId, parsed)
@@ -56,7 +56,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const statusCode = (error && (error as any).statusCode) as number | undefined
 
         if (statusCode === 429 || message?.includes?.('Too Many Requests') || message?.includes?.('Rate limit') || message?.includes?.('rate limit') || message?.includes?.('TPM')) {
-          // Try to extract retry-after time from the error message
           const retryMatch = message.match(/(?:try again in|retry.?after[:\s]*)([\d.]+)\s*s/i)
           const waitTime = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 30
           toast.error(`Rate limit reached. Please wait ~${waitTime}s before trying again.`, {
@@ -86,7 +85,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!projectId) return
 
-    const chatKey = `vibe-chat-${projectId}`
+    const chatKey = `joyful-chat-${projectId}`
 
     const unsub = chat['~registerMessagesCallback'](() => {
       try {

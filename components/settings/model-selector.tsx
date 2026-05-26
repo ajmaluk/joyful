@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
   SelectGroup,
-  SelectLabel,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useMemo } from 'react'
@@ -29,25 +28,24 @@ export function ModelSelector({ className, disabled }: { className?: string; dis
       onValueChange={setModelId}
       disabled={disabled || isLoading || !!error || !models?.length}
     >
-      <SelectTrigger className={cn('bg-background', className)}>
+      <SelectTrigger className={cn('w-[140px] bg-background text-xs', className)}>
         {isLoading ? (
           <div className="flex items-center gap-2">
-            <Loader2Icon className="h-4 w-4 animate-spin" />
+            <Loader2Icon className="h-3 w-3 animate-spin" />
           </div>
         ) : error ? (
           <span className="text-red-500">Error</span>
         ) : !models?.length ? (
           <span>No models</span>
         ) : (
-          <SelectValue placeholder="Select a model" />
+          <SelectValue placeholder="Model" />
         )}
       </SelectTrigger>
 
       <SelectContent>
         <SelectGroup>
-          <SelectLabel>Models</SelectLabel>
           {models.map((model) => (
-            <SelectItem key={model.id} value={model.id}>
+            <SelectItem key={model.id} value={model.id} className="text-xs">
               {model.label}
             </SelectItem>
           ))}

@@ -1,4 +1,4 @@
-"use client";
+'use client'
 
 import type { Command, CommandLog } from '@/components/commands-logs/types'
 import type { DataPart } from '@/ai/messages/data-parts'
@@ -6,6 +6,7 @@ import type { ChatStatus, DataUIPart } from 'ai'
 import { useMonitorState } from '@/components/error-monitor/state'
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { Sandbox } from '@/lib/sandbox'
 import { saveProject, safeSetItem } from '@/lib/services/storage'
 
 interface SandboxStore {
@@ -51,15 +52,14 @@ export function useCommandErrorsLogs() {
 export async function syncProjectFiles(projectId: string, sandboxId: string, filePaths: string[]) {
   if (typeof window === 'undefined') return
   try {
-    // 1. Fetch all file contents in parallel without touching localStorage (preventing race conditions)
+    const sandbox = await Sandbox.get({ sandboxId })
     const fetchedResults = await Promise.all(
       filePaths.map(async (path) => {
         const cleanPath = path.startsWith('/') ? path.substring(1) : path
         try {
-          const res = await fetch(`/api/sandboxes/${sandboxId}/files?path=${encodeURIComponent(cleanPath)}`)
-          if (res.ok) {
-            const content = await res.text()
-            return { path, content }
+          const buf = await sandbox.readFile({ path: cleanPath })
+          if (buf) {
+            return { path, content: buf.toString('utf8') }
           }
         } catch (err) {
           console.warn(`Failed to fetch file content for ${path}:`, err)
@@ -71,13 +71,10 @@ export async function syncProjectFiles(projectId: string, sandboxId: string, fil
     const validResults = fetchedResults.filter((r): r is { path: string; content: string } => r !== null)
     if (validResults.length === 0) return
 
-    // 2. Re-read the ABSOLUTE LATEST project state from localStorage atomically right before writing
     const existing = JSON.parse(localStorage.getItem(`joyful_project_${projectId}`) || 'null')
     if (!existing) return
 
     const updatedFiles = [...existing.files]
-
-    // 3. Merge the newly fetched contents into the latest files array
     for (const result of validResults) {
       const idx = updatedFiles.findIndex((f: any) => f.path === result.path)
       if (idx >= 0) {
@@ -188,10 +185,13 @@ export const useSandboxStore = create<SandboxStore>()((set) => ({
           if (savedProject) {
             const project = JSON.parse(savedProject)
             if (project.files && project.files.length > 0) {
-              fetch(`/api/sandboxes/${sandboxId}/files`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: project.files }),
+              Sandbox.get({ sandboxId }).then((sandbox) => {
+                sandbox.writeFiles(
+                  project.files.map((f: any) => ({
+                    path: f.path,
+                    content: Buffer.from(f.content || '', 'utf8'),
+                  }))
+                )
               }).catch((err) => console.warn('Failed to sync files on sandbox set:', err))
             }
           }
@@ -312,8 +312,8 @@ export function useProjectPersistence(projectId?: string) {
 
     setProjectId(projectId)
 
-    const sandboxKey = `vibe-sandbox-${projectId}`
-    const fileExplorerKey = `vibe-file-explorer-${projectId}`
+    const sandboxKey = `joyful-sandbox-${projectId}`
+    const fileExplorerKey = `joyful-file-explorer-${projectId}`
 
     try {
       const savedSandbox = localStorage.getItem(sandboxKey)
@@ -352,10 +352,13 @@ export function useProjectPersistence(projectId?: string) {
         if (savedProject) {
           const project = JSON.parse(savedProject)
           if (project.files && project.files.length > 0) {
-            fetch(`/api/sandboxes/${sandboxIdToSync}/files`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ files: project.files }),
+            Sandbox.get({ sandboxId: sandboxIdToSync }).then((sandbox) => {
+              sandbox.writeFiles(
+                project.files.map((f: any) => ({
+                  path: f.path,
+                  content: Buffer.from(f.content || '', 'utf8'),
+                }))
+              )
             }).catch((err) => console.warn('Failed to sync files on load:', err))
           }
         }

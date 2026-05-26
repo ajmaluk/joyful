@@ -3,8 +3,9 @@ import type { DataPart } from '../messages/data-parts'
 import { Command, Sandbox } from '@/lib/sandbox'
 import { getRichError } from './get-rich-error'
 import { tool } from 'ai'
-import description from './run-command.md'
 import z from 'zod'
+
+const description = `Run a shell command inside the sandbox. Commands run in a fresh shell session with no persistent state between commands (cannot use 'cd'). Use to install dependencies, run builds, start servers, or execute code. When wait=true the command blocks until done; when wait=false it runs in the background.`
 
 interface Params {
   writer: UIMessageStreamWriter<UIMessage<never, DataPart>>

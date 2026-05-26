@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Sandbox } from '@/lib/sandbox'
 import { useSandboxStore } from '@/app/state'
 
 export interface HealthCheckResult {
@@ -14,24 +15,16 @@ export interface HealthCheckResult {
   inLocalStorageNotInSandbox: string[]
 }
 
-/**
- * Run a one-shot sandbox health check and return structured results.
- * Compares files in the sandbox vs paths tracked in the zustand store
- * and localStorage project data.
- */
 export async function runSandboxHealthCheck(
   sandboxId: string,
   projectId?: string
 ): Promise<HealthCheckResult> {
   const normalize = (p: string) => (p.startsWith('/') ? p : '/' + p)
 
-  // Read live store state
   const { paths: storePaths, generatedFiles } = useSandboxStore.getState()
 
-  // 1. Fetch file paths from the sandbox API
-  const res = await fetch(`/api/sandboxes/${sandboxId}/files`)
-  const data: { paths: string[] } = res.ok ? await res.json() : { paths: [] }
-  const sandboxPaths = new Set(data.paths || [])
+  const sandbox = await Sandbox.get({ sandboxId })
+  const sandboxPaths = new Set(Array.from(sandbox.files.keys()))
 
   // 2. Normalize store paths for comparison
   const storePathSet = new Set(storePaths.map(normalize))

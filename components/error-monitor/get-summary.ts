@@ -1,15 +1,15 @@
-import { resultSchema, type Line, type Lines } from './schemas'
+import { resultSchema, type Line } from './schemas'
 
-export async function getSummary(lines: Line[], previous: Line[]) {
-  const response = await fetch('/api/errors', {
-    body: JSON.stringify({ lines, previous } satisfies Lines),
-    method: 'POST',
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch errors summary: ${response.statusText}`)
+export async function getSummary(lines: Line[], _previous: Line[]) {
+  const stderrLines = lines.filter(l => l.stream === 'stderr' && l.data.trim())
+  if (stderrLines.length === 0) {
+    return resultSchema.parse({ shouldBeFixed: false, summary: '' })
   }
 
-  const body = await response.json()
-  return resultSchema.parse(body)
+  const summary = stderrLines.slice(0, 20).map(l => l.data.trim()).filter(Boolean).join('\n')
+
+  return resultSchema.parse({
+    shouldBeFixed: true,
+    summary: summary.slice(0, 4000),
+  })
 }

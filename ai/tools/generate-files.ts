@@ -5,8 +5,9 @@ import { getContents, type File } from './generate-files/get-contents'
 import { getRichError } from './get-rich-error'
 import { getWriteFiles } from './generate-files/get-write-files'
 import { tool } from 'ai'
-import description from './generate-files.md'
 import z from 'zod'
+
+const description = `Generate and upload code files into an existing sandbox. Generates file contents based on conversation context and user intent, then writes them into the sandbox file system. All file paths must be relative to the sandbox root. Use when you need to create new files, scaffold applications, add features, write config files, or fix missing components.`
 
 interface Params {
   modelId: string
@@ -55,7 +56,11 @@ export const generateFiles = ({ writer, modelId, isGroq }: Params) =>
       try {
         for await (const chunk of iterator) {
           if (chunk.files.length > 0) {
-            const error = await writeFiles(chunk)
+            const error = await writeFiles({
+              written: chunk.written ?? [],
+              files: chunk.files,
+              paths: chunk.paths,
+            })
             if (error) {
               return error
             } else {

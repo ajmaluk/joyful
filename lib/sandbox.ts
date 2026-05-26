@@ -105,7 +105,8 @@ export class MockSandbox {
     this.commands.set(cmdId, cmd)
 
     // Intercept file creations in mock commands
-    const fullCmd = [options.cmd, ...(options.args ?? [])].join(' ')
+    // Use newline separator to preserve multi-line content in args
+    const fullCmd = [options.cmd, ...(options.args ?? [])].join('\n')
     const filesToWrite: { path: string; content: Buffer }[] = []
 
     if (fullCmd.includes('files = {') || fullCmd.includes('files={')) {
@@ -121,7 +122,7 @@ export class MockSandbox {
       }
     } else if (fullCmd.includes('cat <<') || fullCmd.includes('cat  <<') || fullCmd.includes('cat >') || fullCmd.includes('cat  >')) {
       // Loop for: cat <<'EOF' > filepath
-      const catRegexA = /cat\s*<<\s*['"]?(\w+)['"]?\s*>\s*(\S+)\s*\n([\s\S]*?)\n\1/g
+      const catRegexA = /cat\s*<<\s*['"]?(\w+)['"]?\s*>\s*(\S+)\n([\s\S]*?)\n\1/g
       let match
       while ((match = catRegexA.exec(fullCmd)) !== null) {
         const filePath = match[2].trim().replace(/['"]/g, '')
@@ -133,7 +134,7 @@ export class MockSandbox {
       }
 
       // Loop for: cat > filepath <<'EOF'
-      const catRegexB = /cat\s*>\s*(\S+)\s*<<\s*['"]?(\w+)['"]?\s*\n([\s\S]*?)\n\2/g
+      const catRegexB = /cat\s*>\s*(\S+)\s*<<\s*['"]?(\w+)['"]?\n([\s\S]*?)\n\2/g
       while ((match = catRegexB.exec(fullCmd)) !== null) {
         const filePath = match[1].trim().replace(/['"]/g, '')
         const fileContent = match[3] || ''
@@ -201,6 +202,11 @@ export class MockSandbox {
   async getURL(_port?: number) {
     return `/api/sandboxes/${this.sandboxId}/preview`
   }
+
+  destroy() {
+    this.files.clear()
+    this.commands.clear()
+  }
 }
 
 export const Sandbox = {
@@ -218,6 +224,18 @@ export const Sandbox = {
       sandboxes.set(options.sandboxId, sandbox)
     }
     return sandbox
+  },
+
+  exists(sandboxId: string): boolean {
+    return sandboxes.has(sandboxId)
+  },
+
+  destroy(sandboxId: string) {
+    const sandbox = sandboxes.get(sandboxId)
+    if (sandbox) {
+      sandbox.destroy()
+      sandboxes.delete(sandboxId)
+    }
   }
 }
 

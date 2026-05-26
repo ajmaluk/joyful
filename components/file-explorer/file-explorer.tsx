@@ -1,10 +1,13 @@
 'use client'
 
+import type { SyncStatus } from '@/hooks/use-sandbox-health-check'
 import {
   ChevronRightIcon,
   ChevronDownIcon,
   FolderIcon,
   FileIcon,
+  ActivityIcon,
+  Loader2Icon,
 } from 'lucide-react'
 import { FileContent } from '@/components/file-explorer/file-content'
 import { Panel, PanelHeader } from '@/components/panels/panels'
@@ -18,6 +21,9 @@ interface Props {
   disabled?: boolean
   paths: string[]
   sandboxId?: string
+  onHealthCheck?: () => Promise<void>
+  healthCheckRunning?: boolean
+  syncStatus?: SyncStatus
 }
 
 export const FileExplorer = memo(function FileExplorer({
@@ -25,6 +31,9 @@ export const FileExplorer = memo(function FileExplorer({
   disabled,
   paths,
   sandboxId,
+  onHealthCheck,
+  healthCheckRunning,
+  syncStatus,
 }: Props) {
   const fileTree = useMemo(() => buildFileTree(paths), [paths])
   const [selected, setSelected] = useState<FileNode | null>(null)
@@ -80,9 +89,57 @@ export const FileExplorer = memo(function FileExplorer({
         <span className="font-mono uppercase font-semibold">
           Sandbox Remote Filesystem
         </span>
-        {selected && !disabled && (
-          <span className="ml-auto text-gray-500">{selected.path}</span>
-        )}
+        <div className="ml-auto flex items-center gap-3">
+          {syncStatus && sandboxId && (
+            <div
+              className="flex items-center gap-1.5"
+              title={
+                syncStatus === 'synced'
+                  ? 'Sandbox is in sync with the store'
+                  : syncStatus === 'out-of-sync'
+                    ? 'Sandbox is out of sync with the store - run health check for details'
+                    : 'Sync status unknown'
+              }
+            >
+              <span
+                className={cn(
+                  'inline-block w-2 h-2 rounded-full',
+                  syncStatus === 'synced'
+                    ? 'bg-emerald-500'
+                    : syncStatus === 'out-of-sync'
+                      ? 'bg-amber-500'
+                      : 'bg-muted-foreground/40'
+                )}
+              />
+              <span className="text-[10px] font-medium uppercase tracking-wider">
+                {syncStatus === 'synced'
+                  ? 'Synced'
+                  : syncStatus === 'out-of-sync'
+                    ? 'Out of sync'
+                    : 'Checking...'}
+              </span>
+            </div>
+          )}
+          {onHealthCheck && (
+            <button
+              type="button"
+              onClick={onHealthCheck}
+              disabled={healthCheckRunning || disabled}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:pointer-events-none"
+              title="Run sandbox health check"
+            >
+              {healthCheckRunning ? (
+                <Loader2Icon className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <ActivityIcon className="w-3.5 h-3.5" />
+              )}
+              Health
+            </button>
+          )}
+          {selected && !disabled && (
+            <span className="text-gray-500 truncate max-w-[200px]">{selected.path}</span>
+          )}
+        </div>
       </PanelHeader>
 
       <div className="flex text-sm h-[calc(100%-2rem-1px)]">

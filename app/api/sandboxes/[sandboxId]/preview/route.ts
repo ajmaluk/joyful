@@ -42,7 +42,9 @@ export async function GET(
   <div id="root"></div>
   <script>
     // Inject the Virtual Filesystem files from Next.js server!
-    window.__VFS__ = ${JSON.stringify(files)};
+    // Escape <, >, & as unicode to prevent HTML parser from seeing tag-like
+    // sequences (e.g. </script>) inside this script block.
+    window.__VFS__ = ${JSON.stringify(files).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')};
     
     // Simple CommonJS bundler in the browser
     const moduleCache = {};
@@ -146,16 +148,20 @@ export async function GET(
             plugins: [
               Babel.availablePlugins['transform-modules-commonjs']
             ]
-          }).code;
-          
-          // Inject custom require bound to the current file's directory
+          }).code;            // Inject custom require bound to the current file's directory
           const customRequire = (p) => require(p, normalizedPath);
           
           const wrapper = new Function('require', 'exports', 'module', transformed);
           wrapper(customRequire, module.exports, module);
         } catch (err) {
           console.error("Compilation error in " + normalizedPath + ":", err);
-          throw err;
+          // Show error with the raw file content so the user can see what was actually generated
+          const rawContent = window.__VFS__[normalizedPath] || '';
+          const errorWithContent = new Error(
+            err.message + '\n\n--- Raw file content ---\n' + rawContent.slice(0, 2000)
+          );
+          errorWithContent.stack = err.stack;
+          throw errorWithContent;
         }
         
         return module.exports;
@@ -226,9 +232,16 @@ export async function GET(
         }
       } catch (err) {
         document.getElementById('root').innerHTML = \`
-          <div style="color: red; padding: 20px; font-family: monospace; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px;">
-            <h3 style="font-weight: bold; font-size: 1.1rem; margin-bottom: 8px;">Runtime Compilation Error</h3>
-            <pre style="white-space: pre-wrap; font-size: 0.85rem;">\${err.stack || err.message}</pre>
+          <div style="color: red; padding: 20px; font-family: monospace; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 4px; max-width: 100%; overflow-x: auto;">
+            <h3 style="font-weight: bold; font-size: 1.1rem; margin-bottom: 8px;">Compilation Error</h3>
+            <p style="margin-bottom: 12px; font-size: 0.85rem;">\${err.message.split('--- Raw file content ---')[0]}</p>
+            \${err.message.includes('--- Raw file content ---')
+              ? '<details style="margin-top: 8px;"><summary style="cursor: pointer; font-weight: bold; font-size: 0.85rem;">View raw file content</summary><pre style="white-space: pre-wrap; font-size: 0.75rem; background: #1f2937; color: #d1d5db; padding: 12px; border-radius: 4px; margin-top: 8px; overflow-x: auto;">' +
+                err.message.split('--- Raw file content ---')[1].trim() +
+                '</pre></details>'
+              : ''
+            }
+            <details style="margin-top: 8px;"><summary style="cursor: pointer; font-weight: bold; font-size: 0.85rem; color: #991b1b;">Stack trace</summary><pre style="white-space: pre-wrap; font-size: 0.75rem; background: #1f2937; color: #d1d5db; padding: 12px; border-radius: 4px; margin-top: 8px; overflow-x: auto;">\${err.stack || '(no stack trace)'}</pre></details>
           </div>
         \`;
       }

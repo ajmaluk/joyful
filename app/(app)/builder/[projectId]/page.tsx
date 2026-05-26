@@ -10,8 +10,14 @@ import { WorkspaceHeader } from '@/components/workspace/workspace-header'
 import { cookies } from 'next/headers'
 import { getHorizontal, getVertical } from '@/components/layout/sizing'
 import { hideBanner } from '@/app/actions'
+import { ProjectDeletionGuard } from '@/components/project-deletion-guard'
 
-export default async function WorkspacePage() {
+export default async function WorkspacePage({
+  params,
+}: {
+  params: Promise<{ projectId: string }>
+}) {
+  const { projectId } = await params
   const store = await cookies()
   const banner = store.get('banner-hidden')?.value !== 'true'
   const horizontalSizes = getHorizontal(store)
@@ -25,6 +31,7 @@ export default async function WorkspacePage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-1.5 md:p-2">
         <Welcome defaultOpen={banner} onDismissAction={hideBanner} />
         <ContinueBanner />
+        <ProjectDeletionGuard projectId={projectId} />
         <ul className="flex space-x-5 font-mono text-sm tracking-tight px-1 py-2 md:hidden">
           <TabItem tabId="chat">Chat</TabItem>
           <TabItem tabId="preview">Preview</TabItem>

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Sandbox, APIError } from '@/lib/sandbox'
 
-
-
 /**
  * We must change the SDK to add data to the instance and then
  * use it to retrieve the status of the Sandbox.
@@ -28,5 +26,26 @@ export async function GET(
     } else {
       throw error
     }
+  }
+}
+
+/**
+ * Destroy a sandbox and its associated resources.
+ * Called when a project is deleted or when navigating away from a workspace.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ sandboxId: string }> }
+) {
+  const { sandboxId } = await params
+  try {
+    Sandbox.destroy(sandboxId)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Failed to destroy sandbox:', error)
+    return NextResponse.json(
+      { error: String(error) },
+      { status: 500 }
+    )
   }
 }

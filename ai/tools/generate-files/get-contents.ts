@@ -47,9 +47,9 @@ export async function* getContents(
   let lastError: unknown
 
   for (const modelId of modelsToTry) {
-    const generated: z.infer<typeof fileSchema>[] = []
+    const allPaths = new Set<string>()
     const deferred = new Deferred<void>()
-    
+
     try {
       const result = streamText({
         ...getModelOptions(modelId, { reasoningEffort: 'low' }),
@@ -73,51 +73,53 @@ export async function* getContents(
         },
       })
 
+      // Phase 1: Stream only paths for UI progress — no file content yet
       for await (const items of result.partialOutputStream) {
         if (!Array.isArray(items?.files)) {
           continue
         }
 
-        const written = generated.map((file) => file.path)
-        const paths = written.concat(
-          items.files
-            .slice(generated.length, items.files.length - 1)
-            .flatMap((f) => (f?.path ? [f.path] : []))
+        const validFiles = items.files.filter(
+          (file): file is z.infer<typeof fileSchema> =>
+            fileSchema.safeParse(file).success
         )
 
-        const files = items.files
-          .slice(generated.length)
-          .filter((file): file is z.infer<typeof fileSchema> => {
-            return fileSchema.safeParse(file).success
-          })
-
-        if (files.length > 0) {
-          yield { files, paths, written }
-          generated.push(...files)
-        } else {
-          yield { files: [], written, paths }
+        for (const file of validFiles) {
+          allPaths.add(file.path)
         }
+
+        // Yield paths for UI progress, but no file content (avoids writing partial content)
+        yield { files: [], paths: Array.from(allPaths), written: [] }
       }
 
+      // Phase 2: Wait for the final complete output
       const raceResult = await Promise.race([result.output, deferred.promise])
       if (!raceResult) {
         throw new Error('Unexpected Error: Deferred was resolved before the result')
       }
 
-      const written = generated.map((file) => file.path)
-      const files = raceResult.files.slice(generated.length)
-      const paths = written.concat(files.map((file) => file.path))
-      if (files.length > 0) {
-        yield { files, written, paths }
-        generated.push(...files)
+      const finalFiles = (raceResult.files ?? []).filter(
+        (file): file is z.infer<typeof fileSchema> =>
+          fileSchema.safeParse(file).success
+      )
+
+      if (finalFiles.length === 0) {
+        throw new Error('No valid files generated in the final output')
       }
 
-      // If we reach here successfully, we're done and can exit the fallback loop.
+      // Yield the complete files once — sandbox only ever sees complete content
+      yield {
+        files: finalFiles,
+        paths: Array.from(allPaths),
+        written: [],
+      }
+
+      // Success — exit the fallback loop
       return
     } catch (error) {
       lastError = error
-      if (generated.length > 0) {
-        // If we already yielded parts of the files, we cannot cleanly fall back to another model.
+      if (allPaths.size > 0) {
+        // If we already yielded paths, we cannot cleanly fall back to another model.
         throw error
       }
       console.warn(`Model ${modelId} failed in getContents. Attempting fallback...`)

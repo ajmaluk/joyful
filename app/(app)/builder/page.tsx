@@ -7,6 +7,7 @@ import type { ChatAttachment, ChatMode, Project } from '@/lib/types'
 import { deleteProject, getProjects, saveProject } from '@/lib/services/storage'
 import { useAuth } from '@/lib/auth-context'
 import { signOutUser } from '@/lib/firebase'
+import { useBackgroundSandboxMonitor } from '@/hooks/use-background-sandbox-monitor'
 
 const MAX_PROJECT_NAME_LENGTH = 54
 
@@ -49,6 +50,9 @@ function readImageAttachment(file: File): Promise<ChatAttachment> {
 export default function BuilderHubPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // Poll active sandboxes every 10s to keep buildStatus up-to-date
+  useBackgroundSandboxMonitor(10_000)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const modeMenuRef = useRef<HTMLDivElement>(null)
@@ -433,7 +437,7 @@ export default function BuilderHubPage() {
                             <iframe
                               srcDoc={srcDoc}
                               className="h-full w-full bg-white"
-                              sandbox="allow-scripts allow-same-origin"
+                              sandbox="allow-scripts"
                               style={{ pointerEvents: 'none' }}
                               title={project.name}
                             />
@@ -476,6 +480,15 @@ export default function BuilderHubPage() {
                             <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Building
+                            </span>
+                          )}
+                          {project.buildStatus === 'running' && (
+                            <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                              </span>
+                              Background
                             </span>
                           )}
                           {project.buildStatus === 'interrupted' && (

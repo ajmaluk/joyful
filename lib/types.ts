@@ -23,6 +23,7 @@ export interface UserSettings {
   aiTemperature: number;
   aiProvider?: string;
   aiModel?: string;
+  healthCheckInterval: number;
 }
 
 export interface ProjectFile {
@@ -36,7 +37,7 @@ export interface Project {
   description?: string;
   files: ProjectFile[];
   updatedAt?: string;
-  buildStatus?: 'building' | 'interrupted' | 'complete' | 'idle';
+  buildStatus?: 'building' | 'interrupted' | 'complete' | 'idle' | 'running';
 }
 
 export type ChatMode = 'build' | 'plan';

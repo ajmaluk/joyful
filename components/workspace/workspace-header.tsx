@@ -20,7 +20,9 @@ export function WorkspaceHeader() {
         const parsed = JSON.parse(saved)
         setHasMessages(Array.isArray(parsed) && parsed.length > 0)
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to load chat messages for workspace header', e)
+    }
   }, [projectId])
 
   return (

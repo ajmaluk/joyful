@@ -200,6 +200,33 @@ export default function SettingsPage() {
                   }`} />
                 </button>
               </div>
+              <div className="border-t border-border p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium text-card-foreground">Sandbox health check interval</label>
+                    <p className="text-xs text-muted-foreground mt-1">How often the sandbox is checked for file sync issues</p>
+                  </div>
+                  <span className="ml-4 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary whitespace-nowrap">
+                    {settings.healthCheckInterval / 1000}s
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={5000}
+                  max={60000}
+                  step={5000}
+                  value={settings.healthCheckInterval}
+                  onChange={(e) => updateSetting('healthCheckInterval', parseInt(e.target.value))}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+                />
+                <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                  <span>5s</span>
+                  <span>10s</span>
+                  <span>15s</span>
+                  <span>30s</span>
+                  <span>60s</span>
+                </div>
+              </div>
             </div>
           </div>
         );

@@ -113,6 +113,23 @@ export function saveProject(project: Project): void {
 
 export function deleteProject(projectId: string): void {
   if (typeof window === 'undefined') return;
+
+  // 1. Destroy the server-side sandbox via API (Sandbox.destroy called directly
+  //    in the client is a no-op since the sandbox map lives on the server)
+  try {
+    const sandboxRaw = localStorage.getItem(`vibe-sandbox-${projectId}`);
+    if (sandboxRaw) {
+      const parsed = JSON.parse(sandboxRaw);
+      if (parsed.sandboxId) {
+        fetch(`/api/sandboxes/${parsed.sandboxId}`, { method: 'DELETE' })
+          .catch((err) => console.warn('Failed to destroy sandbox on delete:', err))
+      }
+    }
+  } catch {
+    // ignore parse/cleanup errors
+  }
+
+  // 2. Remove all localStorage entries associated with this project
   const projects = getProjects().filter(p => p.id !== projectId);
   safeSetItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   localStorage.removeItem(`${STORAGE_KEYS.PROJECT_PREFIX}${projectId}`);
@@ -120,6 +137,7 @@ export function deleteProject(projectId: string): void {
   localStorage.removeItem(`${STORAGE_KEYS.GENERATION_PREFIX}${projectId}`);
   localStorage.removeItem(`vibe-sandbox-${projectId}`);
   localStorage.removeItem(`vibe-file-explorer-${projectId}`);
+  localStorage.removeItem(`vibe-chat-${projectId}`);
   window.dispatchEvent(new CustomEvent('joyful_projects_changed'));
 }
 
@@ -185,6 +203,7 @@ export function getSettings(): UserSettings {
     aiProvider: 'joyful',
     aiModel: joyfulProviderConfig.model,
     aiTemperature: 0.7,
+    healthCheckInterval: 15000,
   };
 
   if (typeof window === 'undefined') return defaults;

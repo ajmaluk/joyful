@@ -43,6 +43,17 @@ export function Reasoning({
                 p: ({ node, ...props }: any) => (
                   <div {...props} className={props.className || 'mb-4 last:mb-0'} />
                 ),
+                a: ({ node, href, children, ...props }: any) => (
+                  <a
+                    {...props}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 underline hover:text-blue-300"
+                  >
+                    {children}
+                  </a>
+                ),
               }}
             >
               {escapeHtmlOutsideCodeBlocks(text)}

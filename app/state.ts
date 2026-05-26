@@ -430,7 +430,26 @@ export function useProjectPersistence(projectId?: string) {
     window.addEventListener('beforeunload', handleUnloadSave)
 
     return () => {
-      if (saveTimeout) clearTimeout(saveTimeout)
+      // Save current state immediately — don't rely on throttled save
+      if (saveTimeout) {
+        clearTimeout(saveTimeout)
+        saveTimeout = null
+      }
+      const finalState = useSandboxStore.getState()
+      const finalFileState = useFileExplorerStore.getState()
+      const finalToSave = {
+        commands: finalState.commands,
+        paths: finalState.paths,
+        sandboxId: finalState.sandboxId,
+        status: finalState.status,
+        url: finalState.url,
+        urlUUID: finalState.urlUUID,
+        generatedFiles: Array.from(finalState.generatedFiles),
+        chatStatus: finalState.chatStatus,
+      }
+      safeSetItem(sandboxKey, JSON.stringify(finalToSave))
+      safeSetItem(fileExplorerKey, JSON.stringify({ paths: finalFileState.paths }))
+
       unsubSandbox()
       unsubFileExplorer()
       window.removeEventListener('beforeunload', handleUnloadSave)

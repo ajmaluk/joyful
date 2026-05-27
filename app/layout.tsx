@@ -18,19 +18,21 @@ export const metadata: Metadata = {
   title,
   description,
   openGraph: {
+    title,
+    description,
     images: [
       {
-        url: 'https://assets.vercel.com/image/upload/v1754588799/OSSvibecodingplatform/OG.png',
+        url: '/seo/og-image.png',
+        width: 1200,
+        height: 630,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    images: [
-      {
-        url: 'https://assets.vercel.com/image/upload/v1754588799/OSSvibecodingplatform/OG.png',
-      },
-    ],
+    title,
+    description,
+    images: ['/seo/twitter-image.png'],
   },
 }
 

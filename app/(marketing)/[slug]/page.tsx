@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { PromptBox } from '@/components/joyful/marketing/MarketingChrome';
 import { sitePageContent } from './sitePageContent';
 import { routeMeta } from '@/lib/seo';
-import type { ChatAttachment, ChatMode } from '@/lib/types';
+import type { ChatAttachment } from '@/lib/types';
 
 const relatedPages: Record<string, Array<{ label: string; path: string }>> = {
   privacy: [
@@ -65,10 +65,9 @@ export default function SitePage({ params, ...rest }: SitePageProps) {
   const path = slug === 'home' ? '/' : `/${slug}`;
   const meta = routeMeta[path] || routeMeta['/'];
 
-  const onStartProject = (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => {
+  const onStartProject = (prompt: string, attachments?: ChatAttachment[]) => {
     const searchParams = new URLSearchParams()
     searchParams.set('prompt', prompt)
-    if (mode) searchParams.set('mode', mode)
     // NOTE: attachments are not easily serializable via URL query string, usually handled via state/storage in real app
     router.push(`/builder?${searchParams.toString()}`)
   };

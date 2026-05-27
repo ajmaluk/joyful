@@ -18,7 +18,7 @@ export const runCommand = ({ writer, isGroq }: Params) =>
     inputSchema: z.object({
       sandboxId: z
         .string()
-        .describe('The ID of the Vercel Sandbox to run the command in'),
+        .describe('The ID of the sandbox to run the command in'),
       command: z
         .string()
         .describe(

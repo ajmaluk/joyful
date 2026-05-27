@@ -19,7 +19,7 @@ import { PromptBox } from '@/components/joyful/marketing/MarketingChrome';
 import { FeatureShowcase } from '@/components/joyful/marketing/FeatureShowcase';
 import { AnimatedDemo } from '@/components/joyful/marketing/AnimatedDemo';
 import { TestimonialsSection } from '@/components/joyful/marketing/TestimonialCard';
-import type { ChatAttachment, ChatMode } from '@/lib/types';
+import type { ChatAttachment } from '@/lib/types';
 
 import { CountUpStats } from '@/components/joyful/marketing/CountUpStats';
 

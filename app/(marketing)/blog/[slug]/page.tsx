@@ -7,10 +7,10 @@ import { Calendar, Clock, ArrowLeft, Tag, Sparkles } from 'lucide-react';
 import { getBlogPostBySlug, getRelatedPosts } from '@/data/joyful/blog';
 import { PromptBox } from '@/components/joyful/marketing/MarketingChrome';
 import { SITE_URL } from '@/lib/seo';
-import type { ChatAttachment, ChatMode } from '@/lib/types';
+import type { ChatAttachment } from '@/lib/types';
 
 interface BlogPostPageProps {
-  onStartProject?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
+  onStartProject?: (prompt: string, attachments?: ChatAttachment[]) => void;
 }
 
 function renderContent(content: string): string {

@@ -8,7 +8,7 @@ import { useSharedChatContext } from '@/lib/chat-context'
 import { useChat } from '@ai-sdk/react'
 import { useSettings } from '@/components/settings/use-settings'
 
-const CHAT_STORAGE_PREFIX = 'vibe-chat-'
+const CHAT_STORAGE_PREFIX = 'joyful-chat-'
 
 export function ContinueBanner() {
   const params = useParams()

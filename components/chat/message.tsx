@@ -46,27 +46,29 @@ export const Message = memo(function Message({ message }: Props) {
       value={{ expandedReasoningIndex, setExpandedReasoningIndex }}
     >
       <div
-        className={cn({
-          'mr-20': message.role === 'assistant',
-          'ml-20': message.role === 'user',
-        })}
+        className={cn(
+          'group',
+          message.role === 'assistant' ? 'mr-16' : 'ml-16',
+        )}
       >
-        {/* Message Header */}
-        <div className="flex items-center gap-2 text-sm font-medium font-mono text-primary mb-1.5">
+        <div className="flex items-center gap-2 text-xs font-mono font-medium mb-2">
           {message.role === 'user' ? (
             <>
-              <UserIcon className="ml-auto w-4" />
-              <span>You</span>
+              <span className="ml-auto flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-primary">
+                <UserIcon className="w-3 h-3" />
+                You
+              </span>
             </>
           ) : (
             <>
-              <BotIcon className="w-4" />
-              <span>Assistant ({message.metadata?.model})</span>
+              <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-secondary-foreground">
+                <BotIcon className="w-3 h-3" />
+                {message.metadata?.model ?? 'Assistant'}
+              </span>
             </>
           )}
         </div>
 
-        {/* Message Content */}
         <div className="space-y-1.5">
           {message.parts.map((part, index) => (
             <MessagePart key={index} part={part} partIndex={index} />

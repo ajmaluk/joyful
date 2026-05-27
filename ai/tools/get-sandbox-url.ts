@@ -18,12 +18,12 @@ export const getSandboxURL = ({ writer, isGroq }: Params) =>
       sandboxId: z
         .string()
         .describe(
-          "The unique identifier of the Vercel Sandbox (e.g., 'sbx_abc123xyz'). This ID is returned when creating a Vercel Sandbox and is used to reference the specific sandbox instance."
+          "The unique identifier of the sandbox (e.g., 'sbx_abc123xyz'). This ID is returned when creating a sandbox."
         ),
       port: z
         .number()
         .describe(
-          'The port number where a service is running inside the Vercel Sandbox (e.g., 3000 for Next.js dev server, 8000 for Python apps, 5000 for Flask). The port must have been exposed when the sandbox was created or when running commands.'
+          'The port number where a service is running inside the sandbox (e.g., 3000 for Next.js dev server, 8000 for Python apps, 5000 for Flask).'
         ),
     }),
     execute: async ({ sandboxId, port }, { toolCallId }) => {

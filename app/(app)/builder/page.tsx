@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowRight, ArrowUp, ChevronDown, Clock, Eye, Grid3X3, ImagePlus, Loader2, Pencil, LogOut, Search, Settings, Sparkles, Trash2, Wand2, X } from 'lucide-react'
-import type { ChatAttachment, ChatMode, Project } from '@/lib/types'
+import type { ChatAttachment, Project } from '@/lib/types'
 import { deleteProject, getProjects, saveProject } from '@/lib/services/storage'
 import { useAuth } from '@/lib/auth-context'
 import { signOutUser } from '@/lib/firebase'
@@ -383,20 +383,23 @@ export default function BuilderHubPage() {
 }
 
 function PreviewThumbnail({ project }: { project: Project }) {
-  if (project.files.length === 0) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#6387ff]/20 text-[#6387ff]">
-          <Wand2 className="h-5 w-5" />
+  const filesWithContent = project.files.filter(f => f.content && f.content.length > 0)
+
+  if (filesWithContent.length === 0) {
+    if (project.files.length === 0) {
+      return (
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#6387ff]/20 text-[#6387ff]">
+            <Wand2 className="h-5 w-5" />
+          </div>
         </div>
-      </div>
-    )
+      )
+    }
+    return <FileListThumbnail files={project.files} />
   }
 
-  const htmlFile = project.files.find(f => /\.html?$/.test(f.path || ''))
-  const hasContent = project.files.some(f => f.content && f.content.length > 0)
-
-  if (htmlFile && hasContent) {
+  const htmlFile = filesWithContent.find(f => f.path && /\.html?$/.test(f.path))
+  if (htmlFile) {
     return (
       <iframe
         srcDoc={htmlFile.content}
@@ -408,21 +411,44 @@ function PreviewThumbnail({ project }: { project: Project }) {
     )
   }
 
-  const fileCount = project.files.length
-  const extensions = [...new Set(project.files.map(f => {
+  return <FileListThumbnail files={filesWithContent} />
+}
+
+function FileListThumbnail({ files }: { files: { path?: string; content?: string }[] }) {
+  const fileList = files.slice(0, 6)
+  const extensions = [...new Set(files.map(f => {
     const ext = f.path?.split('.').pop()
     return ext ? `.${ext}` : ''
-  }))].filter(Boolean).slice(0, 4).join(' ')
+  }))].filter(Boolean).slice(0, 4)
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 p-4 dark:from-[#1a1a18] dark:to-[#2a2a28]">
-      <div className="text-center">
-        <div className="text-xs font-mono text-gray-400 dark:text-white/30">
-          {fileCount} file{fileCount !== 1 ? 's' : ''}
+    <div className="flex h-full w-full flex-col items-start justify-start bg-gradient-to-br from-gray-50 to-gray-100 p-3 dark:from-[#1a1a18] dark:to-[#2a2a28]">
+      <div className="w-full space-y-1">
+        {fileList.map((f, i) => {
+          const ext = f.path?.split('.').pop()?.toLowerCase() || ''
+          const colors: Record<string, string> = {
+            tsx: 'bg-blue-400', jsx: 'bg-cyan-400', ts: 'bg-blue-500',
+            js: 'bg-yellow-400', css: 'bg-pink-400', html: 'bg-orange-400',
+            json: 'bg-green-400', md: 'bg-gray-400', svg: 'bg-purple-400',
+          }
+          const dotColor = colors[ext] || 'bg-[#6387ff]/40'
+          return (
+            <div key={i} className="flex items-center gap-2 rounded px-2 py-1 text-[10px] font-mono text-gray-500 bg-white/60 dark:bg-black/20 dark:text-white/40 truncate">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
+              {f.path}
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-auto w-full pt-2 text-center border-t border-white/30 dark:border-white/10">
+        <div className="text-xs font-mono text-gray-400 dark:text-white/40">
+          {files.length} file{files.length !== 1 ? 's' : ''}
         </div>
-        {extensions && (
-          <div className="mt-1 text-[10px] font-mono text-gray-400 dark:text-white/20">
-            {extensions}
+        {extensions.length > 0 && (
+          <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-white/30">
+            {extensions.map(ext => (
+              <span key={ext} className="rounded bg-white/40 px-1.5 py-0.5 dark:bg-black/20">{ext}</span>
+            ))}
           </div>
         )}
       </div>

@@ -22,14 +22,14 @@ export const createSandbox = ({ writer, isGroq }: Params) =>
         .max(2700000)
         .optional()
         .describe(
-          'Maximum time in milliseconds the Vercel Sandbox will remain active before automatically shutting down. Minimum 600000ms (10 minutes), maximum 2700000ms (45 minutes). Defaults to 600000ms (10 minutes). The sandbox will terminate all running processes when this timeout is reached.'
+          'Maximum time in milliseconds the sandbox will remain active before automatically shutting down. Minimum 600000ms (10 minutes), maximum 2700000ms (45 minutes). Defaults to 600000ms (10 minutes).'
         ),
       ports: z
         .array(z.number())
         .max(2)
         .optional()
         .describe(
-          'Array of network ports to expose and make accessible from outside the Vercel Sandbox. These ports allow web servers, APIs, or other services running inside the Vercel Sandbox to be reached externally. Common ports include 3000 (Next.js), 8000 (Python servers), 5000 (Flask), etc.'
+          'Array of network ports to expose and make accessible from outside the sandbox. Common ports include 3000 (Next.js), 8000 (Python servers), 5000 (Flask), etc.'
         ),
     }),
     execute: async ({ timeout, ports }, { toolCallId }) => {

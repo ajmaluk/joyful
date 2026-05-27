@@ -1,6 +1,6 @@
 # Contributing to Joyful Builder
 
-Thank you for your interest in contributing! This guide will help you get started.
+Thank you for considering contributing! This guide will help you get started.
 
 ## Development Setup
 
@@ -11,44 +11,40 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ## Project Structure
 
-- `app/` — Next.js App Router pages and layouts
-- `components/` — Reusable UI components
-- `ai/` — AI integration layer (gateway, tools, messages)
-- `lib/` — Core libraries and services
-- `hooks/` — React custom hooks
-- `public/` — Static assets
+| Directory | Purpose |
+|-----------|---------|
+| `app/` | Next.js App Router pages and layouts |
+| `components/` | Reusable UI components |
+| `ai/` | AI integration layer (gateway, tools, messages) |
+| `lib/` | Core libraries and services |
+| `hooks/` | React custom hooks |
+| `public/` | Static assets |
 
 ## Code Style
 
-- TypeScript strict mode
-- Tailwind CSS for styling — no CSS modules
-- React Server Components by default; `'use client'` only when needed
-- Component files use PascalCase; utility files use camelCase
-- Imports: absolute paths with `@/` alias
+- **TypeScript** strict mode, no `any`
+- **Tailwind CSS** for all styling — no CSS modules or inline styles
+- **React Server Components** by default; `'use client'` only for interactivity
+- **Component files** use PascalCase; utility files use camelCase
+- **Imports** use absolute paths with `@/` alias
+- **2-space indentation**
 
 ## Pull Request Process
 
 1. Create a feature branch from `main`
-2. Make your changes with clear commit messages
-3. Run `pnpm type-check` and `pnpm lint`
-4. Ensure the build succeeds with `pnpm build`
-5. Open a PR with a clear description of changes
+2. Make changes with clear, atomic commits
+3. Run `pnpm check` (lint + typecheck + build)
+4. Ensure the build succeeds
+5. Open a PR with a clear description
 
-## Adding a New Skill
+## Adding a Skill
 
-Skills are defined in `lib/services/skills.ts`. To add one:
+Skills are defined in `lib/services/skills.ts`:
 
-1. Create an entry in `defaultBuilderSkills` array with:
-   - `id` — unique identifier
-   - `name` — display name
-   - `description` — summary (shown in manifest)
-   - `instructions` — detailed guidance for the AI
-   - `keywords` — trigger words for auto-activation
-   - `sourcePath` — path to a markdown doc (optional)
-
-2. Add scoring rules in `scoreSkill()` for auto-activation
-
-3. Add to appropriate group in `composeSkills()` if it should compose
+1. Add a `BuilderSkill` entry with: `id`, `name`, `description`, `instructions`, `keywords`, `sourcePath`
+2. Add doc content in `registerSkillDocs()` 
+3. Add scoring rules in `scoreSkill()` for auto-activation
+4. Optionally add a slash command in `SLASH_COMMANDS`
 
 ## Adding an AI Model
 
@@ -56,16 +52,12 @@ Skills are defined in `lib/services/skills.ts`. To add one:
 2. Configure the provider in `ai/gateway.ts`
 3. Add fallback logic in `app/api/chat/route.ts`
 
-## Deployment
+## Adding a UI Component
 
-Joyful is designed for Cloudflare Pages static deployment:
-
-```bash
-pnpm cf-pages
-```
-
-The output in `out/` can be deployed to any static hosting provider.
+1. Check if a shadcn/ui primitive exists in `components/ui/`
+2. Use `@/lib/utils` for `cn()` class merging
+3. Follow existing component patterns (named exports, TypeScript interfaces)
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/your-username/joyful-builder/discussions) for questions and ideas.
+Open a [GitHub Discussion](https://github.com/your-username/joyful-builder/discussions).

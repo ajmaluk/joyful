@@ -23,6 +23,7 @@ import { useSettings } from '@/components/settings/use-settings'
 import { useSandboxStore } from './state'
 import { useParams, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { detectSlashCommand, getSlashCommandsHelp, SLASH_COMMANDS } from '@/lib/services/skills'
 
 interface Props {
   className: string
@@ -172,6 +173,43 @@ export function Chat({ className }: Props) {
     window.history.replaceState({}, '', next)
   }, [searchParams, status, messages.length, projectId, validateAndSubmitMessage])
 
+  const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [slashFilter, setSlashFilter] = useState('')
+  const slashMenuRef = useRef<HTMLDivElement>(null)
+
+  const filteredSlashCommands = Object.entries(SLASH_COMMANDS).filter(([cmd]) =>
+    cmd.includes(slashFilter)
+  )
+
+  const handleSlashCommand = useCallback((cmd: string, args: string) => {
+    setShowSlashMenu(false)
+    setSlashFilter('')
+    validateAndSubmitMessage(`${cmd} ${args}`.trim())
+  }, [validateAndSubmitMessage])
+
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value)
+    if (value.startsWith('/')) {
+      setShowSlashMenu(true)
+      setSlashFilter(value.slice(1).split(' ')[0])
+    } else {
+      setShowSlashMenu(false)
+      setSlashFilter('')
+    }
+  }, [setInput])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
+        setShowSlashMenu(false)
+      }
+    }
+    if (showSlashMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSlashMenu])
+
   const isBusy = status === 'streaming' || status === 'submitted'
   const isOnCooldown = cooldownRemaining > 0
 
@@ -297,10 +335,34 @@ export function Chat({ className }: Props) {
         </div>
       )}
 
+      {showSlashMenu && (
+        <div ref={slashMenuRef} className="relative z-50">
+          <div className="absolute bottom-full left-3 mb-1 w-64 max-h-48 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+            {filteredSlashCommands.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-muted-foreground">No matching commands</div>
+            ) : (
+              filteredSlashCommands.map(([cmd, info]) => (
+                <button
+                  key={cmd}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-left hover:bg-accent"
+                  onClick={() => handleSlashCommand(cmd, '')}
+                >
+                  <span className="font-bold text-primary">{cmd}</span>
+                  <span className="text-muted-foreground truncate">{info.skill.description}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
       <form
         className="flex items-center p-3 gap-2 border-t border-border/40 bg-background/50 backdrop-blur-md"
         onSubmit={async (event) => {
           event.preventDefault()
+          if (detectSlashCommand(input)) {
+            setShowSlashMenu(false)
+          }
           validateAndSubmitMessage(input)
         }}
       >
@@ -309,13 +371,13 @@ export function Chat({ className }: Props) {
         <Input
           className="w-full font-mono text-sm rounded-lg border border-border/50 bg-background shadow-inner focus-visible:ring-1 focus-visible:ring-primary/50"
           disabled={isBusy}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => handleInputChange(e.target.value)}
           placeholder={
             isBusy
               ? 'Waiting for AI response...'
               : isOnCooldown
                 ? `Cooldown... ${Math.ceil(cooldownRemaining / 1000)}s`
-                : 'Type your message...'
+                : 'Type / for commands or your message...'
           }
           value={input}
         />

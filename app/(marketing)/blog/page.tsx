@@ -8,10 +8,10 @@ import { Calendar, Clock, User, Search, ArrowRight, Sparkles, Tag } from 'lucide
 import { blogPosts, blogCategories, type BlogPost } from '@/data/joyful/blog';
 import { PromptBox } from '@/components/joyful/marketing/MarketingChrome';
 import { routeMeta } from '@/lib/seo';
-import type { ChatAttachment, ChatMode } from '@/lib/types';
+import type { ChatAttachment } from '@/lib/types';
 
 interface BlogListPageProps {
-  onStartProject?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
+  onStartProject?: (prompt: string, attachments?: ChatAttachment[]) => void;
 }
 
 function BlogCard({ post, index }: { post: BlogPost; index: number }) {

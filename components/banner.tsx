@@ -15,16 +15,15 @@ export function Banner({ defaultOpen, onDismiss }: Props) {
   }
 
   return (
-    <div className="relative full text-xs border border-dashed border-yellow-500 bg-yellow-100 py-2 pl-2 pr-8">
-      <strong>Vercel Coding Agent demo</strong> This demo showcases a full-stack
-      coding agent built with Vercel&apos;s AI Cloud, AI SDK, and Next.js This
-      example gives you full flexibility of the underlying model via Vercel AI
-      Gateway and code execution via Vercel Sandbox. For a drop-in, higher-level
-      solution for adding vibe coding capabilities to your applications, check
-      out the v0 Platform API.
+    <div className="relative w-full text-xs border border-dashed border-amber-500/50 bg-amber-500/10 py-2 pl-2 pr-8 backdrop-blur-sm">
+      <strong className="text-amber-700 dark:text-amber-400">Joyful Builder</strong>{' '}
+      <span className="text-amber-600/80 dark:text-amber-300/60">
+        Build anything with AI — describe, iterate, preview. All AI runs through
+        NVIDIA, Groq, and Freemodel providers with a fully local sandbox.
+      </span>
       <button
         aria-label="Close Banner"
-        className="absolute top-2 right-2 text-yellow-700 hover:text-yellow-900 transition-colors cursor-pointer"
+        className="absolute top-2 right-2 text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 transition-colors cursor-pointer"
         onClick={() => {
           onDismiss()
           setOpen(false)

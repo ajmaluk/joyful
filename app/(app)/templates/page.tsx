@@ -14,7 +14,7 @@ export default function TemplatesPage() {
       </div>
       <h1 className="text-2xl font-bold text-gray-950 dark:text-white">Templates</h1>
       <p className="mt-3 max-w-md text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
-        Choose a template to kickstart your next project in the Vibe builder.
+        Choose a template to kickstart your next project in the Joyful builder.
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
         <button

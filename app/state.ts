@@ -98,6 +98,17 @@ export const useSandboxStore = create<SandboxStore>()((set) => ({
       const filePaths = files.map((f) => f.path)
       const updated = new Set([...state.generatedFiles, ...filePaths])
       const pid = state.projectId
+      const sandboxId = state.sandboxId
+      if (sandboxId && files.length > 0) {
+        Sandbox.get({ sandboxId }).then((sandbox) => {
+          sandbox.writeFiles(
+            files.map((f) => ({
+              path: f.path,
+              content: Buffer.from(f.content || '', 'utf8'),
+            }))
+          )
+        }).catch((err) => console.warn('Failed to sync files to sandbox in addGeneratedFiles:', err))
+      }
       if (pid && files.length > 0) {
         try {
           const existing = JSON.parse(localStorage.getItem(`joyful_project_${pid}`) || 'null')
@@ -247,38 +258,46 @@ export const useFileExplorerStore = create<FileExplorerStore>()((set) => ({
 }))
 
 export function useDataStateMapper() {
-  const { addPaths, setSandboxId, setUrl, upsertCommand, addGeneratedFiles, sandboxId, projectId } =
+  const { addPaths, setSandboxId, setUrl, upsertCommand, addGeneratedFiles } =
     useSandboxStore()
   const { errors } = useCommandErrorsLogs()
   const { setCursor } = useMonitorState()
 
   return (data: DataUIPart<DataPart>) => {
+    const storeState = useSandboxStore.getState()
+    const activeSandboxId = storeState.sandboxId
+    const activeProjectId = storeState.projectId
+
     switch (data.type) {
       case 'data-create-sandbox':
         if (data.data.sandboxId) {
           setSandboxId(data.data.sandboxId)
         }
         break
-      case 'data-generating-files':
-        if (data.data.sandboxId && !sandboxId) {
-          setSandboxId(data.data.sandboxId)
+      case 'data-generating-files': {
+        const incomingSandboxId = data.data.sandboxId
+        if (incomingSandboxId && !activeSandboxId) {
+          setSandboxId(incomingSandboxId)
+        }
+        if (data.data.paths && data.data.paths.length > 0) {
+          addPaths(data.data.paths)
+          addGeneratedFiles(data.data.paths.map((p) => ({ path: p, content: '' })))
         }
         if (data.data.status === 'uploaded') {
           setCursor(errors.length)
-          addPaths(data.data.paths)
           if (data.data.files && data.data.files.length > 0) {
             addGeneratedFiles(data.data.files)
-          } else {
-            // Fallback for older messages
-            addGeneratedFiles(data.data.paths.map((p) => ({ path: p, content: '' })))
-            if (sandboxId) {
-              syncProjectFiles(projectId || '', sandboxId, data.data.paths)
-            }
+          }
+          const finalSandboxId = incomingSandboxId || useSandboxStore.getState().sandboxId
+          const finalProjectId = useSandboxStore.getState().projectId || activeProjectId
+          if (finalSandboxId && data.data.paths.length > 0) {
+            syncProjectFiles(finalProjectId || '', finalSandboxId, data.data.paths)
           }
         }
         break
+      }
       case 'data-run-command':
-        if (data.data.sandboxId && !sandboxId) {
+        if (data.data.sandboxId && !activeSandboxId) {
           setSandboxId(data.data.sandboxId)
         }
         if (

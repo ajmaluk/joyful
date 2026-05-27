@@ -60,34 +60,81 @@ export class Command {
 }
 
 let sandboxCounter = 0
-const MAX_SANDBOXES = 20
+const MAX_SANDBOXES = 10
+const MAX_FILES_PER_SANDBOX = 200
+const MAX_FILE_SIZE_BYTES = 1_000_000
+const SANDBOX_IDLE_MS = 60 * 60 * 1000 // 60 min idle timeout
 
 export class MockSandbox {
   sandboxId: string
   ports: number[]
   files: Map<string, string> = new Map()
   commands: Map<string, Command> = new Map()
+  lastAccessed: number = Date.now()
+  createdAt: number = Date.now()
 
   constructor(sandboxId: string, ports: number[] = []) {
     this.sandboxId = sandboxId
     this.ports = ports
   }
 
+  private touch() {
+    this.lastAccessed = Date.now()
+  }
+
+  get isIdle(): boolean {
+    return Date.now() - this.lastAccessed > SANDBOX_IDLE_MS
+  }
+
   async writeFiles(files: { path: string; content: Buffer }[]) {
+    this.touch()
     for (const f of files) {
       const normalizedPath = f.path.startsWith('/') ? f.path : '/' + f.path
-      this.files.set(normalizedPath, f.content.toString('utf8'))
+      if (this.files.size >= MAX_FILES_PER_SANDBOX) {
+        const firstKey = this.files.keys().next().value
+        if (firstKey) this.files.delete(firstKey)
+      }
+      const content = f.content.toString('utf8')
+      if (content.length > MAX_FILE_SIZE_BYTES) {
+        console.warn(`[sandbox] File ${normalizedPath} exceeds size limit, truncating`)
+        this.files.set(normalizedPath, content.slice(0, MAX_FILE_SIZE_BYTES))
+      } else {
+        this.files.set(normalizedPath, content)
+      }
     }
   }
 
   async readFile(options: { path: string }) {
+    this.touch()
     const normalizedPath = options.path.startsWith('/') ? options.path : '/' + options.path
     const content = this.files.get(normalizedPath)
     if (content === undefined) return null
     return Buffer.from(content, 'utf8')
   }
 
+  hasFile(path: string): boolean {
+    const normalizedPath = path.startsWith('/') ? path : '/' + path
+    return this.files.has(normalizedPath)
+  }
+
+  getFilePaths(): string[] {
+    return Array.from(this.files.keys())
+  }
+
+  getFileCount(): number {
+    return this.files.size
+  }
+
+  getTotalSizeBytes(): number {
+    let total = 0
+    for (const content of this.files.values()) {
+      total += content.length
+    }
+    return total
+  }
+
   async runCommand(options: RunCommandOptions) {
+    this.touch()
     const cmdId = 'cmd_' + Math.random().toString(36).substring(2, 8)
     const cmd = new Command(cmdId, options.cmd, options.args ?? [])
     this.commands.set(cmdId, cmd)
@@ -153,12 +200,14 @@ export class MockSandbox {
   }
 
   async getCommand(cmdId: string) {
+    this.touch()
     const cmd = this.commands.get(cmdId)
     if (!cmd) throw new Error(`Command not found: ${cmdId}`)
     return cmd
   }
 
   getCommandSync(cmdId: string) {
+    this.touch()
     const cmd = this.commands.get(cmdId)
     if (!cmd) return null
     return cmd
@@ -169,9 +218,11 @@ export class MockSandbox {
   }
 
   buildPreviewHtmlUrl(): string {
-    return URL.createObjectURL(
-      new Blob([this.buildPreviewHtml()], { type: 'text/html' })
-    )
+    const html = this.buildPreviewHtml()
+    const base64Html = typeof btoa !== 'undefined'
+      ? btoa(unescape(encodeURIComponent(html)))
+      : Buffer.from(html).toString('base64')
+    return `data:text/html;base64,${base64Html}`
   }
 
   buildPreviewHtml(): string {
@@ -275,12 +326,33 @@ if (typeof globalThis !== 'undefined') {
   globalForSandboxes.__sandboxes__ = sandboxes
 }
 
+function cleanupIdleSandboxes() {
+  for (const [id, sandbox] of sandboxes.entries()) {
+    if (sandbox.isIdle) {
+      sandbox.destroy()
+      sandboxes.delete(id)
+    }
+  }
+}
+let cleanupInterval: ReturnType<typeof setInterval> | null = null
+function ensureCleanupInterval() {
+  if (cleanupInterval) return
+  cleanupInterval = setInterval(cleanupIdleSandboxes, 15 * 60 * 1000)
+  if (cleanupInterval && typeof cleanupInterval === 'object' && 'unref' in cleanupInterval) {
+    ;(cleanupInterval as any).unref()
+  }
+}
+
 export const Sandbox = {
   async create(options: SandboxOptions = {}) {
+    ensureCleanupInterval()
     if (sandboxes.size >= MAX_SANDBOXES) {
-      const oldest = sandboxes.keys().next().value
-      if (oldest) {
-        Sandbox.destroy(oldest)
+      cleanupIdleSandboxes()
+      if (sandboxes.size >= MAX_SANDBOXES) {
+        const oldest = sandboxes.keys().next().value
+        if (oldest) {
+          Sandbox.destroy(oldest)
+        }
       }
     }
     const sandboxId = 'sb_' + Math.random().toString(36).substring(2, 10)
@@ -291,6 +363,7 @@ export const Sandbox = {
   },
 
   async get(options: { sandboxId: string }) {
+    ensureCleanupInterval()
     let sandbox = sandboxes.get(options.sandboxId)
     if (!sandbox) {
       sandbox = new MockSandbox(options.sandboxId)

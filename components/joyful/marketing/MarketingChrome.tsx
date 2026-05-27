@@ -1,12 +1,10 @@
 "use client";
 
-import { useVoiceInput, mergeVoiceTranscript, useClickOutside, readImageAttachment } from './stubs';
+import { useVoiceInput, mergeVoiceTranscript, readImageAttachment } from './stubs';
 import { useState, useEffect, useRef, useCallback, type ChangeEvent, type KeyboardEvent } from 'react';
-import { ChevronDown, Github, ImagePlus, ListChecks, Loader2, Mail, Mic, Pause, Twitter, Heart, Wand2, Zap, ArrowUp, X } from 'lucide-react';
+import { ImagePlus, Loader2, Mic, Pause, ArrowUp, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { BrandLogo } from '@/components/joyful/brand-logo';
-import { marketingFooterLinks, marketingFooterRoutes } from '@/components/joyful/marketing/marketingRoutes';
-import type { ChatAttachment, ChatMode } from '@/lib/types';
+import type { ChatAttachment } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 
 
@@ -21,7 +19,7 @@ const promptExamples = [
 
 interface PromptBoxProps {
   compact?: boolean;
-  onSubmit?: (prompt: string, mode?: ChatMode, attachments?: ChatAttachment[]) => void;
+  onSubmit?: (prompt: string, attachments?: ChatAttachment[]) => void;
 }
 
 export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
@@ -32,13 +30,8 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const [attachmentError, setAttachmentError] = useState('');
   const [placeholder, setPlaceholder] = useState(promptExamples[0]);
-  const [mode, setMode] = useState<ChatMode>('build');
-  const [modeMenuOpen, setModeMenuOpen] = useState(false);
-  const modeMenuRef = useRef<HTMLDivElement>(null);
   const exampleIndexRef = useRef(Math.floor(Math.random() * promptExamples.length));
   const { isAuthed, isAuthReady } = useAuth();
-
-  useClickOutside(modeMenuRef, () => setModeMenuOpen(false), modeMenuOpen);
 
   useEffect(() => {
     if (compact) return;
@@ -58,15 +51,14 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
     const request = trimmedPrompt || 'Use the attached image as a visual reference and build the website from it.';
     const attachments = attachment ? [attachment] : [];
     if (onSubmit) {
-      onSubmit(request, mode, attachments);
+      onSubmit(request, attachments);
     } else if (isAuthReady) {
       if (isAuthed) {
-        router.push(`/builder?prompt=${encodeURIComponent(request)}&mode=${mode}`);
+        router.push(`/builder?prompt=${encodeURIComponent(request)}`);
       } else {
-        router.push(`/login?prompt=${encodeURIComponent(request)}&mode=${mode}`);
+        router.push(`/login?prompt=${encodeURIComponent(request)}`);
       }
     }
-    setModeMenuOpen(false);
   };
 
   const handleImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -151,51 +143,6 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
             {attachmentError && <span className="text-[10px] font-medium text-red-500">{attachmentError}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <div ref={modeMenuRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setModeMenuOpen(prev => !prev)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:text-[#f5f2ea] dark:hover:bg-white/10"
-                aria-haspopup="menu"
-                aria-expanded={modeMenuOpen}
-              >
-                {mode === 'plan' ? <ListChecks className="h-3.5 w-3.5" /> : <Wand2 className="h-3.5 w-3.5" />}
-                {mode === 'plan' ? 'Plan' : 'Build'}
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-              </button>
-              {modeMenuOpen && (
-                <div className="absolute bottom-full right-0 z-20 mb-2 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-white/10 dark:bg-[#20211e]">
-                  {([
-                    { value: 'build' as const, label: 'Build', hint: 'Create files', icon: Wand2 },
-                    { value: 'plan' as const, label: 'Plan', hint: 'Review first', icon: ListChecks },
-                  ]).map((option) => {
-                    const Icon = option.icon;
-                    const selected = mode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => {
-                          setMode(option.value);
-                          setModeMenuOpen(false);
-                        }}
-                        className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
-                          selected
-                            ? 'bg-[#2f5bff]/10 text-gray-950 dark:text-white'
-                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-950 dark:text-[#d8d3ca] dark:hover:bg-white/10 dark:hover:text-white'
-                        }`}
-                      >
-                        <Icon className="mt-0.5 h-3.5 w-3.5 text-[#2f5bff]" />
-                        <span>
-                          <span className="block text-xs font-semibold">{option.label}</span>
-                          <span className="block text-[10px] leading-snug opacity-70">{option.hint}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
             <button
               type="button"
               onClick={() => {
@@ -225,8 +172,8 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
               type="button"
               onClick={handleSubmit}
               disabled={!prompt.trim() && !attachment}
-              aria-label={(prompt.trim() || attachment) ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
-              title={(prompt.trim() || attachment) ? (mode === 'plan' ? 'Create implementation plan' : 'Start building') : "Can't submit an empty request"}
+              aria-label={(prompt.trim() || attachment) ? 'Start building' : "Can't submit an empty request"}
+              title={(prompt.trim() || attachment) ? 'Start building' : "Can't submit an empty request"}
               className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-transform ${
                 prompt.trim() || attachment
                   ? 'bg-[#2f5bff] text-white shadow-[#2f5bff]/25 hover:scale-105'
@@ -242,85 +189,4 @@ export function PromptBox({ compact = false, onSubmit }: PromptBoxProps) {
   );
 }
 
-export function MarketingFooter() {
-  const router = useRouter();
 
-  return (
-    <footer className="relative overflow-hidden border-t border-gray-200 bg-gray-50 px-4 py-12 shadow-[0_-18px_60px_rgba(15,23,42,0.05)] sm:px-6 lg:px-8 dark:border-white/10 dark:bg-[#10110f] dark:shadow-[0_-18px_60px_rgba(0,0,0,0.24)]">
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#2f5bff]/5 dark:to-[#2f5bff]/10" />
-      <div className="relative mx-auto max-w-7xl">
-        <div className="grid gap-8 md:grid-cols-[1.2fr_3fr]">
-          <div>
-            <button type="button" onClick={() => router.push('/')} className="flex items-center gap-3">
-              <BrandLogo className="h-9 w-9" showText />
-            </button>
-            <p className="mt-4 max-w-xs text-sm leading-6 text-gray-600 dark:text-[#aaa69d]">
-              Build beautiful websites in minutes with AI. No coding required, export anytime.
-            </p>
-            <div className="mt-5 flex items-center gap-4">
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-[#aaa69d]">
-                <Zap className="h-4 w-4 text-[#2f5bff]" />
-                <span>100% Free</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-[#aaa69d]">
-                <Heart className="h-4 w-4 text-[#f23c78]" />
-                <span>Open Source</span>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-4 lg:gap-8">
-            {Object.entries(marketingFooterLinks).map(([category, links]) => (
-              <div key={category}>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-[#aaa69d]">{category}</h3>
-                <ul className="mt-4 space-y-3">
-                  {links.map((link) => (
-                    <li key={link}>
-                      <button
-                        type="button"
-                        onClick={() => router.push(marketingFooterRoutes[link] ?? '/docs')}
-                        className="text-left text-sm text-gray-600 transition-all hover:text-[#2f5bff] hover:translate-x-1 dark:text-[#aaa69d] dark:hover:text-white"
-                      >
-                        {link}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="mt-10 flex flex-col gap-4 border-t border-gray-200 pt-6 sm:flex-row sm:items-center sm:justify-between dark:border-white/8">
-          <div className="flex items-center gap-4">
-            <p className="text-xs text-gray-500 dark:text-[#aaa69d]">&copy; 2026 Joyful. All rights reserved.</p>
-            <span className="hidden text-sm text-gray-400 dark:text-gray-600 sm:inline">•</span>
-            <p className="text-xs text-gray-400 dark:text-[#6f6b64]">Made with care in San Francisco</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-all hover:border-[#2f5bff] hover:text-[#2f5bff] dark:border-white/10 dark:text-[#aaa69d] dark:hover:border-white/20 dark:hover:text-white"
-            >
-              <Github className="h-4 w-4" />
-            </a>
-            <a
-              href="https://twitter.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-all hover:border-[#2f5bff] hover:text-[#2f5bff] dark:border-white/10 dark:text-[#aaa69d] dark:hover:border-white/20 dark:hover:text-white"
-            >
-              <Twitter className="h-4 w-4" />
-            </a>
-            <a
-              href="mailto:hello@joyful.com"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-all hover:border-[#2f5bff] hover:text-[#2f5bff] dark:border-white/10 dark:text-[#aaa69d] dark:hover:border-white/20 dark:hover:text-white"
-            >
-              <Mail className="h-4 w-4" />
-            </a>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}

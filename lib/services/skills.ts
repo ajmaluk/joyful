@@ -13,6 +13,32 @@ export interface BuilderSkill {
   sourcePath: string;
 }
 
+function registerSkillDocs() {
+  const docs: [string, string][] = [
+    ['skills/react-product-architecture/SKILL.md', `# React Architecture\n\nCreate production-ready React apps with clear component structure. Use component composition, custom hooks, and proper state management. Name files by feature, not by type. Keep components small and focused.`],
+    ['skills/code-review-pass/SKILL.md', `# Code Review\n\nAfter each build iteration, verify: (1) All imports resolve (2) No TypeScript errors (3) Key UI renders without crash (4) Responsive behavior works (5) No console errors.`],
+    ['skills/responsive-ui-polish/SKILL.md', `# UI Polish\n\nUse consistent spacing (4px grid), readable font sizes (min 14px body), proper contrast ratios, focus-visible styles for keyboard nav, and no horizontal overflow.`],
+    ['skills/web-development-master/SKILL.md', `# Web Dev Master\n\nOrchestrate end-to-end web development: 1) Plan architecture 2) Build iteratively 3) Verify with build/lint 4) Test preview 5) Repeat until quality gates pass.`],
+    ['skills/nextjs-app-router/SKILL.md', `# Next.js App Router\n\nUse App Router conventions: layout.tsx for shared UI, page.tsx for routes, loading.tsx for loading states, error.tsx for error boundaries. Use server components by default.`],
+    ['skills/database-schema-design/SKILL.md', `# DB Schema Design\n\nDesign schemas with proper data types, constraints, indexes, and relationships. Consider query patterns. Use migrations for schema changes.`],
+    ['skills/api-design/SKILL.md', `# API Design\n\nDesign RESTful APIs with consistent endpoint naming, proper HTTP methods, meaningful status codes, structured error responses, and input validation.`],
+    ['skills/security-best-practices/SKILL.md', `# Security\n\nSanitize all user input. Use parameterized queries. Implement proper auth with JWT/sessions. Set security headers. Validate file uploads. Avoid eval().`],
+    ['skills/state-management/SKILL.md', `# State Management\n\nChoose the right tool: useState for local, useContext for shared, zustand for global/complex state, React Query for server state. Avoid prop drilling.`],
+    ['skills/tailwind-css-mastery/SKILL.md', `# Tailwind CSS\n\nUse Tailwind utility classes for styling. Leverage CSS variables for theming. Use responsive prefixes (sm:, md:, lg:). Group related utilities.`],
+    ['skills/git-workflow/SKILL.md', `# Git Workflow\n\nUse conventional commits (feat:, fix:, chore:, docs:). Keep commits atomic. Write descriptive messages. Branch per feature.`],
+    ['skills/full-stack-integration/SKILL.md', `# Full Stack Integration\n\nDefine clear API contracts. Handle loading, empty, error states on frontend. Use proper auth patterns. Implement data caching.`],
+    ['skills/docker-container/SKILL.md', `# Docker & Containers\n\nWrite efficient Dockerfiles: multi-stage builds, minimal layers, non-root users. Use docker-compose for multi-service setups. Add healthchecks, ignore node_modules, use .dockerignore.`],
+    ['skills/animation-motion/SKILL.md', `# Animation & Motion\n\nUse CSS transitions for simple state changes. Use framer-motion for enter/exit, layout animations, and gestures. Keep animations subtle (200-500ms). Respect prefers-reduced-motion.`],
+    ['skills/data-visualization/SKILL.md', `# Data Visualization\n\nChoose chart type by data shape: line for trends, bar for comparisons, pie for proportions. Make charts responsive, accessible with aria-labels, and include loading/empty states.`],
+    ['skills/testing-e2e/SKILL.md', `# E2E Testing\n\nTest critical user flows: signup, login, CRUD operations, checkout. Use data-testid for selectors. Keep tests atomic and independent. Run headless in CI.`],
+    ['skills/progressive-web-app/SKILL.md', `# PWA & Offline\n\nRegister service worker for offline caching. Use Cache First for static assets, Network First for API. Add web manifest with icons. Handle offline with friendly UI. Sync data when online.`],
+  ]
+  for (const [path, content] of docs) {
+    skillDocModules[`/${path}`] = content
+  }
+}
+registerSkillDocs()
+
 export const defaultBuilderSkills: BuilderSkill[] = [
   {
     id: 'react-product-architecture',
@@ -133,6 +159,70 @@ export const defaultBuilderSkills: BuilderSkill[] = [
     instructions: 'Choose appropriate state management: useState for local, useContext for shared, zustand for global, React Query for server state. Avoid prop drilling.',
     keywords: ['state management', 'state', 'store', 'context', 'redux', 'zustand', 'react query', 'use state', 'use context', 'prop drilling', 'global state'],
     sourcePath: 'skills/state-management/SKILL.md',
+  },
+  {
+    id: 'tailwind-css-mastery',
+    name: 'Tailwind CSS',
+    description: 'Build beautiful UIs with Tailwind CSS v4, custom themes, and responsive design.',
+    instructions: 'Use Tailwind CSS utility classes for all styling. Leverage Tailwind v4 features like CSS variables, container queries, and oklch colors. Follow mobile-first responsive patterns.',
+    keywords: ['tailwind', 'css', 'styling', 'responsive', 'design', 'utility', 'theme', 'layout', 'mobile-first', 'animation'],
+    sourcePath: 'skills/tailwind-css-mastery/SKILL.md',
+  },
+  {
+    id: 'git-workflow',
+    name: 'Git Workflow',
+    description: 'Manage version control with proper commit messages, branching, and collaboration.',
+    instructions: 'Use clear commit messages (conventional commits), create feature branches, keep commits atomic, write meaningful PR descriptions.',
+    keywords: ['git', 'github', 'version control', 'commit', 'branch', 'pr', 'pull request', 'merge', 'rebase', 'clone', 'push', 'repository'],
+    sourcePath: 'skills/git-workflow/SKILL.md',
+  },
+  {
+    id: 'full-stack-integration',
+    name: 'Full Stack Integration',
+    description: 'Connect frontend to backend with proper data flow, error handling, and auth.',
+    instructions: 'Design clean data flow between frontend and backend. Handle loading, error, and empty states. Implement proper authentication and authorization patterns.',
+    keywords: ['full stack', 'frontend', 'backend', 'api integration', 'data flow', 'auth', 'authentication', 'authorization', 'endpoint', 'fetch', 'axios', 'server', 'client', 'fullstack'],
+    sourcePath: 'skills/full-stack-integration/SKILL.md',
+  },
+  {
+    id: 'docker-container',
+    name: 'Docker & Containers',
+    description: 'Containerize apps with Dockerfiles, docker-compose, and multi-stage builds.',
+    instructions: 'Write efficient Dockerfiles with multi-stage builds. Use docker-compose for local dev services. Follow container best practices: minimal layers, non-root users, proper healthchecks.',
+    keywords: ['docker', 'container', 'dockerfile', 'compose', 'docker-compose', 'containerize', 'image', 'deploy', 'infrastructure', 'devops'],
+    sourcePath: 'skills/docker-container/SKILL.md',
+  },
+  {
+    id: 'animation-motion',
+    name: 'Animation & Motion',
+    description: 'Add smooth animations with CSS transitions, keyframes, and framer-motion.',
+    instructions: 'Use CSS transitions for simple state changes. Use framer-motion for complex enter/exit animations, layout animations, and gesture-based interactions. Keep animations subtle and purposeful.',
+    keywords: ['animation', 'motion', 'transition', 'framer-motion', 'keyframe', 'animate', 'css animation', 'micro-interaction', 'gesture', 'parallax', 'spring'],
+    sourcePath: 'skills/animation-motion/SKILL.md',
+  },
+  {
+    id: 'data-visualization',
+    name: 'Data Visualization',
+    description: 'Build charts, graphs, and data dashboards with efficient rendering patterns.',
+    instructions: 'Choose the right chart type for the data. Use libraries like recharts, chart.js, or d3. Implement responsive charts, handle empty/loading states, optimize for large datasets.',
+    keywords: ['chart', 'graph', 'data', 'visualization', 'dashboard', 'chart.js', 'recharts', 'd3', 'plot', 'statistics', 'analytics', 'metric', 'kpi'],
+    sourcePath: 'skills/data-visualization/SKILL.md',
+  },
+  {
+    id: 'testing-e2e',
+    name: 'E2E Testing',
+    description: 'Write end-to-end tests with Playwright or Cypress for user flow validation.',
+    instructions: 'Write E2E tests that cover critical user flows. Use data-testid attributes for selectors. Test happy paths and error states. Run tests in CI. Keep tests independent and fast.',
+    keywords: ['test', 'e2e', 'end-to-end', 'playwright', 'cypress', 'integration', 'user flow', 'automation', 'qa', 'regression', 'browser test'],
+    sourcePath: 'skills/testing-e2e/SKILL.md',
+  },
+  {
+    id: 'progressive-web-app',
+    name: 'PWA & Offline',
+    description: 'Build progressive web apps with service workers, offline support, and manifests.',
+    instructions: 'Implement service workers for offline caching. Add web app manifest for installability. Handle offline states gracefully. Use IndexedDB for client-side persistence. Optimize for mobile.',
+    keywords: ['pwa', 'progressive web app', 'service worker', 'offline', 'manifest', 'indexeddb', 'cache', 'installable', 'mobile web', 'app shell', 'workbox'],
+    sourcePath: 'skills/progressive-web-app/SKILL.md',
   },
 ];
 
@@ -482,6 +572,106 @@ export function buildQualityGatesForPrompt(
         : 'simple';
 
   return qualityGates.buildGates(hasPackageJson, hasTsConfig, complexity);
+}
+
+export const SLASH_COMMANDS: Record<string, { skill: BuilderSkill; usage: string }> = {
+  '/architect': {
+    skill: defaultBuilderSkills.find(s => s.id === 'react-product-architecture')!,
+    usage: '/architect build a dashboard app with side navigation',
+  },
+  '/review': {
+    skill: defaultBuilderSkills.find(s => s.id === 'code-review-pass')!,
+    usage: '/review the current code for issues',
+  },
+  '/ui': {
+    skill: defaultBuilderSkills.find(s => s.id === 'responsive-ui-polish')!,
+    usage: '/ui make the header responsive on mobile',
+  },
+  '/test': {
+    skill: defaultBuilderSkills.find(s => s.id === 'testing-workflow')!,
+    usage: '/test add tests for the login component',
+  },
+  '/perf': {
+    skill: defaultBuilderSkills.find(s => s.id === 'performance-budget')!,
+    usage: '/perf optimize the image loading',
+  },
+  '/security': {
+    skill: defaultBuilderSkills.find(s => s.id === 'security-best-practices')!,
+    usage: '/security audit the auth flow',
+  },
+  '/db': {
+    skill: defaultBuilderSkills.find(s => s.id === 'database-schema-design')!,
+    usage: '/db design a schema for user subscriptions',
+  },
+  '/api': {
+    skill: defaultBuilderSkills.find(s => s.id === 'api-design')!,
+    usage: '/api design REST endpoints for the blog',
+  },
+  '/state': {
+    skill: defaultBuilderSkills.find(s => s.id === 'state-management')!,
+    usage: '/state refactor to use zustand store',
+  },
+  '/design': {
+    skill: defaultBuilderSkills.find(s => s.id === 'design-system-consistency')!,
+    usage: '/design enforce design system tokens',
+  },
+  '/a11y': {
+    skill: defaultBuilderSkills.find(s => s.id === 'accessibility-audit')!,
+    usage: '/a11y check contrast and keyboard navigation',
+  },
+  '/next': {
+    skill: defaultBuilderSkills.find(s => s.id === 'nextjs-app-router')!,
+    usage: '/next scaffold a new route with layout',
+  },
+  '/tailwind': {
+    skill: defaultBuilderSkills.find(s => s.id === 'tailwind-css-mastery')!,
+    usage: '/tailwind add responsive grid layout',
+  },
+  '/git': {
+    skill: defaultBuilderSkills.find(s => s.id === 'git-workflow')!,
+    usage: '/git commit the changes with a good message',
+  },
+  '/docker': {
+    skill: defaultBuilderSkills.find(s => s.id === 'docker-container')!,
+    usage: '/docker create a Dockerfile for the Node.js app',
+  },
+  '/animate': {
+    skill: defaultBuilderSkills.find(s => s.id === 'animation-motion')!,
+    usage: '/animate add page transition animations',
+  },
+  '/chart': {
+    skill: defaultBuilderSkills.find(s => s.id === 'data-visualization')!,
+    usage: '/chart add a revenue chart to the dashboard',
+  },
+  '/e2e': {
+    skill: defaultBuilderSkills.find(s => s.id === 'testing-e2e')!,
+    usage: '/e2e write tests for the login flow',
+  },
+  '/pwa': {
+    skill: defaultBuilderSkills.find(s => s.id === 'progressive-web-app')!,
+    usage: '/pwa make the app installable with offline support',
+  },
+}
+
+export function detectSlashCommand(prompt: string): { command: string; skill: BuilderSkill; args: string } | null {
+  const trimmed = prompt.trim()
+  for (const [cmd, info] of Object.entries(SLASH_COMMANDS)) {
+    if (trimmed.startsWith(cmd + ' ') || trimmed === cmd) {
+      const args = trimmed.replace(cmd, '').trim()
+      return { command: cmd, skill: info.skill, args }
+    }
+  }
+  return null
+}
+
+export function getSlashCommandsHelp(): string {
+  const lines = ['Available slash commands:']
+  for (const [cmd, info] of Object.entries(SLASH_COMMANDS)) {
+    lines.push(`  ${cmd} - ${info.skill.description}`)
+  }
+  lines.push('')
+  lines.push('Type / to see available commands in the chat input.')
+  return lines.join('\n')
 }
 
 export function buildFileContextGraph(prompt: string, files: ProjectFile[], limit = 8): ContextFileNode[] {

@@ -6,6 +6,8 @@ import { Panel, PanelHeader } from '@/components/panels/panels'
 import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { Sandbox } from '@/lib/sandbox'
+import { useSandboxStore } from '@/app/state'
 
 interface Props {
   className?: string
@@ -22,10 +24,33 @@ export function Preview({ className, disabled, url }: Props) {
   const loadStartTime = useRef<number | null>(null)
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const sandboxId = useSandboxStore((s) => s.sandboxId)
+
   useEffect(() => {
-    setCurrentUrl(url)
-    setInputValue(url || '')
-  }, [url])
+    if (url && url.startsWith('blob:')) {
+      if (sandboxId) {
+        Sandbox.get({ sandboxId }).then((sandbox) => {
+          const correctUrl = sandbox.buildPreviewHtmlUrl()
+          setCurrentUrl(correctUrl)
+          setInputValue('http://localhost:3000')
+        }).catch((err) => {
+          console.warn('Failed to regenerate preview URL from blob:', err)
+          setCurrentUrl(url)
+          setInputValue(url)
+        })
+      } else {
+        setCurrentUrl(url)
+        setInputValue(url)
+      }
+    } else {
+      setCurrentUrl(url)
+      if (url && url.startsWith('data:')) {
+        setInputValue('http://localhost:3000')
+      } else {
+        setInputValue(url || '')
+      }
+    }
+  }, [url, sandboxId])
 
   const refreshIframe = () => {
     if (refreshTimeoutRef.current) {
@@ -47,7 +72,10 @@ export function Preview({ className, disabled, url }: Props) {
 
   const loadNewUrl = () => {
     if (iframeRef.current && inputValue) {
-      if (inputValue !== currentUrl) {
+      const isFriendlyPlaceholder = (inputValue === 'http://localhost:3000' || inputValue === 'http://localhost:3000/') && currentUrl?.startsWith('data:')
+      if (isFriendlyPlaceholder) {
+        refreshIframe()
+      } else if (inputValue !== currentUrl) {
         setIsLoading(true)
         setError(null)
         loadStartTime.current = Date.now()

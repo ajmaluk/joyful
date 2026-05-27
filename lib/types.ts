@@ -40,8 +40,6 @@ export interface Project {
   buildStatus?: 'building' | 'interrupted' | 'complete' | 'idle' | 'running';
 }
 
-export type ChatMode = 'build' | 'plan';
-
 export interface ChatAttachment {
   name: string;
   url?: string;

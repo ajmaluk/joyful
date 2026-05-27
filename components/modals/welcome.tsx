@@ -54,19 +54,20 @@ export function Welcome(props: {
               Build full websites by describing what you want, iterating with the AI assistant, and previewing changes in real time.
             </p>
             <p className="text-base text-secondary-foreground">
-              This workspace uses Vercel&apos;s AI Cloud services like{' '}
-              <ExternalLink href="https://vercel.com/docs/vercel-sandbox">
-                Sandbox
+              This workspace uses{' '}
+              <ExternalLink href="https://build.nvidia.com/">
+                NVIDIA AI
+              </ExternalLink>
+              ,{' '}
+              <ExternalLink href="https://console.groq.com/">
+                Groq
+              </ExternalLink>
+              , and{' '}
+              <ExternalLink href="https://freemodel.ai/">
+                Freemodel
               </ExternalLink>{' '}
-              for secure code execution,{' '}
-              <ExternalLink href="https://vercel.com/docs/ai-gateway">
-                AI Gateway
-              </ExternalLink>{' '}
-              for model support,{' '}
-              <ExternalLink href="https://vercel.com/fluid">
-                Fluid Compute
-              </ExternalLink>{' '}
-              for efficient rendering and streaming, and it&apos;s built with{' '}
+              for AI model inference, a fully local in-memory sandbox for code
+              execution, and is built with{' '}
               <ExternalLink href="https://nextjs.org/">Next.js</ExternalLink>{' '}
               and the{' '}
               <ExternalLink href="https://ai-sdk.dev/docs/introduction">

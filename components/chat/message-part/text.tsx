@@ -16,7 +16,7 @@ function renderMarkdown(text: string): string {
 
     const codeMatch = line.match(/^```(\w*)$/)
     if (codeMatch) {
-      result.push(`<pre class="rounded bg-black/10 p-2 my-2 overflow-x-auto text-xs">`)
+      result.push(`<pre class="rounded bg-black/10 p-2 my-2 overflow-x-auto overflow-y-auto text-xs max-h-64">`)
       continue
     }
     if (line === '```') {

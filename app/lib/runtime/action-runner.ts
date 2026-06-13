@@ -128,8 +128,27 @@ export class ActionRunner {
 
     const webcontainer = await this.#webcontainer;
 
-    const process = await webcontainer.spawn('jsh', ['-c', action.content], {
-      env: { npm_config_yes: true },
+    // Optimize common package manager commands to use pnpm for speed and efficiency in WebContainer
+    let command = action.content;
+    if (command.includes('npm install') || command.includes('npm i ') || command === 'npm i') {
+      command = command.replace(/\bnpm (install|i)\b/g, 'pnpm install');
+    } else if (command.includes('npm run ')) {
+      command = command.replace(/\bnpm run\b/g, 'pnpm run');
+    } else if (command.includes('npx ')) {
+      command = command.replace(/\bnpx\b/g, 'pnpm dlx');
+    } else if (command.includes('npm create ')) {
+      command = command.replace(/\bnpm create\b/g, 'pnpm create');
+    }
+
+    const process = await webcontainer.spawn('jsh', ['-c', command], {
+      env: {
+        npm_config_yes: 'true',
+        npm_config_prefer_offline: 'true',
+        npm_config_audit: 'false',
+        npm_config_fund: 'false',
+        npm_config_progress: 'false',
+        npm_config_loglevel: 'error',
+      },
     });
 
     action.abortSignal.addEventListener('abort', () => {

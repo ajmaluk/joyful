@@ -93,6 +93,15 @@ export class StreamingMessageParser {
 
             let content = currentAction.content.trim();
 
+            // Decode HTML entities that may be encoded during markdown/XML rendering
+            content = content
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&apos;/g, "'");
+
             if ('type' in currentAction && currentAction.type === 'file') {
               content += '\n';
             }

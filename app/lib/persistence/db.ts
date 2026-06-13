@@ -7,7 +7,7 @@ const logger = createScopedLogger('ChatHistory');
 // this is used at the top level and never rejects
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
   return new Promise((resolve) => {
-    const request = indexedDB.open('boltHistory', 1);
+    const request = indexedDB.open('boltHistory', 2);
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
@@ -15,7 +15,16 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
       if (!db.objectStoreNames.contains('chats')) {
         const store = db.createObjectStore('chats', { keyPath: 'id' });
         store.createIndex('id', 'id', { unique: true });
-        store.createIndex('urlId', 'urlId', { unique: true });
+        store.createIndex('urlId', 'urlId', { unique: false });
+      } else {
+        const transaction = (event.target as IDBOpenDBRequest).transaction;
+        if (transaction) {
+          const store = transaction.objectStore('chats');
+          if (store.indexNames.contains('urlId')) {
+            store.deleteIndex('urlId');
+          }
+          store.createIndex('urlId', 'urlId', { unique: false });
+        }
       }
     };
 

@@ -11,6 +11,14 @@ export async function newShellProcess(webcontainer: WebContainer, terminal: ITer
       cols: terminal.cols ?? 80,
       rows: terminal.rows ?? 15,
     },
+    env: {
+      npm_config_yes: 'true',
+      npm_config_prefer_offline: 'true',
+      npm_config_audit: 'false',
+      npm_config_fund: 'false',
+      npm_config_progress: 'false',
+      npm_config_loglevel: 'error',
+    },
   });
 
   const input = process.input.getWriter();

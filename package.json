@@ -1,6 +1,6 @@
 {
-  "name": "bolt",
-  "description": "StackBlitz AI Agent",
+  "name": "joyful",
+  "description": "Joyful AI Agent",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@9.4.0",

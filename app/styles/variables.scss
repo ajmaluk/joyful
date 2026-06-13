@@ -249,3 +249,12 @@
   --bolt-elements-terminal-color-brightCyan: var(--bolt-terminal-brightCyan);
   --bolt-elements-terminal-color-brightWhite: var(--bolt-terminal-brightWhite);
 }
+
+@media (max-width: 768px) {
+  :root {
+    --chat-min-width: 100%;
+    --workbench-width: 100%;
+    --workbench-inner-width: calc(100% - 2rem);
+    --workbench-left: 1rem;
+  }
+}

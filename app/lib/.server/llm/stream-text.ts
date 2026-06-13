@@ -26,7 +26,7 @@ export function streamText(messages: Messages, env: Env, options?: StreamingOpti
     model: getOpenAIModel(getAPIKey(env)),
     system: getSystemPrompt(),
     maxTokens: MAX_TOKENS,
-    messages: convertToCoreMessages(messages),
+    messages: convertToCoreMessages(messages as any),
     ...options,
   });
 }

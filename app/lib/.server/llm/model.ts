@@ -6,5 +6,5 @@ export function getOpenAIModel(apiKey: string) {
     baseURL: 'https://integrate.api.nvidia.com/v1',
   });
 
-  return openai('nvidia/nemotron-3-ultra-550b-a55b');
+  return openai('meta/llama-3.3-70b-instruct');
 }

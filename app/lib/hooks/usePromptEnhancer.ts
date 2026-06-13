@@ -16,12 +16,24 @@ export function usePromptEnhancer() {
     setEnhancingPrompt(true);
     setPromptEnhanced(false);
 
-    const response = await fetch('/api/enhancer', {
-      method: 'POST',
-      body: JSON.stringify({
-        message: input,
-      }),
-    });
+    let response;
+
+    try {
+      response = await fetch('/api/enhancer', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: input,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      logger.error(error);
+      setEnhancingPrompt(false);
+      return;
+    }
 
     const reader = response.body?.getReader();
 

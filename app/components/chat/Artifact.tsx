@@ -60,12 +60,12 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
         >
           <div className="px-5 p-3.5 w-full text-left">
             <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
-            <div className="w-full w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
+            <div className="w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
           </div>
         </button>
         <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
         <AnimatePresence>
-          {actions.length && (
+          {actions.length > 0 && (
             <motion.button
               initial={{ width: 0 }}
               animate={{ width: 'auto' }}
@@ -102,14 +102,14 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
 });
 
 interface ShellCodeBlockProps {
-  classsName?: string;
+  className?: string;
   code: string;
 }
 
-function ShellCodeBlock({ classsName, code }: ShellCodeBlockProps) {
+function ShellCodeBlock({ className, code }: ShellCodeBlockProps) {
   return (
     <div
-      className={classNames('text-xs', classsName)}
+      className={classNames('text-xs', className)}
       dangerouslySetInnerHTML={{
         __html: shellHighlighter.codeToHtml(code, {
           lang: 'shell',
@@ -175,7 +175,7 @@ const ActionList = memo(({ actions }: ActionListProps) => {
               </div>
               {type === 'shell' && (
                 <ShellCodeBlock
-                  classsName={classNames('mt-1', {
+                  className={classNames('mt-1', {
                     'mb-3.5': !isLast,
                   })}
                   code={content}

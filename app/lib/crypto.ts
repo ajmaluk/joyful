@@ -26,8 +26,8 @@ export async function encrypt(key: string, data: string) {
 export async function decrypt(key: string, payload: string) {
   const bundle = encodeBase64(payload);
 
-  const iv = new Uint8Array(bundle.buffer, bundle.byteLength - IV_LENGTH);
-  const ciphertext = new Uint8Array(bundle.buffer, 0, bundle.byteLength - IV_LENGTH);
+  const iv = bundle.subarray(bundle.byteLength - IV_LENGTH);
+  const ciphertext = bundle.subarray(0, bundle.byteLength - IV_LENGTH);
 
   const cryptoKey = await getKey(key);
 

@@ -2,7 +2,7 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import type { PluggableList, Plugin } from 'unified';
 import rehypeSanitize, { defaultSchema, type Options as RehypeSanitizeOptions } from 'rehype-sanitize';
-import { SKIP, visit } from 'unist-util-visit';
+import { visit } from 'unist-util-visit';
 type UnistNode = any;
 type UnistParent = any;
 
@@ -100,18 +100,19 @@ const limitedMarkdownPlugin: Plugin = () => {
         return true;
       }
 
-      let value = contents.slice(node.position.start.offset, node.position.end.offset);
+      const value = contents.slice(node.position.start.offset, node.position.end.offset);
 
       if (node.type === 'heading') {
-        value = `\n${value}`;
+        parent.children[index] = {
+          type: 'text',
+          value: `\n${value}`,
+        } as any;
+      } else {
+        parent.children[index] = {
+          type: 'text',
+          value,
+        } as any;
       }
-
-      parent.children[index] = {
-        type: 'text',
-        value,
-      } as any;
-
-      return [SKIP, index] as const;
     });
   };
 };

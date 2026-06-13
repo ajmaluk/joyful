@@ -167,6 +167,7 @@ export class ActionRunner {
         logger.debug('Created folder', folder);
       } catch (error) {
         logger.error('Failed to create folder\n\n', error);
+        throw error;
       }
     }
 
@@ -175,6 +176,7 @@ export class ActionRunner {
       logger.debug(`File written ${action.filePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
+      throw error;
     }
   }
 

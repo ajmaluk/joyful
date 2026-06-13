@@ -20,6 +20,7 @@ export function useSnapScroll() {
       });
 
       observer.observe(node);
+      observerRef.current = observer;
     } else {
       observerRef.current?.disconnect();
       observerRef.current = undefined;

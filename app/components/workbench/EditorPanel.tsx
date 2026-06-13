@@ -61,7 +61,7 @@ export const EditorPanel = memo(
     const theme = useStore(themeStore);
     const showTerminal = useStore(workbenchStore.showTerminal);
 
-    const terminalRefs = useRef<Array<TerminalRef | null>>([]);
+    const terminalRefs = useRef<Map<number, TerminalRef | null>>(new Map());
     const terminalPanelRef = useRef<ImperativePanelHandle>(null);
     const terminalToggledByShortcut = useRef(false);
 
@@ -86,7 +86,7 @@ export const EditorPanel = memo(
       });
 
       const unsubscribeFromThemeStore = themeStore.subscribe(() => {
-        for (const ref of Object.values(terminalRefs.current)) {
+        for (const ref of terminalRefs.current.values()) {
           ref?.reloadStyles();
         }
       });
@@ -146,7 +146,7 @@ export const EditorPanel = memo(
             <PanelResizeHandle />
             <Panel className="flex flex-col" defaultSize={80} minSize={20}>
               <PanelHeader className="overflow-x-auto">
-                {activeFileSegments?.length && (
+                {activeFileSegments && activeFileSegments.length > 0 && (
                   <div className="flex items-center flex-1 text-sm">
                     <FileBreadcrumb pathSegments={activeFileSegments} files={files} onFileSelect={onFileSelect} />
                     {activeFileUnsaved && (
@@ -239,7 +239,7 @@ export const EditorPanel = memo(
                       hidden: !isActive,
                     })}
                     ref={(ref) => {
-                      terminalRefs.current.push(ref);
+                      terminalRefs.current.set(index, ref);
                     }}
                     onTerminalReady={(terminal) => workbenchStore.attachTerminal(terminal)}
                     onTerminalResize={(cols, rows) => workbenchStore.onTerminalResize(cols, rows)}

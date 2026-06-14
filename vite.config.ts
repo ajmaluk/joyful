@@ -10,11 +10,27 @@ export default defineConfig((config) => {
     build: {
       target: 'esnext',
     },
+    test: {
+      coverage: {
+        provider: 'istanbul',
+        reporter: ['text', 'json', 'html', 'lcov'],
+        include: ['app/**/*.ts', 'app/**/*.tsx'],
+        exclude: [
+          'app/**/*.spec.ts',
+          'app/**/*.test.ts',
+          'app/**/*.d.ts',
+          'app/entry.client.tsx',
+          'app/entry.server.tsx',
+          'app/root.tsx',
+        ],
+        reportsDirectory: 'coverage',
+      },
+    },
     css: {
       preprocessorOptions: {
         scss: {
           api: 'modern-compiler',
-          silenceDeprecations: ['import'],
+          silenceDeprecations: ['import', 'legacy-js-api'],
         },
       },
     },
@@ -28,7 +44,6 @@ export default defineConfig((config) => {
           v3_fetcherPersist: true,
           v3_relativeSplatPath: true,
           v3_throwAbortReason: true,
-          v3_lazyRouteDiscovery: true,
         },
       }),
       UnoCSS(),

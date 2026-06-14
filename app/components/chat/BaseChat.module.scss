@@ -1,4 +1,9 @@
 .BaseChat {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 26rem),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.08), transparent 22rem),
+    var(--bolt-elements-bg-depth-1);
+
   &[data-chat-visible='false'] {
     --workbench-inner-width: 100%;
     --workbench-left: 0;

@@ -37,3 +37,4 @@ shortcutsStore.subscribe((shortcuts) => {
     shortcuts,
   });
 });
+

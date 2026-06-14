@@ -10,7 +10,7 @@ export const LoadingDots = memo(({ text }: LoadingDotsProps) => {
   useEffect(() => {
     const interval = setInterval(() => {
       setDotCount((prevDotCount) => (prevDotCount + 1) % 4);
-    }, 500);
+    }, 400);
 
     return () => clearInterval(interval);
   }, []);
@@ -18,8 +18,8 @@ export const LoadingDots = memo(({ text }: LoadingDotsProps) => {
   return (
     <div className="flex justify-center items-center h-full">
       <div className="relative">
-        <span>{text}</span>
-        <span className="absolute left-[calc(100%-12px)]">{'.'.repeat(dotCount)}</span>
+        <span className="text-bolt-elements-textSecondary">{text}</span>
+        <span className="absolute left-[calc(100%-4px)]">{'.'.repeat(dotCount)}</span>
         <span className="invisible">...</span>
       </div>
     </div>

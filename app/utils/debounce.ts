@@ -3,14 +3,14 @@ export function debounce<Args extends any[]>(fn: (...args: Args) => void, delay 
     return fn;
   }
 
-  let timer: number | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   return function <U>(this: U, ...args: Args) {
     const context = this;
 
     clearTimeout(timer);
 
-    timer = window.setTimeout(() => {
+    timer = setTimeout(() => {
       fn.apply(context, args);
     }, delay);
   };

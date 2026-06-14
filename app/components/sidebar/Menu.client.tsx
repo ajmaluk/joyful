@@ -14,7 +14,7 @@ const menuVariants = {
   closed: {
     opacity: 0,
     visibility: 'hidden',
-    left: '-150px',
+    left: '-320px',
     transition: {
       duration: 0.2,
       ease: cubicEasingFn,
@@ -79,6 +79,12 @@ export function Menu() {
   }, [open]);
 
   useEffect(() => {
+    const isMobile = window.innerWidth < 640;
+
+    if (isMobile) {
+      return;
+    }
+
     const enterThreshold = 40;
     const exitThreshold = 40;
 
@@ -99,28 +105,69 @@ export function Menu() {
     };
   }, []);
 
+  // Listen for custom event from Header toggle button
+  useEffect(() => {
+    function toggleMenu() {
+      setOpen((prev) => !prev);
+    }
+
+    window.addEventListener('toggle-sidebar', toggleMenu);
+
+    return () => {
+      window.removeEventListener('toggle-sidebar', toggleMenu);
+    };
+  }, []);
+
+  // Close menu on mobile when clicking a chat
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (window.innerWidth < 640 && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <motion.div
       ref={menuRef}
       initial="closed"
       animate={open ? 'open' : 'closed'}
       variants={menuVariants}
-      className="flex flex-col side-menu fixed top-0 w-[350px] h-full bg-bolt-elements-background-depth-2 border-r rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl shadow-bolt-elements-sidebar-dropdownShadow text-sm"
-    >
-      <div className="flex items-center h-[var(--header-height)]">{/* Placeholder */}</div>
+      className="flex flex-col side-menu fixed top-0 w-full sm:w-[350px] h-full bg-bolt-elements-background-depth-2 border-r sm:rounded-r-3xl border-bolt-elements-borderColor z-sidebar shadow-xl shadow-bolt-elements-sidebar-dropdownShadow text-sm"
+    >        <div className="hidden sm:flex items-center h-[var(--header-height)]">{/* Placeholder */}</div>
       <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
         <div className="p-4">
-          <a
-            href="/"
-            className="flex gap-2 items-center bg-bolt-elements-sidebar-buttonBackgroundDefault text-bolt-elements-sidebar-buttonText hover:bg-bolt-elements-sidebar-buttonBackgroundHover rounded-md p-2 transition-theme"
-          >
-            <span className="inline-block i-bolt:chat scale-110" />
-            Start new chat
-          </a>
+          <div className="flex items-center justify-between">
+            <a
+              href="/"
+              className="flex gap-2 items-center bg-bolt-elements-sidebar-buttonBackgroundDefault text-bolt-elements-sidebar-buttonText hover:bg-bolt-elements-sidebar-buttonBackgroundHover rounded-md p-2 transition-theme"
+            >
+              <span className="inline-block i-bolt:chat scale-110" />
+              Start new chat
+            </a>
+            <button
+              className="sm:hidden p-2 text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary rounded-md hover:bg-bolt-elements-item-backgroundActive"
+              onClick={() => setOpen(false)}
+              title="Close menu"
+            >
+              <div className="i-ph:x text-xl" />
+            </button>
+          </div>
         </div>
         <div className="text-bolt-elements-textPrimary font-medium pl-6 pr-5 my-2">Your Chats</div>
-        <div className="flex-1 overflow-scroll pl-4 pr-5 pb-5">
-          {list.length === 0 && <div className="pl-2 text-bolt-elements-textTertiary">No previous conversations</div>}
+        <div className="flex-1 overflow-y-auto pl-4 pr-5 pb-5">
+          {list.length === 0 && (
+            <div className="pl-2 text-bolt-elements-textTertiary flex items-center gap-2 mt-4">
+              <div className="i-ph:chat-text-duotone text-lg opacity-50" />
+              No previous conversations
+            </div>
+          )}
           <DialogRoot open={dialogContent !== null}>
             {binDates(list).map(({ category, items }) => (
               <div key={category} className="mt-4 first:mt-0 space-y-1">

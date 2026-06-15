@@ -2,40 +2,45 @@
   &[data-chat-visible='false'] {
     --workbench-inner-width: 100%;
     --workbench-left: 0;
-
-    .Chat {
-      --at-apply: bolt-ease-cubic-bezier;
-      transition-property: transform, opacity;
-      transition-duration: 0.3s;
-      will-change: transform, opacity;
-      transform: translateX(-50%);
-      opacity: 0;
-    }
   }
-}
 
-.Chat {
-  opacity: 1;
+  /* Ensure chat fills available space */
+  & > div {
+    min-height: 0;
+  }
 }
 
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .BaseChat {
-    --chat-min-width: 100% !important;
-  }
-
-  .Chat {
-    min-width: 100% !important;
+    flex-direction: column !important;
   }
 }
 
 /* Smooth transitions for all interactive elements */
-.Chat textarea {
+.BaseChat textarea {
   transition: height 0.15s ease;
 }
 
-/* Sticky prompt styling */
-.Chat [class*='sticky'] {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* Sidebar gradients - using the new sidebar-gradient class */
+.BaseChat .sidebar-gradient {
+  background-image: 
+    radial-gradient(ellipse 115% 38% at 50% 48%, rgba(38, 55, 88, 0.88) 0%, rgba(27, 33, 46, 0.72) 42%, transparent 74%),
+    radial-gradient(ellipse 115% 35% at 50% 61%, rgba(65, 104, 220, 0.96) 0%, rgba(80, 105, 225, 0.82) 46%, transparent 78%),
+    radial-gradient(ellipse 120% 34% at 50% 73%, rgba(202, 112, 235, 0.94) 0%, rgba(255, 90, 198, 0.88) 48%, transparent 80%),
+    radial-gradient(ellipse 110% 28% at 50% 89%, rgba(255, 36, 111, 0.98) 0%, rgba(255, 48, 101, 0.93) 58%, transparent 84%),
+    radial-gradient(ellipse 125% 26% at 50% 108%, rgba(255, 97, 33, 1) 0%, rgba(255, 67, 45, 0.98) 56%, transparent 86%),
+    linear-gradient(180deg, #191a1c 0%, #191a1c 31%, #1d2028 40%, #283b67 50%, #486bd1 59%, #7c75e8 67%, #db78df 75%, #ff58b7 82%, #ff2879 91%, #ff5c2f 100%);
+}
+
+/* Glassmorphism effect for chat bubbles */
+.BaseChat .chat-bubble {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Resizable handle active state */
+.BaseChat .resize-active {
+  background-color: rgba(255, 255, 255, 0.2);
 }

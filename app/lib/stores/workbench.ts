@@ -5,6 +5,7 @@ import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/mes
 import { webcontainer } from '~/lib/webcontainer';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
+import { WORK_DIR } from '~/utils/constants';
 import { EditorStore } from './editor';
 import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
@@ -200,6 +201,29 @@ export class WorkbenchStore {
     for (const filePath of this.unsavedFiles.get()) {
       await this.saveFile(filePath);
     }
+  }
+
+  async downloadCodebase() {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    const files = this.files.get();
+
+    for (const [filePath, dirent] of Object.entries(files)) {
+      if (dirent?.type === 'file') {
+        const relativePath = filePath.replace(new RegExp(`^${WORK_DIR}/`), '');
+        zip.file(relativePath, dirent.content);
+      }
+    }
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = objectUrl;
+    link.download = 'workspace.zip';
+    link.click();
+
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
   }
 
   getFileModifcations() {

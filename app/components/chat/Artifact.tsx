@@ -27,6 +27,7 @@ interface ArtifactProps {
 export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
+  const [showAllActions, setShowAllActions] = useState(false);
 
   const artifacts = useStore(workbenchStore.artifacts);
   const artifact = artifacts[messageId];
@@ -48,51 +49,92 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
     }
   }, [actions]);
 
+  const totalActions = actions.length;
+  const completedActions = actions.filter((a) => a.status === 'complete').length;
+  const failedActions = actions.filter((a) => a.status === 'failed').length;
+  const isRunning = actions.some((a) => a.status === 'running');
+
   return (
-    <div className="artifact border border-bolt-elements-borderColor flex flex-col overflow-hidden rounded-lg w-full transition-border duration-150">
-      <div className="flex">
-        <button
-          className="flex items-stretch bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover w-full overflow-hidden"
-          onClick={() => {
-            const showWorkbench = workbenchStore.showWorkbench.get();
-            workbenchStore.showWorkbench.set(!showWorkbench);
-          }}
-        >
-          <div className="px-5 p-3.5 w-full text-left">
-            <div className="w-full text-bolt-elements-textPrimary font-medium leading-5 text-sm">{artifact?.title}</div>
-            <div className="w-full text-bolt-elements-textSecondary text-xs mt-0.5">Click to open Workbench</div>
+    <div className="artifact w-full max-w-full mr-auto overflow-hidden rounded-2xl border border-white/10 bg-[#202023] shadow-md transition-all duration-200">
+      {/* Accordion Header */}
+      <div
+        className="flex items-center justify-between py-2 px-3 cursor-pointer hover:bg-white/5 transition-colors border-b border-white/5"
+        onClick={toggleActions}
+      >
+        <div className="flex items-center min-w-0 flex-1 mr-2">
+          <div className="min-w-0 flex-1">
+            <h3 style={{ fontSize: '12px', margin: 0 }} className="font-semibold text-white truncate whitespace-nowrap overflow-hidden leading-tight">{artifact?.title}</h3>
+            <div className="flex items-center space-x-1.5 mt-1.5">
+              <span className="text-[8px] text-white/50 leading-none">
+                {isRunning ? 'Building...' : 'Click to view actions'}
+              </span>
+              <span className="text-[8px] px-1 py-0.5 rounded-full bg-white/10 text-white/70 leading-none">
+                {completedActions}/{totalActions}
+              </span>
+              {failedActions > 0 && (
+                <span className="text-[8px] px-1 py-0.5 rounded-full bg-red-500/20 text-red-400 leading-none">
+                  {failedActions}
+                </span>
+              )}
+            </div>
           </div>
-        </button>
-        <div className="bg-bolt-elements-artifacts-borderColor w-[1px]" />
-        <AnimatePresence>
-          {actions.length > 0 && (
-            <motion.button
-              initial={{ width: 0 }}
-              animate={{ width: 'auto' }}
-              exit={{ width: 0 }}
-              transition={{ duration: 0.15, ease: cubicEasingFn }}
-              className="bg-bolt-elements-artifacts-background hover:bg-bolt-elements-artifacts-backgroundHover"
-              onClick={toggleActions}
-            >
-              <div className="p-4">
-                <div className={showActions ? 'i-ph:caret-up-bold' : 'i-ph:caret-down-bold'}></div>
-              </div>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        </div>
+        <div className={classNames('transition-transform duration-200 shrink-0', showActions ? 'rotate-180' : '')}>
+          <svg className="w-2.5 h-2.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
+      
+      {/* Accordion Content */}
       <AnimatePresence>
         {showActions && actions.length > 0 && (
           <motion.div
             className="actions"
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: '0px' }}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            <div className="bg-bolt-elements-artifacts-borderColor h-[1px]" />
-            <div className="p-5 text-left bg-bolt-elements-actions-background">
-              <ActionList actions={actions} />
+            <div className="p-2.5 space-y-2">
+              <div 
+                className={classNames(
+                  "overflow-y-auto pr-1 space-y-2 transition-all duration-200",
+                  showAllActions ? "max-h-[500px]" : "max-h-[160px]"
+                )}
+              >
+                <ActionList actions={actions} />
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-2 pt-1.5 border-t border-white/5">
+                <button
+                  onClick={() => {
+                    workbenchStore.showWorkbench.set(true);
+                    workbenchStore.currentView.set('code');
+                  }}
+                  className="flex-grow py-1 text-[10px] font-medium border border-white/20 rounded-md hover:bg-white/10 text-white transition-colors bg-transparent cursor-pointer"
+                >
+                  Details
+                </button>
+                <button
+                  onClick={() => {
+                    workbenchStore.showWorkbench.set(true);
+                    workbenchStore.currentView.set('preview');
+                  }}
+                  className="flex-grow py-1 text-[10px] font-medium border border-white/20 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors bg-transparent cursor-pointer"
+                >
+                  Preview
+                </button>
+                {actions.length > 5 && (
+                  <button
+                    onClick={() => setShowAllActions(!showAllActions)}
+                    className="py-1 px-2.5 text-[10px] font-medium border border-white/20 rounded-md hover:bg-white/10 text-white transition-colors bg-transparent cursor-pointer shrink-0"
+                  >
+                    {showAllActions ? 'Show Less' : 'Show All'}
+                  </button>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -109,7 +151,7 @@ interface ShellCodeBlockProps {
 function ShellCodeBlock({ className, code }: ShellCodeBlockProps) {
   return (
     <div
-      className={classNames('text-xs', className)}
+      className={classNames('text-xs font-mono bg-black/30 rounded-lg p-2 border border-white/5 overflow-x-auto', className)}
       dangerouslySetInnerHTML={{
         __html: shellHighlighter.codeToHtml(code, {
           lang: 'shell',
@@ -125,64 +167,105 @@ interface ActionListProps {
 }
 
 const actionVariants = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 10 },
   visible: { opacity: 1, y: 0 },
 };
+
+function getStatusIcon(status: ActionState['status']) {
+  switch (status) {
+    case 'running':
+      return <div className="i-svg-spinners:90-ring-with-bg text-blue-400"></div>;
+    case 'pending':
+      return <div className="i-ph:circle-duotone text-white/30"></div>;
+    case 'complete':
+      return <div className="i-ph:check text-green-500 font-bold"></div>;
+    case 'failed':
+      return <div className="i-ph:x text-red-500 font-bold"></div>;
+    case 'aborted':
+      return <div className="i-ph:minus-circle text-white/30"></div>;
+    default:
+      return null;
+  }
+}
+
+const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: boolean }) => {
+  const [isExpanded, setIsExpanded] = useState(
+    action.status === 'running' || action.status === 'failed'
+  );
+
+  useEffect(() => {
+    if (action.status === 'running' || action.status === 'failed') {
+      setIsExpanded(true);
+    }
+  }, [action.status]);
+
+  return (
+    <motion.li
+      variants={actionVariants}
+      initial="hidden"
+      animate="visible"
+      transition={{
+        duration: 0.2,
+        ease: cubicEasingFn,
+      }}
+    >
+      <div className="flex items-center space-x-3 text-[13px]">
+        <div className="text-base shrink-0 flex items-center">
+          {getStatusIcon(action.status)}
+        </div>
+        {action.type === 'file' ? (
+          <div className="text-white/70 min-w-0 flex-1 break-all py-0.5">
+            {action.filePath.includes('/') ? 'Edit' : 'Create'}{' '}
+            <code className="bg-white/5 px-1.5 py-0.5 rounded text-white/90 font-mono text-[11px] break-all inline-block max-w-full">
+              {action.filePath}
+            </code>
+          </div>
+        ) : action.type === 'shell' ? (
+          <div
+            className="flex items-center w-full text-white/70 min-w-0 cursor-pointer select-none gap-2 hover:text-white py-0.5"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            <span className="font-medium shrink-0">Run:</span>
+            <code className="bg-white/5 px-1.5 py-0.5 rounded text-white/90 font-mono text-[11px] break-all truncate flex-1 max-w-[calc(100%-40px)]">
+              {action.content}
+            </code>
+            <div className={classNames('transition-transform duration-200 shrink-0 ml-auto mr-1', isExpanded ? 'rotate-180' : '')}>
+              <svg className="w-2.5 h-2.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <AnimatePresence initial={false}>
+        {action.type === 'shell' && isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15, ease: cubicEasingFn }}
+            className="overflow-hidden"
+          >
+            <ShellCodeBlock
+              className={classNames('mt-1.5 h-[100px] overflow-y-auto', {
+                'mb-2': !isLast,
+              })}
+              code={action.content}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.li>
+  );
+});
 
 const ActionList = memo(({ actions }: ActionListProps) => {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-      <ul className="list-none space-y-2.5">
+      <ul className="list-none space-y-2">
         {actions.map((action, index) => {
-          const { status, type, content } = action;
           const isLast = index === actions.length - 1;
-
-          return (
-            <motion.li
-              key={index}
-              variants={actionVariants}
-              initial="hidden"
-              animate="visible"
-              transition={{
-                duration: 0.2,
-                ease: cubicEasingFn,
-              }}
-            >
-              <div className="flex items-center gap-1.5 text-sm">
-                <div className={classNames('text-lg', getIconColor(action.status))}>
-                  {status === 'running' ? (
-                    <div className="i-svg-spinners:90-ring-with-bg"></div>
-                  ) : status === 'pending' ? (
-                    <div className="i-ph:circle-duotone"></div>
-                  ) : status === 'complete' ? (
-                    <div className="i-ph:check"></div>
-                  ) : status === 'failed' || status === 'aborted' ? (
-                    <div className="i-ph:x"></div>
-                  ) : null}
-                </div>
-                {type === 'file' ? (
-                  <div>
-                    Create{' '}
-                    <code className="bg-bolt-elements-artifacts-inlineCode-background text-bolt-elements-artifacts-inlineCode-text px-1.5 py-1 rounded-md">
-                      {action.filePath}
-                    </code>
-                  </div>
-                ) : type === 'shell' ? (
-                  <div className="flex items-center w-full min-h-[28px]">
-                    <span className="flex-1">Run command</span>
-                  </div>
-                ) : null}
-              </div>
-              {type === 'shell' && (
-                <ShellCodeBlock
-                  className={classNames('mt-1', {
-                    'mb-3.5': !isLast,
-                  })}
-                  code={content}
-                />
-              )}
-            </motion.li>
-          );
+          return <ActionItem key={index} action={action} isLast={isLast} />;
         })}
       </ul>
     </motion.div>
@@ -191,23 +274,17 @@ const ActionList = memo(({ actions }: ActionListProps) => {
 
 function getIconColor(status: ActionState['status']) {
   switch (status) {
-    case 'pending': {
+    case 'pending':
       return 'text-bolt-elements-textTertiary';
-    }
-    case 'running': {
+    case 'running':
       return 'text-bolt-elements-loader-progress';
-    }
-    case 'complete': {
+    case 'complete':
       return 'text-bolt-elements-icon-success';
-    }
-    case 'aborted': {
+    case 'aborted':
       return 'text-bolt-elements-textSecondary';
-    }
-    case 'failed': {
+    case 'failed':
       return 'text-bolt-elements-icon-error';
-    }
-    default: {
+    default:
       return undefined;
-    }
   }
 }

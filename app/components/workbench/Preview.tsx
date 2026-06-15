@@ -3,8 +3,13 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { PortDropdown } from './PortDropdown';
+import { classNames } from '~/utils/classNames';
 
-export const Preview = memo(() => {
+interface PreviewProps {
+  deviceMode?: 'desktop' | 'tablet' | 'mobile';
+}
+
+export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [activePreviewIndex, setActivePreviewIndex] = useState(0);
@@ -72,19 +77,23 @@ export const Preview = memo(() => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="flex h-full w-full flex-col bg-[#0d0d10]">
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
-      <div className="bg-bolt-elements-background-depth-2 p-2 flex items-center gap-1.5">
-        <IconButton icon="i-ph:arrow-clockwise" onClick={reloadPreview} />
+      <div className="flex items-center gap-2 border-b border-white/10 bg-[#141418] p-3">
+        <IconButton
+          icon="i-ph:arrow-clockwise"
+          className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+          onClick={reloadPreview}
+        />
         <div
-          className="flex items-center gap-1 flex-grow bg-bolt-elements-preview-addressBar-background border border-bolt-elements-borderColor text-bolt-elements-preview-addressBar-text rounded-full px-3 py-1 text-sm hover:bg-bolt-elements-preview-addressBar-backgroundHover hover:focus-within:bg-bolt-elements-preview-addressBar-backgroundActive focus-within:bg-bolt-elements-preview-addressBar-backgroundActive
-        focus-within-border-bolt-elements-borderColorActive focus-within:text-bolt-elements-preview-addressBar-textActive"
+          className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white"
         >
+          <div className="i-ph:globe-hemisphere-west text-white/35" />
           <input
             ref={inputRef}
-            className="w-full bg-transparent outline-none"
+            className="w-full bg-transparent outline-none placeholder:text-white/20"
             type="text"
             value={url}
             onChange={(event) => {
@@ -112,13 +121,29 @@ export const Preview = memo(() => {
           />
         )}
       </div>
-      <div className="flex-1 border-t border-bolt-elements-borderColor">
+      <div className="flex-1 bg-[#050507] flex items-center justify-center p-4 overflow-auto">
         {activePreview ? (
-          <iframe ref={iframeRef} className="border-none w-full h-full bg-white" src={iframeUrl} />
+          <iframe 
+            ref={iframeRef} 
+            className={classNames(
+              "border border-white/10 bg-white transition-all duration-300 shadow-2xl",
+              deviceMode === 'mobile' ? 'rounded-2xl' : undefined,
+              deviceMode === 'tablet' ? 'rounded-xl' : undefined,
+              deviceMode === 'desktop' ? 'border-none' : undefined
+            )}
+            style={{
+              width: deviceMode === 'mobile' ? '375px' : deviceMode === 'tablet' ? '768px' : '100%',
+              maxWidth: '100%',
+              height: deviceMode === 'mobile' ? '667px' : deviceMode === 'tablet' ? '900px' : '100%',
+              maxHeight: '100%',
+            }}
+            src={iframeUrl} 
+          />
         ) : (
-          <div className="flex w-full h-full justify-center items-center bg-white">No preview available</div>
+          <div className="flex h-full w-full items-center justify-center text-sm text-white/45">No preview available</div>
         )}
       </div>
     </div>
   );
 });
+

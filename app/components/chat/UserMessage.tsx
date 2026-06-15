@@ -13,6 +13,6 @@ export function UserMessage({ content }: UserMessageProps) {
   );
 }
 
-function sanitizeUserMessage(content: string) {
+export function sanitizeUserMessage(content: string) {
   return content.replace(modificationsRegex, '').trim();
 }

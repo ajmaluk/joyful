@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import React, { type RefCallback } from 'react';
+import React, { type RefCallback, useState, useCallback, useRef, useEffect } from 'react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { Menu } from '~/components/sidebar/Menu.client';
 import { IconSidebar } from '~/components/sidebar/IconSidebar';
@@ -10,8 +10,11 @@ import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
 import { Header } from '~/components/header/Header';
 import { Messages } from './Messages.client';
-import { SendButton } from './SendButton.client';
 
+import { HomeInput } from '~/components/home/HomeInput';
+
+import { motion } from 'framer-motion';
+import { cubicEasingFn } from '~/utils/easings';
 import styles from './BaseChat.module.scss';
 
 interface BaseChatProps {
@@ -31,8 +34,6 @@ interface BaseChatProps {
   enhancePrompt?: () => void;
   setInput?: (value: string) => void;
 }
-
-const TEXTAREA_MIN_HEIGHT = 76;
 
 export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   (
@@ -55,29 +56,126 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     },
     ref,
   ) => {
-    const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
+    const [chatWidth, setChatWidth] = useState(380);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartX = useRef(0);
+    const dragStartWidth = useRef(0);
+
+    const handleDragStart = useCallback((e: React.MouseEvent) => {
+      setIsDragging(true);
+      dragStartX.current = e.clientX;
+      dragStartWidth.current = chatWidth;
+    }, [chatWidth]);
+
+    useEffect(() => {
+      if (!isDragging) return;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const diff = e.clientX - dragStartX.current;
+        const newWidth = Math.min(600, Math.max(300, dragStartWidth.current + diff));
+        setChatWidth(newWidth);
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }, [isDragging]);
 
     return (
       <div
         ref={ref}
         className={classNames(
           styles.BaseChat,
-          'relative flex h-full w-full overflow-hidden bg-[#181816]',
+          'relative flex flex-col h-full w-full overflow-hidden',
+          chatStarted ? 'bg-[#0a0a0a]' : 'bg-transparent'
         )}
+        style={
+          chatStarted
+            ? ({
+                '--chat-min-width': showChat ? `${chatWidth}px` : '0px',
+                '--workbench-left': showChat ? `${chatWidth}px` : '0px',
+                '--workbench-width': showChat ? `calc(100% - ${chatWidth}px)` : '100%',
+                '--workbench-inner-width': showChat ? `calc(100% - ${chatWidth}px)` : '100%',
+              } as React.CSSProperties)
+            : undefined
+        }
         data-chat-visible={showChat}
       >
-        {/* Sidebar - desktop inline, mobile slide-over */}
-        {!chatStarted && showChat && <IconSidebar />}
+        {/* Header - Only when chat started */}
+        {chatStarted && <Header />}
+        
+        {/* Main content area */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar - desktop inline, mobile slide-over */}
+          {!chatStarted && showChat && <IconSidebar />}
 
-        {/* Legacy Menu - Only show when chat started */}
-        {chatStarted && <ClientOnly>{() => <Menu />}</ClientOnly>}
+          {/* Chat Started View - Left Panel with Gradient */}
+          {chatStarted && (
+            <motion.div 
+              className="sidebar-gradient flex flex-col h-full relative shrink-0 overflow-hidden"
+              initial={{ width: showChat ? chatWidth : 0, opacity: showChat ? 1 : 0 }}
+              animate={{
+                width: showChat ? chatWidth : 0,
+                opacity: showChat ? 1 : 0,
+              }}
+              transition={{ duration: 0.2, ease: cubicEasingFn }}
+              style={{
+                minWidth: showChat ? '300px' : '0px',
+                maxWidth: '600px',
+              }}
+            >
+              {/* Chat Scrollable Area */}
+              <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6 space-y-6">
+                <ClientOnly>
+                  {() => {
+                    return (
+                      <Messages
+                        ref={messageRef}
+                        className="z-1 flex w-full flex-1 flex-col"
+                        messages={messages}
+                        isStreaming={isStreaming}
+                      />
+                    );
+                  }}
+                </ClientOnly>
+              </div>
 
-        <div ref={scrollRef} className="flex overflow-y-auto w-full h-full md:rounded-t-[2rem] lovable-gradient overflow-hidden">
-          <div className={classNames(styles.Chat, 'flex flex-col flex-grow min-w-[var(--chat-min-width)] h-full')}>
-            <Header />
-            {/* Hero Section - Only show when chat not started */}
-            {!chatStarted && showChat && (
-              <div id="hero" className="flex-grow flex flex-col items-center justify-center pt-6 pb-6 md:pt-48 md:pb-16 w-full">
+              {/* Chat Input Area - Fixed at Bottom */}
+              <HomeInput
+                mode="chat"
+                textareaRef={textareaRef}
+                input={input}
+                isStreaming={isStreaming}
+                enhancingPrompt={enhancingPrompt}
+                promptEnhanced={promptEnhanced}
+                sendMessage={sendMessage}
+                handleInputChange={handleInputChange}
+                enhancePrompt={enhancePrompt}
+                handleStop={handleStop}
+              />
+
+              {/* Resizable Divider Handle */}
+              <div 
+                className={classNames(
+                  "w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0",
+                  isDragging ? "bg-white/30" : undefined
+                )}
+                onMouseDown={handleDragStart}
+              />
+            </motion.div>
+          )}
+
+          {/* Hero Section - Only show when chat not started */}
+          {!chatStarted && showChat && (
+            <div ref={scrollRef} className="flex-1 overflow-y-auto">
+              <div id="hero" className="flex-grow flex flex-col items-center justify-center pt-6 pb-6 md:pt-48 md:pb-16 w-full min-h-full">
                 <ClientOnly>
                   {() => (
                     <>
@@ -100,7 +198,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         }}
                         onRunTemplate={(prompt) => {
                           setInput?.(prompt);
-                          // Trigger sending message after a tiny timeout to let the state update
                           setTimeout(() => {
                             sendMessage?.({} as any, prompt);
                           }, 50);
@@ -110,110 +207,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                   )}
                 </ClientOnly>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Chat Started View */}
-            {chatStarted && (
-              <div className="pt-6 px-6 h-full flex flex-col">
-                <ClientOnly>
-                  {() => {
-                    return (
-                      <Messages
-                        ref={messageRef}
-                        className="flex flex-col w-full flex-1 max-w-chat px-4 pb-6 mx-auto z-1"
-                        messages={messages}
-                        isStreaming={isStreaming}
-                      />
-                    );
-                  }}
-                </ClientOnly>
-
-                {/* Prompt Input - Sticky at bottom when chat started */}
-                <div
-                  className={classNames('relative w-full max-w-chat mx-auto z-prompt', {
-                    'sticky bottom-0': chatStarted,
-                  })}
-                >
-                  <div
-                    className={classNames(
-                      'shadow-sm border border-bolt-elements-borderColor bg-bolt-elements-prompt-background backdrop-filter backdrop-blur-[8px] rounded-lg overflow-hidden',
-                    )}
-                  >
-                    <textarea
-                      ref={textareaRef}
-                      className={`w-full pl-4 pt-4 pr-16 focus:outline-none resize-none text-md text-bolt-elements-textPrimary placeholder-bolt-elements-textTertiary bg-transparent`}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          if (event.shiftKey) {
-                            return;
-                          }
-                          event.preventDefault();
-                          sendMessage?.(event);
-                        }
-                      }}
-                      value={input}
-                      onChange={(event) => {
-                        handleInputChange?.(event);
-                      }}
-                      style={{
-                        minHeight: TEXTAREA_MIN_HEIGHT,
-                        maxHeight: TEXTAREA_MAX_HEIGHT,
-                      }}
-                      placeholder="How can Joyful help you today?"
-                      translate="no"
-                    />
-                    <ClientOnly>
-                      {() => (
-                        <SendButton
-                          show={input.length > 0 || isStreaming}
-                          isStreaming={isStreaming}
-                          onClick={(event) => {
-                            if (isStreaming) {
-                              handleStop?.();
-                              return;
-                            }
-                            sendMessage?.(event);
-                          }}
-                        />
-                      )}
-                    </ClientOnly>
-                    <div className="flex justify-between text-sm p-4 pt-2">
-                      <div className="flex gap-1 items-center">
-                        <IconButton
-                          title="Enhance prompt"
-                          disabled={input.length === 0 || enhancingPrompt}
-                          className={classNames({
-                            'opacity-100!': enhancingPrompt,
-                            'text-bolt-elements-item-contentAccent! pr-1.5 enabled:hover:bg-bolt-elements-item-backgroundAccent!':
-                              promptEnhanced,
-                          })}
-                          onClick={() => enhancePrompt?.()}
-                        >
-                          {enhancingPrompt ? (
-                            <>
-                              <div className="i-svg-spinners:90-ring-with-bg text-bolt-elements-loader-progress text-xl"></div>
-                              <div className="ml-1.5">Enhancing prompt...</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="i-bolt:stars text-xl"></div>
-                              {promptEnhanced && <div className="ml-1.5">Prompt enhanced</div>}
-                            </>
-                          )}
-                        </IconButton>
-                      </div>
-                      {input.length > 3 ? (
-                        <div className="text-xs text-bolt-elements-textTertiary">
-                          Use <kbd className="kdb">Shift</kbd> + <kbd className="kdb">Return</kbd> for a new line
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="bg-bolt-elements-background-depth-1 pb-6">{/* Ghost Element */}</div>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Workbench - Right Panel */}
           <ClientOnly>{() => <Workbench chatStarted={chatStarted} isStreaming={isStreaming} />}</ClientOnly>
         </div>
       </div>

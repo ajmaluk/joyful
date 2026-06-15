@@ -19,6 +19,7 @@ interface Props {
   hiddenFiles?: Array<string | RegExp>;
   unsavedFiles?: Set<string>;
   className?: string;
+  searchQuery?: string;
 }
 
 export const FileTree = memo(
@@ -33,6 +34,7 @@ export const FileTree = memo(
     hiddenFiles,
     className,
     unsavedFiles,
+    searchQuery = '',
   }: Props) => {
     renderLogger.trace('FileTree');
 
@@ -96,6 +98,32 @@ export const FileTree = memo(
       return list;
     }, [fileList, collapsedFolders]);
 
+    const visibleFileList = useMemo(() => {
+      const normalizedQuery = searchQuery.trim().toLowerCase();
+
+      if (!normalizedQuery) {
+        return filteredFileList;
+      }
+
+      const matchingPaths = new Set<string>();
+
+      for (const node of fileList) {
+        const matches = node.name.toLowerCase().includes(normalizedQuery) || node.fullPath.toLowerCase().includes(normalizedQuery);
+
+        if (!matches) {
+          continue;
+        }
+
+        const segments = node.fullPath.split('/').filter(Boolean);
+
+        for (let index = 0; index < segments.length; index++) {
+          matchingPaths.add(`/${segments.slice(0, index + 1).join('/')}`);
+        }
+      }
+
+      return fileList.filter((node) => matchingPaths.has(node.fullPath));
+    }, [fileList, filteredFileList, searchQuery]);
+
     const toggleCollapseState = (fullPath: string) => {
       setCollapsedFolders((prevSet) => {
         const newSet = new Set(prevSet);
@@ -112,7 +140,7 @@ export const FileTree = memo(
 
     return (
       <div className={classNames('text-sm', className)}>
-        {filteredFileList.map((fileOrFolder) => {
+        {visibleFileList.map((fileOrFolder) => {
           switch (fileOrFolder.kind) {
             case 'file': {
               return (

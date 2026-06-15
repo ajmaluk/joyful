@@ -2,7 +2,7 @@ import type { Message } from 'ai';
 import React from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
-import { UserMessage } from './UserMessage';
+import { UserMessage, sanitizeUserMessage } from './UserMessage';
 
 interface MessagesProps {
   id?: string;
@@ -13,6 +13,13 @@ interface MessagesProps {
 
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
   const { id, isStreaming = false, messages = [] } = props;
+  const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
+
+  const handleCopy = (content: string, index: number) => {
+    navigator.clipboard.writeText(sanitizeUserMessage(content));
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
 
   return (
     <div id={id} ref={ref} className={props.className}>
@@ -26,20 +33,41 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
             return (
               <div
                 key={index}
-                className={classNames('flex gap-4 p-6 w-full rounded-[calc(0.75rem-1px)]', {
-                  'bg-bolt-elements-messages-background': isUserMessage || !isStreaming || (isStreaming && !isLast),
+                className={classNames('flex w-full transition-all min-w-0', {
+                  'justify-end': isUserMessage,
+                  'justify-start bg-transparent': !isUserMessage,
                   'bg-gradient-to-b from-bolt-elements-messages-background from-30% to-transparent':
-                    isStreaming && isLast,
-                  'mt-4': !isFirst,
+                    !isUserMessage && isStreaming && isLast,
+                  'mt-2': !isFirst,
                 })}
               >
-                {isUserMessage && (
-                  <div className="flex items-center justify-center w-[34px] h-[34px] overflow-hidden bg-white text-gray-600 rounded-full shrink-0 self-start">
-                    <div className="i-ph:user-fill text-xl"></div>
-                  </div>
-                )}
-                <div className="grid grid-col-1 w-full">
-                  {isUserMessage ? <UserMessage content={content} /> : <AssistantMessage content={content} />}
+                <div
+                  className={classNames('flex flex-col min-w-0', {
+                    'max-w-[70%]': isUserMessage,
+                    'max-w-[94%] w-full': !isUserMessage,
+                  })}
+                >
+                  {isUserMessage ? (
+                    <div className="group flex flex-col items-end min-w-0 max-w-full">
+                      <div className="border border-white/10 bg-[#202023] shadow-md p-3 px-4 text-white text-[13px] rounded-2xl min-w-0 max-w-full break-words">
+                        <UserMessage content={content} />
+                      </div>
+                      <div className="flex justify-end mt-1 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150 mr-2">
+                        <button
+                          onClick={() => handleCopy(content, index)}
+                          className="text-white/40 hover:text-white/80 p-0.5 hover:bg-white/5 rounded transition-all border-none bg-transparent cursor-pointer flex items-center gap-1"
+                          title="Copy message"
+                        >
+                          <div className={copiedIndex === index ? "i-ph:check text-[10px] text-green-500" : "i-ph:copy text-[10px]"} />
+                          <span className="text-[9px] font-medium">{copiedIndex === index ? 'Copied!' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="gap-4 py-0.5 ml-2 mr-2 w-full min-w-0">
+                      <AssistantMessage content={content} />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -51,3 +79,4 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
     </div>
   );
 });
+

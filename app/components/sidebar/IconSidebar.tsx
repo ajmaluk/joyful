@@ -210,7 +210,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
               <img src="/logo.png" alt="Joyful" className="w-5 h-5 object-contain" />
             </a>
 
-            <div className="w-4 h-px bg-white/5 my-2" />
+            <div className="w-8 h-px bg-white/10 my-2" />
 
             {/* Navigation Icons */}
             <nav className="flex flex-col gap-4 text-gray-400">
@@ -342,7 +342,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
           /* OPEN STATE (w-64) */
           <>
             {/* Top Header */}
-            <div className="flex items-center justify-between mb-6 px-1">
+            <div className="flex items-center justify-between mb-6 px-1 pb-4 border-b border-white/5">
               <div className="flex items-center gap-2">
                 <img src="/logo.png" alt="Joyful" className="w-5 h-5 object-contain" />
                 <div className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity">

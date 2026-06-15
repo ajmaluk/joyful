@@ -67,6 +67,7 @@ export const EditorPanel = memo(
 
     const [activeTerminal, setActiveTerminal] = useState(0);
     const [terminalCount, setTerminalCount] = useState(1);
+    const [fileSearch, setFileSearch] = useState('');
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {
@@ -127,25 +128,31 @@ export const EditorPanel = memo(
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
             <Panel defaultSize={20} minSize={10} collapsible>
-              <div className="flex flex-col border-r border-bolt-elements-borderColor h-full">
-                <PanelHeader>
-                  <div className="i-ph:tree-structure-duotone shrink-0" />
-                  Files
+              <div className="flex h-full flex-col border-r border-white/10 bg-[#111114]">
+                <PanelHeader className="border-white/10 bg-[#17171b] px-3 py-2 text-white/55">
+                  <div className="i-ph:magnifying-glass shrink-0" />
+                  <input
+                    className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white outline-none placeholder:text-white/25 focus:border-white/20"
+                    value={fileSearch}
+                    onChange={(event) => setFileSearch(event.target.value)}
+                    placeholder="Search code"
+                  />
                 </PanelHeader>
                 <FileTree
-                  className="h-full"
+                  className="h-full overflow-y-auto px-2 py-3 text-white/70"
                   files={files}
                   hideRoot
                   unsavedFiles={unsavedFiles}
                   rootFolder={WORK_DIR}
+                  searchQuery={fileSearch}
                   selectedFile={selectedFile}
                   onFileSelect={onFileSelect}
                 />
               </div>
             </Panel>
             <PanelResizeHandle />
-            <Panel className="flex flex-col" defaultSize={80} minSize={20}>
-              <PanelHeader className="overflow-x-auto">
+            <Panel className="flex flex-col bg-[#0d0d10]" defaultSize={80} minSize={20}>
+              <PanelHeader className="overflow-x-auto border-white/10 bg-[#16161a] px-4 py-0 text-white/60">
                 {activeFileSegments && activeFileSegments.length > 0 && (
                   <div className="flex items-center flex-1 text-sm">
                     <FileBreadcrumb pathSegments={activeFileSegments} files={files} onFileSelect={onFileSelect} />
@@ -198,7 +205,7 @@ export const EditorPanel = memo(
         >
           <div className="h-full">
             <div className="bg-bolt-elements-terminals-background h-full flex flex-col">
-              <div className="flex items-center bg-bolt-elements-background-depth-2 border-y border-bolt-elements-borderColor gap-1.5 min-h-[34px] p-2">
+              <div className="flex min-h-[40px] items-center gap-1.5 border-y border-white/10 bg-[#141418] p-2">
                 {Array.from({ length: terminalCount }, (_, index) => {
                   const isActive = activeTerminal === index;
 
@@ -208,8 +215,8 @@ export const EditorPanel = memo(
                       className={classNames(
                         'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                         {
-                          'bg-bolt-elements-terminals-buttonBackground text-bolt-elements-textPrimary': isActive,
-                          'bg-bolt-elements-background-depth-2 text-bolt-elements-textSecondary hover:bg-bolt-elements-terminals-buttonBackground':
+                          'bg-white/10 text-white': isActive,
+                          'bg-transparent text-white/45 hover:bg-white/5 hover:text-white/75':
                             !isActive,
                         },
                       )}

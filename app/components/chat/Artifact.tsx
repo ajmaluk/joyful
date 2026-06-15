@@ -32,26 +32,27 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const artifacts = useStore(workbenchStore.artifacts);
   const artifact = artifacts[messageId];
 
-  if (!artifact) {
-    return null;
-  }
-
   const actions = useStore(
-    computed(artifact.runner.actions, (actions) => {
-      return Object.values(actions);
+    computed(workbenchStore.artifacts, (arts) => {
+      const art = arts[messageId];
+      return art ? Object.values(art.runner.actions.get()) : [];
     }),
   );
-
-  const toggleActions = () => {
-    userToggledActions.current = true;
-    setShowActions(!showActions);
-  };
 
   useEffect(() => {
     if (actions.length && !showActions && !userToggledActions.current) {
       setShowActions(true);
     }
-  }, [actions]);
+  }, [actions, showActions]);
+
+  if (!artifact) {
+    return null;
+  }
+
+  const toggleActions = () => {
+    userToggledActions.current = true;
+    setShowActions(!showActions);
+  };
 
   const totalActions = actions.length;
   const completedActions = actions.filter((a) => a.status === 'complete').length;
@@ -71,7 +72,7 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
               style={{ fontSize: '12px', margin: 0 }}
               className="font-semibold text-white truncate whitespace-nowrap overflow-hidden leading-tight"
             >
-              {artifact?.title}
+              {artifact.title}
             </h3>
             <div className="flex items-center space-x-1.5 mt-1.5">
               <span className="text-[8px] text-white/50 leading-none">
@@ -267,19 +268,4 @@ const ActionList = memo(({ actions }: ActionListProps) => {
   );
 });
 
-function getIconColor(status: ActionState['status']) {
-  switch (status) {
-    case 'pending':
-      return 'text-bolt-elements-textTertiary';
-    case 'running':
-      return 'text-bolt-elements-loader-progress';
-    case 'complete':
-      return 'text-bolt-elements-icon-success';
-    case 'aborted':
-      return 'text-bolt-elements-textSecondary';
-    case 'failed':
-      return 'text-bolt-elements-icon-error';
-    default:
-      return undefined;
-  }
-}
+

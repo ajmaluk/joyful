@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
 import type { PreviewInfo } from '~/lib/stores/previews';
 
@@ -22,10 +22,10 @@ export const PortDropdown = memo(
   }: PortDropdownProps) => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // sort previews, preserving original index
-    const sortedPreviews = previews
-      .map((previewInfo, index) => ({ ...previewInfo, index }))
-      .sort((a, b) => a.port - b.port);
+    const sortedPreviews = useMemo(
+      () => previews.map((previewInfo, index) => ({ ...previewInfo, index })).sort((a, b) => a.port - b.port),
+      [previews],
+    );
 
     // close dropdown if user clicks outside
     useEffect(() => {

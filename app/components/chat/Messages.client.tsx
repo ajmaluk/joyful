@@ -1,5 +1,5 @@
 import type { Message } from 'ai';
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import { classNames } from '~/utils/classNames';
 import { AssistantMessage } from './AssistantMessage';
 import { UserMessage, sanitizeUserMessage } from './UserMessage';
@@ -14,12 +14,14 @@ interface MessagesProps {
 export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: MessagesProps, ref) => {
   const { id, isStreaming = false, messages = [] } = props;
   const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleCopy = (content: string, index: number) => {
+  const handleCopy = useCallback((content: string, index: number) => {
     navigator.clipboard.writeText(sanitizeUserMessage(content));
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
+    copyTimerRef.current = setTimeout(() => setCopiedIndex(null), 2000);
+  }, []);
 
   return (
     <div id={id} ref={ref} className={props.className}>

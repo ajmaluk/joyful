@@ -22,7 +22,7 @@ export default function AppearanceSettings() {
   const theme = useStore(themeStore);
 
   return (
-    <div className="space-y-5 sm:space-y-8 max-w-4xl">
+    <div className="space-y-5 sm:space-y-8 w-full">
       {/* Page header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">Appearance</h1>

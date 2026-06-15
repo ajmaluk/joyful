@@ -13,6 +13,126 @@ interface ProjectWithThumbnail extends ProjectMeta {
   thumbnail?: string;
 }
 
+function ProfileMenu({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate: (path: string) => void;
+}) {
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      className={classNames(
+        'w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col',
+        className,
+      )}
+    >
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
+        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white">
+          U
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-semibold text-white truncate">Uthakkan</div>
+          <div className="text-[9px] text-zinc-500 truncate">root.uthakkan@gmail.com</div>
+        </div>
+      </div>
+      <div className="flex flex-col">
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate('/settings/profile'); }}
+          className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+        >
+          <span className="flex items-center gap-2"><div className="i-ph:user text-sm" /> Profile</span>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate('/settings/account'); }}
+          className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+        >
+          <span className="flex items-center gap-2"><div className="i-ph:gear text-sm" /> Settings</span>
+          <span className="text-[9px] text-zinc-600 font-mono">⌘ ,</span>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onNavigate('/settings/appearance'); }}
+          className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+        >
+          <span className="flex items-center gap-2"><div className="i-ph:palette text-sm" /> Appearance</span>
+          <div className="i-ph:caret-right text-[10px] text-zinc-600" />
+        </button>
+        <div className="h-px bg-white/5 my-1" />
+        <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors bg-transparent border-none text-left cursor-pointer">
+          <span className="flex items-center gap-2"><div className="i-ph:sign-out text-sm" /> Sign out</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProjectContextMenu({
+  project,
+  activeMenuId,
+  setActiveMenuId,
+  onRename,
+  onDelete,
+}: {
+  project: ProjectWithThumbnail;
+  activeMenuId: string | null;
+  setActiveMenuId: (id: string | null) => void;
+  onRename: (id: string, desc?: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="absolute right-0 mt-1 w-32 bg-[#1c1c1a] border border-white/5 rounded-xl py-1.5 shadow-xl z-50">
+      <a
+        href={`/chat/${project.urlId || project.id}`}
+        className="flex items-center gap-2 px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+      >
+        <div className="i-ph:arrow-square-out text-xs" /> Open
+      </a>
+      <button
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRename(project.id, project.description); setActiveMenuId(null); }}
+        className="flex items-center gap-2 w-full text-left px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-white bg-transparent border-none transition-colors cursor-pointer"
+      >
+        <div className="i-ph:pencil text-xs" /> Rename
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(project.id); setActiveMenuId(null); }}
+        className="flex items-center gap-2 w-full text-left px-3 py-2 text-[11px] text-red-400 hover:bg-red-500/10 bg-transparent border-none transition-colors cursor-pointer"
+      >
+        <div className="i-ph:trash text-xs" /> Delete
+      </button>
+    </div>
+  );
+}
+
+function ProfileButton({
+  onClick,
+  showMenu,
+  onNavigate,
+  menuClassName,
+}: {
+  onClick: () => void;
+  showMenu: boolean;
+  onNavigate: (path: string) => void;
+  menuClassName?: string;
+}) {
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        className="flex items-center gap-3 min-w-0 flex-1 bg-transparent border-none cursor-pointer text-left hover:opacity-80 transition-opacity"
+      >
+        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-semibold border border-white/10 text-white flex-shrink-0">
+          U
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold text-white truncate max-w-[120px]">Uthakkan</div>
+        </div>
+      </button>
+      {showMenu && <ProfileMenu className={menuClassName} onNavigate={onNavigate} />}
+    </div>
+  );
+}
+
 export const IconSidebar = memo(({ className }: IconSidebarProps) => {
   const isOpen = useStore(mobileSidebarOpen);
   const projectsFromStore = useStore(projectList);
@@ -117,49 +237,6 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
       });
     }
   }, [projectsFromStore]);
-
-  // Format relative time
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  // Get initials from project description
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map((w) => w[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  };
-
-  // Generate a consistent gradient based on project name
-  const getGradient = (name: string) => {
-    const gradients = [
-      'from-blue-400 to-indigo-600',
-      'from-purple-400 to-pink-600',
-      'from-green-400 to-teal-600',
-      'from-orange-400 to-red-600',
-      'from-cyan-400 to-blue-600',
-      'from-pink-400 to-rose-600',
-      'from-violet-400 to-purple-600',
-      'from-yellow-400 to-orange-600',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return gradients[Math.abs(hash) % gradients.length];
-  };
 
   const handleBackdropClick = useCallback(() => {
     closeMobileSidebar();

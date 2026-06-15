@@ -16,6 +16,8 @@ import { Preview } from './Preview';
 
 import { chatStore } from '~/lib/stores/chat';
 
+type DeviceMode = 'desktop' | 'tablet' | 'mobile';
+
 interface WorkspaceProps {
   chatStarted?: boolean;
   isStreaming?: boolean;
@@ -39,6 +41,48 @@ const workbenchVariants = {
     },
   },
 } satisfies Variants;
+
+const TERMINAL_ICON = (
+  <svg className="w-3 h-3 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const DEVICE_MODE_OPTIONS: { mode: DeviceMode; icon: string; label: string }[] = [
+  { mode: 'desktop', icon: 'i-ph:monitor', label: 'Desktop' },
+  { mode: 'tablet', icon: 'i-ph:device-tablet', label: 'Tablet' },
+  { mode: 'mobile', icon: 'i-ph:device-mobile', label: 'Mobile' },
+];
+
+function DeviceModeButton({
+  mode,
+  currentMode,
+  onClick,
+  showLabel = true,
+}: {
+  mode: DeviceMode;
+  currentMode: DeviceMode;
+  onClick: () => void;
+  showLabel?: boolean;
+}) {
+  const isActive = currentMode === mode;
+  const option = DEVICE_MODE_OPTIONS.find((o) => o.mode === mode)!;
+
+  return (
+    <button
+      className={classNames(
+        'flex items-center justify-center w-6 h-6 md:w-auto md:px-2.5 md:py-0.5 text-[10px] font-medium rounded-full transition-all cursor-pointer',
+        isActive
+          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+          : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+      )}
+      onClick={onClick}
+    >
+      <div className={classNames(option.icon, 'text-xs shrink-0')} />
+      {showLabel && <span className="hidden md:inline ml-1">{option.label}</span>}
+    </button>
+  );
+}
 
 export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => {
   renderLogger.trace('Workbench');
@@ -150,54 +194,19 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
                     }}
                   >
-                    <svg className="w-3 h-3 md:w-3.5 md:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
+                    {TERMINAL_ICON}
                     <span className="hidden sm:inline">Terminal</span>
                   </button>
                 ) : (
                   <div className="flex items-center space-x-0.5 md:space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
-                    <button
-                      className={classNames(
-                        'flex items-center justify-center w-6 h-6 md:w-auto md:px-2.5 md:py-0.5 text-[10px] font-medium rounded-full transition-all cursor-pointer',
-                        deviceMode === 'desktop'
-                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
-                      )}
-                      onClick={() => setDeviceMode('desktop')}
-                    >
-                      <div className="i-ph:monitor text-xs shrink-0" />
-                      <span className="hidden md:inline ml-1">Desktop</span>
-                    </button>
-                    <button
-                      className={classNames(
-                        'flex items-center justify-center w-6 h-6 md:w-auto md:px-2.5 md:py-0.5 text-[10px] font-medium rounded-full transition-all cursor-pointer',
-                        deviceMode === 'tablet'
-                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
-                      )}
-                      onClick={() => setDeviceMode('tablet')}
-                    >
-                      <div className="i-ph:device-tablet text-xs shrink-0" />
-                      <span className="hidden md:inline ml-1">Tablet</span>
-                    </button>
-                    <button
-                      className={classNames(
-                        'flex items-center justify-center w-6 h-6 md:w-auto md:px-2.5 md:py-0.5 text-[10px] font-medium rounded-full transition-all cursor-pointer',
-                        deviceMode === 'mobile'
-                          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                          : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
-                      )}
-                      onClick={() => setDeviceMode('mobile')}
-                    >
-                      <div className="i-ph:device-mobile text-xs shrink-0" />
-                      <span className="hidden md:inline ml-1">Mobile</span>
-                    </button>
+                    {DEVICE_MODE_OPTIONS.map((opt) => (
+                      <DeviceModeButton
+                        key={opt.mode}
+                        mode={opt.mode}
+                        currentMode={deviceMode}
+                        onClick={() => setDeviceMode(opt.mode)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -266,25 +275,16 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               </div>
 
               <div className="flex items-center space-x-2">
-                {/* Terminal toggle */}
                 <button
                   onClick={() => workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get())}
                   className="flex items-center justify-center w-7 h-7 text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer rounded-lg hover:bg-white/5"
                   title="Toggle terminal"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                  {TERMINAL_ICON}
                 </button>
-                {/* Device mode button - shows current mode, cycles through */}
                 <button
                   onClick={() => {
-                    const modes: ('desktop' | 'tablet' | 'mobile')[] = ['desktop', 'tablet', 'mobile'];
+                    const modes: DeviceMode[] = ['desktop', 'tablet', 'mobile'];
                     const idx = modes.indexOf(deviceMode);
                     setDeviceMode(modes[(idx + 1) % modes.length]);
                   }}

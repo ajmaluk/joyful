@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { bundledLanguages, codeToHtml, isSpecialLang, type BundledLanguage, type SpecialLanguage } from 'shiki';
 import { classNames } from '~/utils/classNames';
 import { createScopedLogger } from '~/utils/logger';
@@ -19,6 +19,7 @@ export const CodeBlock = memo(
   ({ className, code, language = 'plaintext', theme = 'dark-plus', disableCopy = false }: CodeBlockProps) => {
     const [html, setHTML] = useState<string | undefined>(undefined);
     const [copied, setCopied] = useState(false);
+    const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
     const copyToClipboard = () => {
       if (copied) {
@@ -29,10 +30,17 @@ export const CodeBlock = memo(
 
       setCopied(true);
 
-      setTimeout(() => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => {
         setCopied(false);
       }, 2000);
     };
+
+    useEffect(() => {
+      return () => {
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      };
+    }, []);
 
     useEffect(() => {
       if (language && !isSpecialLang(language) && !(language in bundledLanguages)) {

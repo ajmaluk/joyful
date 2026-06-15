@@ -1,4 +1,5 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState } from 'react';
+import { useStore } from '@nanostores/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { classNames } from '~/utils/classNames';
 import { ImageUpload } from './ImageUpload';
@@ -34,22 +35,9 @@ export const HomeInput = memo(
     const TEXTAREA_MIN_HEIGHT = 28;
     const TEXTAREA_MAX_HEIGHT = isChat ? 400 : 200;
 
-    const [images, setImages] = useState<UploadedImage[]>([]);
-    const [uploadingIds, setUploadingIds] = useState<string[]>([]);
+    const images = useStore(uploadedImages);
+    const uploadingIds = useStore(uploadingImages);
     const [lightboxImage, setLightboxImage] = useState<UploadedImage | null>(null);
-
-    useEffect(() => {
-      const unsub1 = uploadedImages.subscribe((val) => {
-        setImages([...val]);
-      });
-      const unsub2 = uploadingImages.subscribe((val) => {
-        setUploadingIds([...val]);
-      });
-      return () => {
-        unsub1();
-        unsub2();
-      };
-    }, []);
 
     const downloadImage = (img: UploadedImage) => {
       const link = document.createElement('a');

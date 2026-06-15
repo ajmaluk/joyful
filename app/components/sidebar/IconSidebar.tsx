@@ -21,11 +21,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const loadedRef = useRef(false);
 
-  const navItems = [
-    { href: '/', icon: 'i-ph:folder', label: 'My projects', active: true },
-    { href: '#recent', icon: 'i-ph:clock-counter-clockwise', label: 'Recently viewed', active: false },
-    { href: '#templates', icon: 'i-ph:magic-wand', label: 'Joyful templates', active: false },
-  ];
+
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -171,10 +167,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
     closeMobileSidebar();
   }, []);
 
-  const handleCreateNew = useCallback(() => {
-    closeMobileSidebar();
-    window.location.href = '/';
-  }, []);
+
 
   return (
     <>
@@ -261,7 +254,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 {showProfileMenu && (
                   <div 
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-10 bottom-0 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] animate-fade-in flex flex-col"
+                    className="absolute left-10 bottom-0 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
                   >
                     {/* User card header */}
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
@@ -482,7 +475,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 {showProfileMenu && (
                   <div 
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 bottom-10 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] animate-fade-in flex flex-col"
+                    className="absolute left-0 bottom-10 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
                   >
                     {/* User card header */}
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
@@ -587,41 +580,35 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-4 space-y-6">
           <nav className="space-y-1">
-            {navItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={handleNavClick}
-                className={classNames(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                  item.active
-                    ? 'bg-white/5 text-white font-medium'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-white',
-                )}
-              >
-                <div className={classNames('text-[20px]', item.icon)} />
-                <span>{item.label}</span>
-              </a>
-            ))}
+            <a
+              href="/"
+              onClick={(e) => {
+                handleNavClick();
+                const hero = document.getElementById('hero');
+                if (hero) {
+                  hero.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors bg-white/5 text-white font-medium"
+            >
+              <div className="i-ph:house text-[20px]" />
+              <span>Home</span>
+            </a>
+            <button
+              onClick={() => {
+                handleNavClick();
+              }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-zinc-400 hover:bg-white/5 hover:text-white w-full text-left bg-transparent border-none cursor-pointer"
+            >
+              <div className="i-ph:folder text-[20px]" />
+              <span>Projects</span>
+            </button>
           </nav>
 
-          {/* Projects Section */}
+          {/* Recents Section */}
           <div>
-            <div className="flex items-center justify-between mb-4 px-3">
-              <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Projects</h3>
-            </div>
+            <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-3 mb-1.5">Recents</div>
             <div className="space-y-2">
-              {/* Create new */}
-              <div
-                onClick={handleCreateNew}
-                className="flex items-center gap-3 p-2.5 rounded-xl border border-dashed border-zinc-800 hover:bg-white/5 cursor-pointer transition-all group"
-              >
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900 text-zinc-500 group-hover:text-zinc-300">
-                  <div className="i-ph:plus text-sm" />
-                </div>
-                <span className="text-sm font-medium text-zinc-400">New project</span>
-              </div>
-
               {/* Project items from localStorage */}
               {projects.length === 0 && (
                 <div className="text-center py-6">
@@ -690,7 +677,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
             {showProfileMenu && (
               <div 
                 onClick={(e) => e.stopPropagation()}
-                className="absolute left-4 bottom-12 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] animate-fade-in flex flex-col"
+                className="absolute left-4 bottom-12 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
               >
                 {/* User card header */}
                 <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">

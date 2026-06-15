@@ -61,11 +61,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     const dragStartX = useRef(0);
     const dragStartWidth = useRef(0);
 
-    const handleDragStart = useCallback((e: React.MouseEvent) => {
-      setIsDragging(true);
-      dragStartX.current = e.clientX;
-      dragStartWidth.current = chatWidth;
-    }, [chatWidth]);
+    const handleDragStart = useCallback(
+      (e: React.MouseEvent) => {
+        setIsDragging(true);
+        dragStartX.current = e.clientX;
+        dragStartWidth.current = chatWidth;
+      },
+      [chatWidth],
+    );
 
     useEffect(() => {
       if (!isDragging) return;
@@ -94,7 +97,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         className={classNames(
           styles.BaseChat,
           'relative flex flex-col h-full w-full overflow-hidden',
-          chatStarted ? 'bg-[#0a0a0a]' : 'bg-transparent'
+          chatStarted ? 'bg-[#0a0a0a]' : 'bg-transparent',
         )}
         style={
           chatStarted
@@ -108,9 +111,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
         data-chat-visible={showChat}
       >
-        {/* Header - Only when chat started */}
-        {chatStarted && <Header />}
-        
+        {/* Header */}
+        <div className={chatStarted ? '' : 'md:hidden'}>
+          <Header />
+        </div>
+
         {/* Main content area */}
         <div className="flex flex-1 overflow-hidden">
           {/* Sidebar - desktop inline, mobile slide-over */}
@@ -118,7 +123,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
           {/* Chat Started View - Left Panel with Gradient */}
           {chatStarted && (
-            <motion.div 
+            <motion.div
               className="sidebar-gradient flex flex-col h-full relative shrink-0 overflow-hidden"
               initial={{ width: showChat ? chatWidth : 0, opacity: showChat ? 1 : 0 }}
               animate={{
@@ -132,7 +137,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               }}
             >
               {/* Chat Scrollable Area */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-6 space-y-6">
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto overflow-x-hidden pl-1.5 pr-3 md:pl-2 md:pr-4 py-4 md:py-6 space-y-3 md:space-y-6"
+              >
                 <ClientOnly>
                   {() => {
                     return (
@@ -162,10 +170,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               />
 
               {/* Resizable Divider Handle */}
-              <div 
+              <div
                 className={classNames(
-                  "hidden md:block w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0",
-                  isDragging ? "bg-white/30" : undefined
+                  'hidden md:block w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0',
+                  isDragging ? 'bg-white/30' : undefined,
                 )}
                 onMouseDown={handleDragStart}
               />
@@ -175,7 +183,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           {/* Hero Section - Only show when chat not started */}
           {!chatStarted && showChat && (
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
-              <div id="hero" className="flex-grow flex flex-col items-center justify-center pt-6 pb-6 md:pt-48 md:pb-16 w-full min-h-full">
+              <div
+                id="hero"
+                className="flex-grow flex flex-col items-center justify-center md:justify-between pt-6 pb-6 md:pt-48 md:pb-0 w-full min-h-full"
+              >
                 <ClientOnly>
                   {() => (
                     <>

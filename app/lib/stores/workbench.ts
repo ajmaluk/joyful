@@ -279,6 +279,8 @@ export class WorkbenchStore {
     artifact.runner.addAction(data);
   }
 
+  latestAssistantMessageId?: string;
+
   async runAction(data: ActionCallbackData) {
     const { messageId } = data;
 
@@ -288,7 +290,9 @@ export class WorkbenchStore {
       unreachable('Artifact not found');
     }
 
-    artifact.runner.runAction(data);
+    const isLatest = !this.latestAssistantMessageId || messageId === this.latestAssistantMessageId;
+
+    artifact.runner.runAction(data, isLatest);
   }
 
   #getArtifact(id: string) {

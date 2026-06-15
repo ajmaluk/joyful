@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/react';
 import type { Message } from 'ai';
 import { useChat } from 'ai/react';
 import { useAnimate } from 'framer-motion';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cssTransition, toast, ToastContainer } from 'react-toastify';
 import { useMessageParser, usePromptEnhancer, useShortcuts, useSnapScroll } from '~/lib/hooks';
 import { useChatHistory } from '~/lib/persistence';
@@ -94,7 +94,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
 
   useEffect(() => {
     chatStore.setKey('started', initialMessages.length > 0);
-  }, []);
+  }, [initialMessages]);
 
   useEffect(() => {
     parseMessages(messages, isLoading);
@@ -102,15 +102,15 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
     if (messages.length > initialMessages.length) {
       storeMessageHistory(messages).catch((error) => toast.error(error.message));
     }
-  }, [messages, isLoading, parseMessages]);
+  }, [messages, isLoading, parseMessages, initialMessages, storeMessageHistory]);
 
-  const scrollTextArea = () => {
+  const scrollTextArea = useCallback(() => {
     const textarea = textareaRef.current;
 
     if (textarea) {
       textarea.scrollTop = textarea.scrollHeight;
     }
-  };
+  }, []);
 
   const abort = () => {
     stop();
@@ -129,7 +129,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       textarea.style.height = `${Math.min(scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
       textarea.style.overflowY = scrollHeight > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
     }
-  }, [input, textareaRef]);
+  }, [input, textareaRef, chatStarted]);
 
   const runAnimation = async () => {
     if (chatStarted) {
@@ -150,20 +150,13 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       return;
     }
 
-    /**
-     * @note (delm) Usually saving files shouldn't take long but it may take longer if there
-     * many unsaved files. In that case we need to block user input and show an indicator
-     * of some kind so the user is aware that something is happening. But I consider the
-     * happy case to be no unsaved files and I would expect users to save their changes
-     * before they send another message.
-     */
     await workbenchStore.saveAllFiles();
 
     const fileModifications = workbenchStore.getFileModifcations();
 
     chatStore.setKey('aborted', false);
 
-    runAnimation();
+    await runAnimation();
 
     if (fileModifications !== undefined) {
       const diff = fileModificationsToHTML(fileModifications);
@@ -195,6 +188,26 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
 
   const [messageRef, scrollRef] = useSnapScroll();
 
+  const displayMessages = useMemo(() => {
+    return messages.map((message, i) => {
+      if (message.role === 'user') {
+        return message;
+      }
+
+      return {
+        ...message,
+        content: parsedMessages[i] || '',
+      };
+    });
+  }, [messages, parsedMessages]);
+
+  const handleEnhancePrompt = useCallback(() => {
+    enhancePrompt(input, (enhanced) => {
+      setInput(enhanced);
+      scrollTextArea();
+    });
+  }, [input, enhancePrompt, scrollTextArea]);
+
   return (
     <BaseChat
       ref={animationScope}
@@ -211,22 +224,8 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       handleInputChange={handleInputChange}
       handleStop={abort}
       setInput={setInput}
-      messages={messages.map((message, i) => {
-        if (message.role === 'user') {
-          return message;
-        }
-
-        return {
-          ...message,
-          content: parsedMessages[i] || '',
-        };
-      })}
-      enhancePrompt={() => {
-        enhancePrompt(input, (input) => {
-          setInput(input);
-          scrollTextArea();
-        });
-      }}
+      messages={displayMessages}
+      enhancePrompt={handleEnhancePrompt}
     />
   );
 });

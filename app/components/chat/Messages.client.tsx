@@ -43,7 +43,7 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
               >
                 <div
                   className={classNames('flex flex-col min-w-0', {
-                    'max-w-[70%]': isUserMessage,
+                    'max-w-[85%] md:max-w-[70%]': isUserMessage,
                     'max-w-[94%] w-full': !isUserMessage,
                   })}
                 >
@@ -52,19 +52,23 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
                       <div className="border border-white/10 bg-[#202023] shadow-md p-3 px-4 text-white text-[13px] rounded-2xl min-w-0 max-w-full break-words">
                         <UserMessage content={content} />
                       </div>
-                      <div className="flex justify-end mt-1 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150 mr-2">
+                      <div className="flex justify-end mt-1 h-4 opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150 mr-2">
                         <button
                           onClick={() => handleCopy(content, index)}
                           className="text-white/40 hover:text-white/80 p-0.5 hover:bg-white/5 rounded transition-all border-none bg-transparent cursor-pointer flex items-center gap-1"
                           title="Copy message"
                         >
-                          <div className={copiedIndex === index ? "i-ph:check text-[10px] text-green-500" : "i-ph:copy text-[10px]"} />
+                          <div
+                            className={
+                              copiedIndex === index ? 'i-ph:check text-[10px] text-green-500' : 'i-ph:copy text-[10px]'
+                            }
+                          />
                           <span className="text-[9px] font-medium">{copiedIndex === index ? 'Copied!' : 'Copy'}</span>
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="gap-4 py-0.5 ml-2 mr-2 w-full min-w-0">
+                    <div className="gap-4 py-0.5 ml-0.5 mr-2 w-full min-w-0">
                       <AssistantMessage content={content} />
                     </div>
                   )}
@@ -79,4 +83,3 @@ export const Messages = React.forwardRef<HTMLDivElement, MessagesProps>((props: 
     </div>
   );
 });
-

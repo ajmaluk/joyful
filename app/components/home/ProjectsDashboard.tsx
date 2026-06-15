@@ -249,8 +249,8 @@ export const ProjectsDashboard = memo(({ onSelectTemplate, onRunTemplate }: Proj
           )}
         </div>
 
-        {/* Scrollable Container with max height representing one-and-a-half rows */}
-        <div className="max-h-[460px] md:max-h-[500px] overflow-y-auto pr-2 premium-scrollbar">
+        {/* Scrollable Container with fixed height representing one-and-a-half rows */}
+        <div className="h-[380px] md:h-[410px] overflow-y-auto pr-2 premium-scrollbar">
           {/* Templates view */}
           {activeTab === 'templates' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pb-2">
@@ -349,7 +349,7 @@ export const ProjectsDashboard = memo(({ onSelectTemplate, onRunTemplate }: Proj
                             <div className="i-ph:dots-three-vertical text-base font-bold" />
                           </button>
                           {activeMenuId === project.id && (
-                            <div className="absolute right-0 mt-1 w-32 bg-[#1c1c1a] border border-white/5 rounded-xl py-1.5 shadow-xl z-50 animate-fade-in">
+                            <div className="absolute right-0 mt-1 w-32 bg-[#1c1c1a] border border-white/5 rounded-xl py-1.5 shadow-xl z-50">
                               <a
                                 href={`/chat/${project.urlId || project.id}`}
                                 className="flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"

@@ -1,10 +1,6 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
-import { StreamingTextResponse } from 'ai';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { stripIndents } from '~/utils/stripIndent';
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 export async function action(args: ActionFunctionArgs) {
   return enhancerAction(args);
@@ -39,17 +35,14 @@ async function enhancerAction({ context, request }: ActionFunctionArgs) {
       context.cloudflare.env,
     );
 
-    const transformStream = new TransformStream({
-      transform(chunk: Uint8Array, controller: TransformStreamDefaultController<Uint8Array>) {
-        controller.enqueue(chunk);
+    return new Response(result.toAIStream(), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
       },
     });
-
-    const transformedStream = result.toAIStream().pipeThrough(transformStream);
-
-    return new StreamingTextResponse(transformedStream);
   } catch (error) {
-    console.log(error);
+    console.error(error);
 
     throw new Response(null, {
       status: 500,

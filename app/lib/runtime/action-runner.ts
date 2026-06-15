@@ -1,6 +1,5 @@
 import { WebContainer } from '@webcontainer/api';
 import { map, type MapStore } from 'nanostores';
-import * as nodePath from 'node:path';
 import type { BoltAction } from '~/types/actions';
 import { createScopedLogger } from '~/utils/logger';
 import { unreachable } from '~/utils/unreachable';
@@ -72,7 +71,7 @@ export class ActionRunner {
     });
   }
 
-  async runAction(data: ActionCallbackData) {
+  async runAction(data: ActionCallbackData, isLatest = true) {
     const { actionId } = data;
     const action = this.actions.get()[actionId];
 
@@ -85,6 +84,11 @@ export class ActionRunner {
     }
 
     this.#updateAction(actionId, { ...action, ...data.action, executed: true });
+
+    if (data.action.type === 'shell' && !isLatest) {
+      this.#updateAction(actionId, { status: 'complete' });
+      return;
+    }
 
     this.#currentExecutionPromise = this.#currentExecutionPromise
       .then(() => {
@@ -128,8 +132,9 @@ export class ActionRunner {
 
     const webcontainer = await this.#webcontainer;
 
-    // Optimize common package manager commands to use pnpm for speed and efficiency in WebContainer
+    // optimize common package manager commands to use pnpm for speed and efficiency in WebContainer
     let command = action.content;
+
     if (command.includes('npm install') || command.includes('npm i ') || command === 'npm i') {
       command = command.replace(/\bnpm (install|i)\b/g, 'pnpm install');
     } else if (command.includes('npm run ')) {
@@ -175,7 +180,7 @@ export class ActionRunner {
 
     const webcontainer = await this.#webcontainer;
 
-    let folder = nodePath.dirname(action.filePath);
+    let folder = dirname(action.filePath);
 
     // remove trailing slashes
     folder = folder.replace(/\/+$/g, '');
@@ -191,7 +196,8 @@ export class ActionRunner {
     }
 
     try {
-      await webcontainer.fs.writeFile(action.filePath, action.content);
+      const formattedContent = await formatFileContent(action.filePath, action.content);
+      await webcontainer.fs.writeFile(action.filePath, formattedContent);
       logger.debug(`File written ${action.filePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
@@ -203,5 +209,120 @@ export class ActionRunner {
     const actions = this.actions.get();
 
     this.actions.setKey(id, { ...actions[id], ...newState });
+  }
+}
+
+function dirname(path: string): string {
+  const lastSlash = path.lastIndexOf('/');
+
+  if (lastSlash === -1) {
+    return '.';
+  }
+
+  if (lastSlash === 0) {
+    return '/';
+  }
+
+  return path.slice(0, lastSlash);
+}
+
+/**
+ * Detects the prettier parser to use based on the file extension.
+ * Returns null for unsupported file types.
+ */
+function getPrettierParser(filePath: string): string | null {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+
+  switch (ext) {
+    case 'css':
+    case 'scss':
+    case 'less':
+      return 'css';
+    case 'html':
+    case 'htm':
+      return 'html';
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+      return 'babel';
+    case 'jsx':
+      return 'babel';
+    case 'ts':
+    case 'mts':
+      return 'typescript';
+    case 'tsx':
+      return 'typescript';
+    case 'json':
+    case 'jsonc':
+      return 'json';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Formats file content using Prettier's standalone browser bundle.
+ * Falls back to the original content if formatting fails or the file type is unsupported.
+ */
+async function formatFileContent(filePath: string, content: string): Promise<string> {
+  const parser = getPrettierParser(filePath);
+
+  if (!parser) {
+    return content;
+  }
+
+  try {
+    const [{ format }, plugins] = await Promise.all([
+      import('prettier/standalone'),
+      loadPrettierPlugins(parser),
+    ]);
+
+    const formatted = await format(content, {
+      parser,
+      plugins,
+      printWidth: 100,
+      tabWidth: 2,
+      useTabs: false,
+      semi: true,
+      singleQuote: true,
+    });
+
+    return formatted;
+  } catch (error) {
+    logger.debug(`Prettier formatting skipped for ${filePath}:`, error);
+    return content;
+  }
+}
+
+/**
+ * Dynamically loads the minimal set of Prettier plugins needed for the given parser.
+ */
+async function loadPrettierPlugins(parser: string): Promise<any[]> {
+  switch (parser) {
+    case 'css': {
+      const plugin = await import('prettier/plugins/postcss');
+      return [plugin];
+    }
+    case 'html': {
+      const plugin = await import('prettier/plugins/html');
+      return [plugin];
+    }
+    case 'babel':
+    case 'json': {
+      const [babel, estree] = await Promise.all([
+        import('prettier/plugins/babel'),
+        import('prettier/plugins/estree'),
+      ]);
+      return [babel, estree];
+    }
+    case 'typescript': {
+      const [typescript, estree] = await Promise.all([
+        import('prettier/plugins/typescript'),
+        import('prettier/plugins/estree'),
+      ]);
+      return [typescript, estree];
+    }
+    default:
+      return [];
   }
 }

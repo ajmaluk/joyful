@@ -33,7 +33,7 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
 
     setUrl(baseUrl);
     setIframeUrl(baseUrl);
-  }, [activePreview, iframeUrl]);
+  }, [activePreview]);
 
   const validateUrl = useCallback(
     (value: string) => {
@@ -71,8 +71,8 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
   }, [previews]);
 
   const reloadPreview = () => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.location.reload();
     }
   };
 
@@ -87,9 +87,7 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
           className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white"
           onClick={reloadPreview}
         />
-        <div
-          className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white"
-        >
+        <div className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white">
           <div className="i-ph:globe-hemisphere-west text-white/35" />
           <input
             ref={inputRef}
@@ -123,13 +121,15 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
       </div>
       <div className="flex-1 bg-[#050507] flex items-center justify-center p-4 overflow-auto">
         {activePreview ? (
-          <iframe 
-            ref={iframeRef} 
+          <iframe
+            ref={iframeRef}
+            title="Preview"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             className={classNames(
-              "border border-white/10 bg-white transition-all duration-300 shadow-2xl",
+              'border border-white/10 bg-white transition-all duration-300 shadow-2xl',
               deviceMode === 'mobile' ? 'rounded-2xl' : undefined,
               deviceMode === 'tablet' ? 'rounded-xl' : undefined,
-              deviceMode === 'desktop' ? 'border-none' : undefined
+              deviceMode === 'desktop' ? 'border-none' : undefined,
             )}
             style={{
               width: deviceMode === 'mobile' ? '375px' : deviceMode === 'tablet' ? '768px' : '100%',
@@ -137,13 +137,14 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
               height: deviceMode === 'mobile' ? '667px' : deviceMode === 'tablet' ? '900px' : '100%',
               maxHeight: '100%',
             }}
-            src={iframeUrl} 
+            src={iframeUrl}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-white/45">No preview available</div>
+          <div className="flex h-full w-full items-center justify-center text-sm text-white/45">
+            No preview available
+          </div>
         )}
       </div>
     </div>
   );
 });
-

@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from 'react-resizable-panels';
 import {
   CodeMirrorEditor,
@@ -63,11 +63,13 @@ export const EditorPanel = memo(
 
     const terminalRefs = useRef<Map<number, TerminalRef | null>>(new Map());
     const terminalPanelRef = useRef<ImperativePanelHandle>(null);
+    const filesPanelRef = useRef<ImperativePanelHandle>(null);
     const terminalToggledByShortcut = useRef(false);
 
     const [activeTerminal, setActiveTerminal] = useState(0);
     const [terminalCount, setTerminalCount] = useState(1);
     const [fileSearch, setFileSearch] = useState('');
+    const [isFileTreeOpen, setIsFileTreeOpen] = useState(true);
 
     const activeFileSegments = useMemo(() => {
       if (!editorDocument) {
@@ -116,6 +118,13 @@ export const EditorPanel = memo(
       terminalToggledByShortcut.current = false;
     }, [showTerminal]);
 
+    const terminalRefCallback = useCallback(
+      (index: number) => (ref: TerminalRef | null) => {
+        terminalRefs.current.set(index, ref);
+      },
+      [],
+    );
+
     const addTerminal = () => {
       if (terminalCount < MAX_TERMINALS) {
         setTerminalCount(terminalCount + 1);
@@ -127,7 +136,14 @@ export const EditorPanel = memo(
       <PanelGroup direction="vertical">
         <Panel defaultSize={showTerminal ? DEFAULT_EDITOR_SIZE : 100} minSize={20}>
           <PanelGroup direction="horizontal">
-            <Panel defaultSize={20} minSize={10} collapsible>
+            <Panel
+              ref={filesPanelRef}
+              defaultSize={20}
+              minSize={10}
+              collapsible
+              onCollapse={() => setIsFileTreeOpen(false)}
+              onExpand={() => setIsFileTreeOpen(true)}
+            >
               <div className="flex h-full flex-col border-r border-white/10 bg-[#111114]">
                 <PanelHeader className="border-white/10 bg-[#17171b] px-3 py-2 text-white/55">
                   <div className="i-ph:magnifying-glass shrink-0" />
@@ -153,17 +169,29 @@ export const EditorPanel = memo(
             <PanelResizeHandle />
             <Panel className="flex flex-col bg-[#0d0d10]" defaultSize={80} minSize={20}>
               <PanelHeader className="overflow-x-auto border-white/10 bg-[#16161a] px-4 py-0 text-white/60">
-                {activeFileSegments && activeFileSegments.length > 0 && (
-                  <div className="flex items-center flex-1 text-sm">
+                <div className="flex items-center flex-1 text-sm h-full">
+                  <IconButton
+                    icon={isFileTreeOpen ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
+                    onClick={() => {
+                      const panel = filesPanelRef.current;
+
+                      if (panel) {
+                        if (panel.isCollapsed()) {
+                          panel.expand();
+                        } else {
+                          panel.collapse();
+                        }
+                      }
+                    }}
+                    title={isFileTreeOpen ? 'Collapse File Tree' : 'Expand File Tree'}
+                    className="mr-2 text-zinc-400 hover:text-white"
+                    size="lg"
+                  />
+                  {activeFileSegments && activeFileSegments.length > 0 && (
                     <FileBreadcrumb pathSegments={activeFileSegments} files={files} onFileSelect={onFileSelect} />
+                  )}
+                  {activeFileSegments && activeFileSegments.length > 0 && (
                     <div className="flex gap-1 ml-auto -mr-1.5 items-center">
-                      <PanelHeaderButton 
-                        onClick={() => workbenchStore.downloadCodebase()}
-                        className="bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 hover:text-blue-300 px-2.5 py-0.5 rounded-full text-[10px] transition-all"
-                      >
-                        <div className="i-ph:download-duotone text-xs shrink-0" />
-                        <span>Download</span>
-                      </PanelHeaderButton>
                       {activeFileUnsaved && (
                         <>
                           <PanelHeaderButton onClick={onFileSave}>
@@ -177,8 +205,8 @@ export const EditorPanel = memo(
                         </>
                       )}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </PanelHeader>
               <div className="h-full flex-1 overflow-hidden">
                 <CodeMirrorEditor
@@ -225,8 +253,7 @@ export const EditorPanel = memo(
                         'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                         {
                           'bg-white/10 text-white': isActive,
-                          'bg-transparent text-white/45 hover:bg-white/5 hover:text-white/75':
-                            !isActive,
+                          'bg-transparent text-white/45 hover:bg-white/5 hover:text-white/75': !isActive,
                         },
                       )}
                       onClick={() => setActiveTerminal(index)}
@@ -254,9 +281,7 @@ export const EditorPanel = memo(
                     className={classNames('h-full overflow-hidden', {
                       hidden: !isActive,
                     })}
-                    ref={(ref) => {
-                      terminalRefs.current.set(index, ref);
-                    }}
+                    ref={terminalRefCallback(index)}
                     onTerminalReady={(terminal) => workbenchStore.attachTerminal(terminal)}
                     onTerminalResize={(cols, rows) => workbenchStore.onTerminalResize(cols, rows)}
                     theme={theme}

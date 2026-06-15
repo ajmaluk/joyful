@@ -27,6 +27,12 @@ export const Markdown = memo(({ children, html = false, limitedMarkdown = false 
 
           if (!messageId) {
             logger.error(`Invalid message id ${messageId}`);
+
+            return (
+              <div className={className} {...props}>
+                {children}
+              </div>
+            );
           }
 
           return <Artifact messageId={messageId} />;

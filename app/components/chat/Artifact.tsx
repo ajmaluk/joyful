@@ -32,6 +32,10 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const artifacts = useStore(workbenchStore.artifacts);
   const artifact = artifacts[messageId];
 
+  if (!artifact) {
+    return null;
+  }
+
   const actions = useStore(
     computed(artifact.runner.actions, (actions) => {
       return Object.values(actions);
@@ -63,7 +67,12 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
       >
         <div className="flex items-center min-w-0 flex-1 mr-2">
           <div className="min-w-0 flex-1">
-            <h3 style={{ fontSize: '12px', margin: 0 }} className="font-semibold text-white truncate whitespace-nowrap overflow-hidden leading-tight">{artifact?.title}</h3>
+            <h3
+              style={{ fontSize: '12px', margin: 0 }}
+              className="font-semibold text-white truncate whitespace-nowrap overflow-hidden leading-tight"
+            >
+              {artifact?.title}
+            </h3>
             <div className="flex items-center space-x-1.5 mt-1.5">
               <span className="text-[8px] text-white/50 leading-none">
                 {isRunning ? 'Building...' : 'Click to view actions'}
@@ -85,7 +94,7 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
           </svg>
         </div>
       </div>
-      
+
       {/* Accordion Content */}
       <AnimatePresence>
         {showActions && actions.length > 0 && (
@@ -97,15 +106,15 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
             transition={{ duration: 0.15 }}
           >
             <div className="p-2.5 space-y-2">
-              <div 
+              <div
                 className={classNames(
-                  "overflow-y-auto pr-1 space-y-2 transition-all duration-200",
-                  showAllActions ? "max-h-[500px]" : "max-h-[160px]"
+                  'overflow-y-auto pr-1 space-y-2 transition-all duration-200',
+                  showAllActions ? 'max-h-[500px]' : 'max-h-[160px]',
                 )}
               >
                 <ActionList actions={actions} />
               </div>
-              
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end pt-1.5 border-t border-white/5">
                 {actions.length > 5 && (
@@ -133,7 +142,10 @@ interface ShellCodeBlockProps {
 function ShellCodeBlock({ className, code }: ShellCodeBlockProps) {
   return (
     <div
-      className={classNames('text-xs font-mono bg-black/30 rounded-lg p-2 border border-white/5 overflow-x-auto', className)}
+      className={classNames(
+        'text-xs font-mono bg-black/30 rounded-lg p-2 border border-white/5 overflow-x-auto',
+        className,
+      )}
       dangerouslySetInnerHTML={{
         __html: shellHighlighter.codeToHtml(code, {
           lang: 'shell',
@@ -171,9 +183,7 @@ function getStatusIcon(status: ActionState['status']) {
 }
 
 const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: boolean }) => {
-  const [isExpanded, setIsExpanded] = useState(
-    action.status === 'running' || action.status === 'failed'
-  );
+  const [isExpanded, setIsExpanded] = useState(action.status === 'running' || action.status === 'failed');
 
   useEffect(() => {
     if (action.status === 'running' || action.status === 'failed') {
@@ -192,9 +202,7 @@ const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: bool
       }}
     >
       <div className="flex items-center space-x-3 text-[13px]">
-        <div className="text-base shrink-0 flex items-center">
-          {getStatusIcon(action.status)}
-        </div>
+        <div className="text-base shrink-0 flex items-center">{getStatusIcon(action.status)}</div>
         {action.type === 'file' ? (
           <div className="text-white/70 min-w-0 flex-1 break-all py-0.5">
             {action.filePath.includes('/') ? 'Edit' : 'Create'}{' '}
@@ -211,7 +219,12 @@ const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: bool
             <code className="bg-white/5 px-1.5 py-0.5 rounded text-white/90 font-mono text-[11px] break-all truncate flex-1 max-w-[calc(100%-40px)]">
               {action.content}
             </code>
-            <div className={classNames('transition-transform duration-200 shrink-0 ml-auto mr-1', isExpanded ? 'rotate-180' : '')}>
+            <div
+              className={classNames(
+                'transition-transform duration-200 shrink-0 ml-auto mr-1',
+                isExpanded ? 'rotate-180' : '',
+              )}
+            >
               <svg className="w-2.5 h-2.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

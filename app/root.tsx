@@ -16,8 +16,29 @@ import 'virtual:uno.css';
 export const links: LinksFunction = () => [
   {
     rel: 'icon',
+    href: '/favicon.ico',
+    sizes: '48x48',
+  },
+  {
+    rel: 'icon',
     href: '/favicon.svg',
     type: 'image/svg+xml',
+    sizes: 'any',
+  },
+  {
+    rel: 'icon',
+    href: '/favicon-96x96.png',
+    type: 'image/png',
+    sizes: '96x96',
+  },
+  {
+    rel: 'apple-touch-icon',
+    href: '/apple-touch-icon.png',
+    sizes: '180x180',
+  },
+  {
+    rel: 'manifest',
+    href: '/site.webmanifest',
   },
   { rel: 'stylesheet', href: reactToastifyStyles },
   { rel: 'stylesheet', href: tailwindReset },

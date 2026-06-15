@@ -187,6 +187,7 @@ export const CodeMirrorEditor = memo(
       viewRef.current = view;
 
       return () => {
+        onUpdate.cancel?.();
         viewRef.current?.destroy();
         viewRef.current = undefined;
       };
@@ -207,12 +208,17 @@ export const CodeMirrorEditor = memo(
     }, [id]);
 
     useEffect(() => {
+      const view = viewRef.current;
+
+      if (!view) {
+        return;
+      }
+
       const editorStates = editorStatesRef.current!;
-      const view = viewRef.current!;
-      const theme = themeRef.current!;
+      const currentTheme = themeRef.current!;
 
       if (!doc) {
-        const state = newEditorState('', theme, settings, onScrollRef, debounceScroll, onSaveRef, [
+        const state = newEditorState('', currentTheme, settings, onScrollRef, debounceScroll, onSaveRef, [
           languageCompartment.of([]),
         ]);
 
@@ -234,7 +240,7 @@ export const CodeMirrorEditor = memo(
       let state = editorStates.get(doc.filePath);
 
       if (!state) {
-        state = newEditorState(doc.value, theme, settings, onScrollRef, debounceScroll, onSaveRef, [
+        state = newEditorState(doc.value, currentTheme, settings, onScrollRef, debounceScroll, onSaveRef, [
           languageCompartment.of([]),
         ]);
 
@@ -245,13 +251,13 @@ export const CodeMirrorEditor = memo(
 
       setEditorDocument(
         view,
-        theme,
+        currentTheme,
         editable,
         languageCompartment,
         autoFocusOnDocumentChange,
         doc as TextEditorDocument,
       );
-    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange]);
+    }, [doc?.value, editable, doc?.filePath, autoFocusOnDocumentChange, settings]);
 
     return (
       <div className={classNames('relative h-full', className)}>
@@ -335,6 +341,7 @@ function newEditorState(
       }),
       closeBrackets(),
       lineNumbers(),
+      EditorView.lineWrapping,
       scrollPastEnd(),
       dropCursor(),
       drawSelection(),
@@ -397,6 +404,11 @@ function setEditorDocument(
   });
 
   getLanguage(doc.filePath).then((languageSupport) => {
+    // guard against unmounted view
+    if (view.dom?.ownerDocument?.body?.contains(view.dom) === false) {
+      return;
+    }
+
     if (!languageSupport) {
       return;
     }
@@ -406,6 +418,10 @@ function setEditorDocument(
     });
 
     requestAnimationFrame(() => {
+      if (view.dom?.ownerDocument?.body?.contains(view.dom) === false) {
+        return;
+      }
+
       const currentLeft = view.scrollDOM.scrollLeft;
       const currentTop = view.scrollDOM.scrollTop;
       const newLeft = doc.scroll?.left ?? 0;
@@ -415,7 +431,6 @@ function setEditorDocument(
 
       if (autoFocus && editable) {
         if (needsScrolling) {
-          // we have to wait until the scroll position was changed before we can set the focus
           view.scrollDOM.addEventListener(
             'scroll',
             () => {
@@ -424,7 +439,6 @@ function setEditorDocument(
             { once: true },
           );
         } else {
-          // if the scroll position is still the same we can focus immediately
           view.focus();
         }
       }

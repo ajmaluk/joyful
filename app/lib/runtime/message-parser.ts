@@ -100,7 +100,9 @@ export class StreamingMessageParser {
               .replace(/&gt;/g, '>')
               .replace(/&quot;/g, '"')
               .replace(/&#39;/g, "'")
-              .replace(/&apos;/g, "'");
+              .replace(/&apos;/g, "'")
+              .replace(/&#10;/g, '\n')
+              .replace(/&#13;/g, '\r');
 
             if ('type' in currentAction && currentAction.type === 'file') {
               content += '\n';

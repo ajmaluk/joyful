@@ -117,6 +117,10 @@ export function useMessageParser() {
       messageParser.reset();
     }
 
+    const assistantMessages = messages.filter((m) => m.role === 'assistant');
+    const latestAssistantMessageId = assistantMessages[assistantMessages.length - 1]?.id;
+    workbenchStore.latestAssistantMessageId = latestAssistantMessageId;
+
     for (const [index, message] of messages.entries()) {
       if (message.role === 'assistant') {
         // Apply fallback wrapping for messages that are done streaming

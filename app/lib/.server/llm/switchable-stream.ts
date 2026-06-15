@@ -1,10 +1,12 @@
-export default class SwitchableStream extends TransformStream {
-  private _controller: TransformStreamDefaultController | null = null;
-  private _currentReader: ReadableStreamDefaultReader | null = null;
+export default class SwitchableStream extends TransformStream<Uint8Array, Uint8Array> {
+  private _controller: TransformStreamDefaultController<Uint8Array> | null = null;
+  private _currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private _switches = 0;
+  private _closed = false;
+  private _pumpPromise: Promise<void> = Promise.resolve();
 
   constructor() {
-    let controllerRef: TransformStreamDefaultController | undefined;
+    let controllerRef: TransformStreamDefaultController<Uint8Array> | undefined;
 
     super({
       start(controller) {
@@ -19,21 +21,29 @@ export default class SwitchableStream extends TransformStream {
     this._controller = controllerRef;
   }
 
-  async switchSource(newStream: ReadableStream) {
+  async switchSource(newStream: ReadableStream<Uint8Array>) {
+    if (this._closed) {
+      return;
+    }
+
     if (this._currentReader) {
-      await this._currentReader.cancel();
+      try {
+        await this._currentReader.cancel();
+      } catch {
+        // reader may already be cancelled/errored
+      }
     }
 
     this._currentReader = newStream.getReader();
 
-    this._pumpStream();
+    this._pumpPromise = this._pumpStream();
 
     this._switches++;
   }
 
   private async _pumpStream() {
     if (!this._currentReader || !this._controller) {
-      throw new Error('Stream is not properly initialized');
+      return;
     }
 
     try {
@@ -44,20 +54,40 @@ export default class SwitchableStream extends TransformStream {
           break;
         }
 
-        this._controller.enqueue(value);
+        try {
+          this._controller.enqueue(value);
+        } catch {
+          // controller may be terminated/errored
+          break;
+        }
       }
     } catch (error) {
-      console.log(error);
-      this._controller.error(error);
+      console.error(error);
     }
   }
 
-  close() {
-    if (this._currentReader) {
-      this._currentReader.cancel();
+  async close() {
+    if (this._closed) {
+      return;
     }
 
-    this._controller?.terminate();
+    this._closed = true;
+
+    if (this._currentReader) {
+      try {
+        await this._currentReader.cancel();
+      } catch {
+        // reader may already be cancelled
+      }
+    }
+
+    try {
+      this._controller?.terminate();
+    } catch {
+      // controller may already be errored
+    }
+
+    await this._pumpPromise;
   }
 
   get switches() {

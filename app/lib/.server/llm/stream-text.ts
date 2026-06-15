@@ -1,6 +1,6 @@
 import { streamText as _streamText, convertToCoreMessages } from 'ai';
 import { getAPIKey } from '~/lib/.server/llm/api-key';
-import { DEFAULT_MODEL, getModel } from '~/lib/.server/llm/model';
+import { DEFAULT_MODEL_NAME as DEFAULT_MODEL, getModel } from '~/lib/.server/llm/model';
 import { MAX_TOKENS } from './constants';
 import { getSystemPrompt } from './prompts';
 
@@ -109,7 +109,7 @@ export async function summarizeConversation(
     // Call the LLM using the same model the user is chatting with
     // We use _streamText directly with low maxTokens since this is a summary
     const { text } = await _streamText({
-      model: getModel(modelName, env) as any,
+      model: getModel(modelName || DEFAULT_MODEL, env) as any,
       maxTokens: 1024,
       messages: convertToCoreMessages([{ role: 'user', content: prompt }] as any),
     });

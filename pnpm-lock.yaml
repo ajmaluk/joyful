@@ -11,12 +11,6 @@ importers:
 
   .:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: ^0.0.39
-        version: 0.0.39(zod@3.25.76)
-      '@ai-sdk/google':
-        specifier: ^3.0.82
-        version: 3.0.82(zod@3.25.76)
       '@ai-sdk/openai':
         specifier: ^0.0.39
         version: 0.0.39(zod@3.25.76)
@@ -243,18 +237,6 @@ importers:
 
 packages:
 
-  '@ai-sdk/anthropic@0.0.39':
-    resolution: {integrity: sha512-Ouku41O9ebyRi0EUW7pB8+lk4sI74SfJKydzK7FjynhNmCSvi42+U4WPlEjP64NluXUzpkYLvBa6BAd36VY4/g==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.0.0
-
-  '@ai-sdk/google@3.0.82':
-    resolution: {integrity: sha512-md+M92ZJuPIMU2p4v1rGLpJJWTmTh/vpJPkMnQbEdcLaPTZxRaroIKSnmL/9UGJV0BORJlHNDJegkcnhVpTmDA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/openai@0.0.39':
     resolution: {integrity: sha512-UNkT7394/aG7s2VRY53mRqKlv2tBBuRGvIOuqMcpgfVquf+NRYWsDWAYM4UxqcK5uigSKk4uV/lIJX+fRUXszg==}
     engines: {node: '>=18'}
@@ -279,22 +261,12 @@ packages:
       zod:
         optional: true
 
-  '@ai-sdk/provider-utils@4.0.29':
-    resolution: {integrity: sha512-uhukHaCBvqkwBHkT8C2PrnqKTCoLn3pdHXqtcR9I8ErH+flbzgW4o7VHSNIup9LRu+WBvZIZDQLsx6rwl2tiOA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/provider@0.0.13':
     resolution: {integrity: sha512-RBstpG/3RqVBBJgTvjZpou/+1fNQMDIwB9enqQPXqr0MoCrJHscLD2Zsfr6cKM5HFfY1D4KhdSPTycCDebVGlQ==}
     engines: {node: '>=18'}
 
   '@ai-sdk/provider@0.0.17':
     resolution: {integrity: sha512-f9j+P5yYRkqKFHxvWae5FI0j6nqROPCoPnMkpc2hc2vC7vKjqzrxBJucD8rpSaUjqiBnY/QuRJ0QeV717Uz5tg==}
-    engines: {node: '>=18'}
-
-  '@ai-sdk/provider@3.0.10':
-    resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
     engines: {node: '>=18'}
 
   '@ai-sdk/react@0.0.40':
@@ -1874,9 +1846,6 @@ packages:
   '@shikijs/core@1.9.1':
     resolution: {integrity: sha512-EmUful2MQtY8KgCF1OkBtOuMcvaZEvmdubhW0UHCGXi21O9dRLeADVCj+k6ZS+de7Mz9d2qixOXJ+GLhcK3pXg==}
 
-  '@standard-schema/spec@1.1.0':
-    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
-
   '@stylistic/eslint-plugin-js@2.3.0':
     resolution: {integrity: sha512-lQwoiYb0Fs6Yc5QS3uT8+T9CPKK2Eoxc3H8EnYJgM26v/DgtW+1lvy2WNgyBflU+ThShZaHm3a6CdD9QeKx23w==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -3024,10 +2993,6 @@ packages:
   eventsource-parser@1.1.2:
     resolution: {integrity: sha512-v0eOBUbiaFojBu2s2NPBfYUoRR9GjcDNvCXVaqEf5vVfpIAh9f8RCo4vXTP8c63QRKCFwoLpMpTdPwwhEKVgzA==}
     engines: {node: '>=14.18'}
-
-  eventsource-parser@3.1.0:
-    resolution: {integrity: sha512-kJezFj9YFAMLeORyi7aCLxLbD5/qWMQnoMVlVPyHIll7lgRJCc3JVln9Vgl9nwQi0YkMnhdGTMNn7CkRRAptMg==}
-    engines: {node: '>=18.0.0'}
 
   evp_bytestokey@1.0.3:
     resolution: {integrity: sha512-/f2Go4TognH/KvCISP7OUsHn85hT9nUkxxA9BEWxFn+Oj9o8ZNLm/40hdlgSLyuOimsrTKLUMEorQexp/aPQeA==}
@@ -5637,18 +5602,6 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/anthropic@0.0.39(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 0.0.17
-      '@ai-sdk/provider-utils': 1.0.9(zod@3.25.76)
-      zod: 3.25.76
-
-  '@ai-sdk/google@3.0.82(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.29(zod@3.25.76)
-      zod: 3.25.76
-
   '@ai-sdk/openai@0.0.39(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 0.0.13
@@ -5673,22 +5626,11 @@ snapshots:
     optionalDependencies:
       zod: 3.25.76
 
-  '@ai-sdk/provider-utils@4.0.29(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@standard-schema/spec': 1.1.0
-      eventsource-parser: 3.1.0
-      zod: 3.25.76
-
   '@ai-sdk/provider@0.0.13':
     dependencies:
       json-schema: 0.4.0
 
   '@ai-sdk/provider@0.0.17':
-    dependencies:
-      json-schema: 0.4.0
-
-  '@ai-sdk/provider@3.0.10':
     dependencies:
       json-schema: 0.4.0
 
@@ -7319,8 +7261,6 @@ snapshots:
 
   '@shikijs/core@1.9.1': {}
 
-  '@standard-schema/spec@1.1.0': {}
-
   '@stylistic/eslint-plugin-js@2.3.0(eslint@9.5.0)':
     dependencies:
       '@types/eslint': 8.56.10
@@ -8746,8 +8686,6 @@ snapshots:
   events@3.3.0: {}
 
   eventsource-parser@1.1.2: {}
-
-  eventsource-parser@3.1.0: {}
 
   evp_bytestokey@1.0.3:
     dependencies:

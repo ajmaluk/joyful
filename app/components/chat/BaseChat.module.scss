@@ -1,9 +1,4 @@
 .BaseChat {
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 26rem),
-    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.08), transparent 22rem),
-    var(--bolt-elements-bg-depth-1);
-
   &[data-chat-visible='false'] {
     --workbench-inner-width: 100%;
     --workbench-left: 0;
@@ -21,4 +16,26 @@
 
 .Chat {
   opacity: 1;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .BaseChat {
+    --chat-min-width: 100% !important;
+  }
+
+  .Chat {
+    min-width: 100% !important;
+  }
+}
+
+/* Smooth transitions for all interactive elements */
+.Chat textarea {
+  transition: height 0.15s ease;
+}
+
+/* Sticky prompt styling */
+.Chat [class*='sticky'] {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }

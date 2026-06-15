@@ -7,11 +7,12 @@ const logger = createScopedLogger('ChatHistory');
 // this is used at the top level and never rejects
 export async function openDatabase(): Promise<IDBDatabase | undefined> {
   return new Promise((resolve) => {
-    const request = indexedDB.open('boltHistory', 2);
+    const request = indexedDB.open('boltHistory', 3);
 
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;
 
+      // --- chats store (messages + metadata) ---
       if (!db.objectStoreNames.contains('chats')) {
         const store = db.createObjectStore('chats', { keyPath: 'id' });
         store.createIndex('id', 'id', { unique: true });
@@ -25,6 +26,11 @@ export async function openDatabase(): Promise<IDBDatabase | undefined> {
           }
           store.createIndex('urlId', 'urlId', { unique: false });
         }
+      }
+
+      // --- thumbnails store (preview screenshots, keyed by id) ---
+      if (!db.objectStoreNames.contains('thumbnails')) {
+        db.createObjectStore('thumbnails', { keyPath: 'id' });
       }
     };
 
@@ -68,6 +74,56 @@ export async function setMessages(
       description,
       timestamp: new Date().toISOString(),
     });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// ── Thumbnail helpers ───────────────────────────────────────
+
+export async function setThumbnail(
+  db: IDBDatabase,
+  id: string,
+  thumbnail: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('thumbnails', 'readwrite');
+    const store = transaction.objectStore('thumbnails');
+
+    const request = store.put({ id, thumbnail });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function getThumbnail(
+  db: IDBDatabase,
+  id: string,
+): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('thumbnails', 'readonly');
+    const store = transaction.objectStore('thumbnails');
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const result = request.result as { thumbnail: string } | undefined;
+      resolve(result?.thumbnail ?? null);
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function deleteThumbnail(
+  db: IDBDatabase,
+  id: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('thumbnails', 'readwrite');
+    const store = transaction.objectStore('thumbnails');
+    const request = store.delete(id);
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);

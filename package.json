@@ -24,8 +24,6 @@
     "node": ">=18.18.0"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^0.0.39",
-    "@ai-sdk/google": "^3.0.82",
     "@ai-sdk/openai": "^0.0.39",
     "@codemirror/autocomplete": "^6.17.0",
     "@codemirror/commands": "^6.6.0",

@@ -136,10 +136,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       return;
     }
 
-    await Promise.all([
-      animate('#examples', { opacity: 0, display: 'none' }, { duration: 0.1 }),
-      animate('#intro', { opacity: 0, flex: 1 }, { duration: 0.2, ease: cubicEasingFn }),
-    ]);
+    await animate('#hero', { opacity: 0 }, { duration: 0.3, ease: cubicEasingFn });
 
     chatStore.setKey('started', true);
 
@@ -213,6 +210,7 @@ export const ChatImpl = memo(({ initialMessages, storeMessageHistory }: ChatProp
       scrollRef={scrollRef}
       handleInputChange={handleInputChange}
       handleStop={abort}
+      setInput={setInput}
       messages={messages.map((message, i) => {
         if (message.role === 'user') {
           return message;

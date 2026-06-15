@@ -1,0 +1,144 @@
+/* =============================================
+   Joyful Lovable-style Mesh Gradient Background
+   ============================================= */
+
+/* Primary mesh gradient - matches the Lovable mobile dashboard reference */
+.joyful-gradient,
+.lovable-gradient {
+  min-height: 100vh;
+  width: 100%;
+  background:
+    radial-gradient(
+      ellipse 110% 50% at 50% 45%,
+      rgba(61, 111, 255, 0.95) 0%,
+      rgba(70, 102, 225, 0.7) 38%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 85% 42% at 50% 68%,
+      rgba(255, 105, 220, 0.95) 0%,
+      rgba(255, 66, 172, 0.86) 48%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 18% 105%,
+      rgba(255, 75, 42, 1) 0%,
+      rgba(255, 29, 99, 0.9) 45%,
+      transparent 76%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 82% 105%,
+      rgba(255, 74, 40, 1) 0%,
+      rgba(255, 29, 105, 0.9) 45%,
+      transparent 76%
+    ),
+    linear-gradient(
+      180deg,
+      #191a1d 0%,
+      #191a1d 24%,
+      #25365e 37%,
+      #5576e8 49%,
+      #b36ee4 58%,
+      #fa68d0 68%,
+      #ff2e91 82%,
+      #ff552d 100%
+    );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+/* Subtle gradient variation for chat/working views */
+.joyful-chat-gradient {
+  background:
+    radial-gradient(
+      ellipse 60% 40% at 10% 40%,
+      rgba(61, 111, 255, 0.12) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 90% 60%,
+      rgba(255, 105, 220, 0.10) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 35% at 50% 100%,
+      rgba(255, 75, 42, 0.08) 0%,
+      transparent 60%
+    ),
+    #0a0a0a;
+}
+
+/* Premium custom scrollbar utility class */
+.premium-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+    background-clip: padding-box;
+  }
+}
+
+/* Custom scrollbar - dark theme for the main body */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Smooth scrolling for the whole app */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(139, 92, 246, 0.3);
+  color: white;
+}
+
+/* Glass panel utility */
+.joyful-glass {
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Gradient text */
+.joyful-gradient-text {
+  background: linear-gradient(135deg, #f472b6, #8b5cf6, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

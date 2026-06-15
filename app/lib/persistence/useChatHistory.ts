@@ -4,7 +4,8 @@ import { atom } from 'nanostores';
 import type { Message } from 'ai';
 import { toast } from 'react-toastify';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
+import { getAll, getMessages, getNextId, getUrlId, openDatabase, setMessages } from './db';
+import { saveProjectMeta, updateProjectMeta, syncFromIndexedDB } from './project-metadata';
 
 export interface ChatHistoryItem {
   id: string;
@@ -20,6 +21,28 @@ export const db = persistenceEnabled ? await openDatabase() : undefined;
 
 export const chatId = atom<string | undefined>(undefined);
 export const description = atom<string | undefined>(undefined);
+
+/**
+ * On startup, sync the localStorage project index from IndexedDB.
+ * This ensures the sidebar always has the latest list from the database.
+ */
+if (db) {
+  getAll(db)
+    .then((list) => {
+      const metas = list
+        .filter((item) => item.urlId && item.description)
+        .map(({ id, urlId, description, timestamp }) => ({
+          id,
+          urlId,
+          description,
+          timestamp,
+        }));
+      syncFromIndexedDB(metas);
+    })
+    .catch(() => {
+      // silent — localStorage index already exists
+    });
+}
 
 export function useChatHistory() {
   const navigate = useNavigate();
@@ -91,7 +114,23 @@ export function useChatHistory() {
         }
       }
 
+      // Sync description to localStorage when it changes
+      if (description.get() && chatId.get()) {
+        updateProjectMeta(chatId.get() as string, {
+          description: description.get(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       await setMessages(db, chatId.get() as string, messages, urlId, description.get());
+
+      // Sync lightweight metadata to localStorage for instant sidebar loading
+      saveProjectMeta({
+        id: chatId.get() as string,
+        urlId,
+        description: description.get(),
+        timestamp: new Date().toISOString(),
+      });
     },
   };
 }

@@ -1,11 +1,11 @@
 import { useStore } from '@nanostores/react';
 import type { LinksFunction } from '@remix-run/cloudflare';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation } from '@remix-run/react';
 import tailwindReset from '@unocss/reset/tailwind-compat.css?url';
 import { themeStore } from './lib/stores/theme';
 import { stripIndents } from './utils/stripIndent';
 import { createHead } from 'remix-island';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import reactToastifyStyles from 'react-toastify/dist/ReactToastify.css?url';
 import globalStyles from './styles/index.scss?url';
@@ -30,7 +30,6 @@ export const links: LinksFunction = () => [
   {
     rel: 'preconnect',
     href: 'https://fonts.gstatic.com',
-    crossOrigin: 'anonymous',
   },
   {
     rel: 'stylesheet',
@@ -62,6 +61,49 @@ export const Head = createHead(() => (
   </>
 ));
 
+function LoadingScreen() {
+  const navigation = useNavigation();
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [shouldRender, setShouldRender] = useState(true);
+  const [fadeStyle, setFadeStyle] = useState('opacity-100 scale-100');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const isLoading = initialLoading || navigation.state === 'loading';
+
+  useEffect(() => {
+    if (isLoading) {
+      setShouldRender(true);
+      setFadeStyle('opacity-100 scale-100');
+    } else {
+      setFadeStyle('opacity-0 scale-95 pointer-events-none');
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
+  if (!shouldRender) return null;
+
+  return (
+    <div className={`fixed inset-0 z-[9999] bg-[#181816] flex items-center justify-center transition-all duration-300 ease-out ${fadeStyle}`}>
+      <div className="flex flex-col items-center justify-center animate-pulse">
+        <img
+          src="/logo.png"
+          alt="Joyful Logo"
+          className="w-10 h-10 object-contain"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const theme = useStore(themeStore);
 
@@ -71,6 +113,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <LoadingScreen />
       {children}
       <ScrollRestoration />
       <Scripts />
@@ -81,3 +124,4 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return <Outlet />;
 }
+

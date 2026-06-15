@@ -16,13 +16,7 @@ const FONT_SIZES = [
   { label: 'Large', value: 'large', desc: 'Larger text for easier reading' },
 ];
 
-const ACCENT_COLORS = [
-  { label: 'Blue', value: 'blue', color: '#2BA6FF' },
-  { label: 'Purple', value: 'purple', color: '#A855F7' },
-  { label: 'Pink', value: 'pink', color: '#EC4899' },
-  { label: 'Green', value: 'green', color: '#22C55E' },
-  { label: 'Orange', value: 'orange', color: '#F79009' },
-];
+
 
 export default function AppearanceSettings() {
   const theme = useStore(themeStore);
@@ -91,24 +85,6 @@ export default function AppearanceSettings() {
               </div>
             )}
           </button>
-        </div>
-      </div>
-
-      {/* Accent color */}
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4 sm:p-5 md:p-6">
-        <h2 className="text-sm sm:text-base font-semibold text-white mb-1">Accent Color</h2>
-        <p className="text-xs sm:text-[13px] text-white/40 mb-4 sm:mb-5">Choose your preferred accent color.</p>
-        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
-          {ACCENT_COLORS.map((color) => (
-            <button
-              key={color.value}
-              className="group relative w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-transparent hover:border-white/30 transition-all cursor-pointer"
-              title={color.label}
-              style={{ backgroundColor: color.color }}
-            >
-              <div className="absolute inset-0 rounded-full border-2 border-white/0 group-hover:border-white/20 transition-colors" />
-            </button>
-          ))}
         </div>
       </div>
 

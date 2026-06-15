@@ -10,6 +10,7 @@ import { Workbench } from '~/components/workbench/Workbench.client';
 import { classNames } from '~/utils/classNames';
 import { Header } from '~/components/header/Header';
 import { Messages } from './Messages.client';
+import { toggleMobileSidebar } from '~/lib/stores/sidebar';
 
 import { HomeInput } from '~/components/home/HomeInput';
 
@@ -111,10 +112,30 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         }
         data-chat-visible={showChat}
       >
-        {/* Header */}
-        <div className={chatStarted ? '' : 'md:hidden'}>
-          <Header />
-        </div>
+        {/* Home page mobile header */}
+        {!chatStarted && (
+          <div className="md:hidden h-11 flex items-center justify-between px-4 shrink-0 relative z-50">
+            <button
+              onClick={toggleMobileSidebar}
+              className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
+              aria-label="Toggle sidebar"
+            >
+              <div className="i-ph:list text-lg" />
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 flex items-center space-x-2">
+              <img src="/logo.png" alt="Joyful" className="w-6 h-6 object-contain" />
+              <span className="text-sm font-semibold text-white">Joyful</span>
+            </div>
+            <div className="w-9" />
+          </div>
+        )}
+
+        {/* Header - shown when chat started */}
+        {chatStarted && (
+          <div>
+            <Header />
+          </div>
+        )}
 
         {/* Main content area */}
         <div className="flex flex-1 overflow-hidden">

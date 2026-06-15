@@ -84,15 +84,6 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Better tap targets on mobile */
-@media (max-width: 640px) {
-  button, a {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-}
 
 /* Sidebar Gradient Background */
 .sidebar-gradient {

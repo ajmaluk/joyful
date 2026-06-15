@@ -230,7 +230,27 @@ function dirname(path: string): string {
  * Detects the prettier parser to use based on the file extension.
  * Returns null for unsupported file types.
  */
+/**
+ * JSON config files that should NOT be formatted by Prettier to prevent corruption.
+ */
+const SKIP_FORMATTING_FILES = new Set([
+  'package.json',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'tsconfig.json',
+  'tsconfig.node.json',
+  '.eslintrc.json',
+]);
+
 function getPrettierParser(filePath: string): string | null {
+  // Skip formatting for critical config files to prevent JSON corruption
+  const fileName = filePath.split('/').pop() ?? '';
+
+  if (SKIP_FORMATTING_FILES.has(fileName)) {
+    return null;
+  }
+
   const ext = filePath.split('.').pop()?.toLowerCase();
 
   switch (ext) {
@@ -307,7 +327,13 @@ async function loadPrettierPlugins(parser: string): Promise<any[]> {
       const plugin = await import('prettier/plugins/html');
       return [plugin];
     }
-    case 'babel':
+    case 'babel': {
+      const [babel, estree] = await Promise.all([
+        import('prettier/plugins/babel'),
+        import('prettier/plugins/estree'),
+      ]);
+      return [babel, estree];
+    }
     case 'json': {
       const [babel, estree] = await Promise.all([
         import('prettier/plugins/babel'),

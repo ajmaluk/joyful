@@ -1,9 +1,9 @@
 import { useStore } from '@nanostores/react';
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { ClientOnly } from 'remix-utils/client-only';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore, type WorkbenchViewType } from '~/lib/stores/workbench';
-import { toggleMobileSidebar } from '~/lib/stores/sidebar';
 import { classNames } from '~/utils/classNames';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
 
@@ -13,6 +13,7 @@ export function Header() {
   const showWorkbench = useStore(workbenchStore.showWorkbench);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const setView = (view: WorkbenchViewType) => {
     workbenchStore.currentView.set(view);
@@ -45,22 +46,10 @@ export function Header() {
     >
       {/* Left Section: Hamburger Menu & Logo (Left Aligned when chat started) */}
       <div className="flex items-center space-x-3">
-        {/* Hamburger menu - visible on mobile only */}
-        <button
-          onClick={toggleMobileSidebar}
-          className="md:hidden p-2 -ml-2 rounded-full hover:bg-white/10 text-white bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
-          aria-label="Toggle sidebar"
-        >
-          <div className="i-ph:list text-lg" />
-        </button>
-
-        {/* Logo & Dropdown (Left-aligned when chat started, absolute centered when chat not started) */}
+        {/* Logo & Dropdown */}
         <div
-          ref={chat.started ? dropdownRef : undefined}
-          className={classNames(
-            'flex items-center space-x-2',
-            !chat.started ? 'absolute left-1/2 -translate-x-1/2' : '',
-          )}
+          ref={dropdownRef}
+          className="flex items-center space-x-2 relative"
         >
           {/* Logo */}
           <a
@@ -70,67 +59,79 @@ export function Header() {
             <img src="/logo.png" alt="Joyful" className="w-5 h-5 object-contain" />
           </a>
 
-          {chat.started ? (
-            <>
-              {/* Dropdown Trigger */}
-              <button
-                className="cursor-pointer bg-transparent border-none text-left p-0"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="text-xs font-semibold text-white leading-tight">Joyful</span>
-                  <svg
-                    className={classNames(
-                      'w-3.5 h-3.5 text-white/50 transition-transform duration-200',
-                      dropdownOpen ? 'rotate-180' : undefined,
-                    )}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
-
-              {/* Dropdown Menu */}
-              {dropdownOpen && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-[#1c1c1e]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 z-[100]">
-                  {/* User Info Header */}
-                  <div className="flex items-center space-x-3 p-3 border-b border-white/5 mb-1">
-                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                      U
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-white truncate">User</div>
-                      <div className="text-[11px] text-white/40 truncate">user@joyful.uthakkan.in</div>
-                    </div>
-                  </div>
-
-                  {/* Menu Items */}
-                  <div className="space-y-0.5">
-                    <DropdownItem icon="i-ph:user" label="Profile" />
-                    <DropdownItem icon="i-ph:gear" label="Settings" shortcut="⌘ ," />
-                    <DropdownItem icon="i-ph:palette" label="Appearance" hasChevron />
-                    <DropdownItem icon="i-ph:question" label="Support" hasChevron />
-                    <DropdownItem icon="i-ph:book-open" label="Documentation" hasChevron />
-                    <DropdownItem icon="i-ph:users" label="Community" />
-                    <DropdownItem
-                      icon="i-ph:house"
-                      label="Home"
-                      onClick={() => {
-                        window.location.href = '/';
-                        setDropdownOpen(false);
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            /* Brand Name Text (Static, no chevron or dropdown) */
-            <div className="flex items-center">
+          {/* Dropdown Trigger */}
+          <button
+            className="cursor-pointer bg-transparent border-none text-left p-0"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+          >
+            <div className="flex items-center space-x-1">
               <span className="text-xs font-semibold text-white leading-tight">Joyful</span>
+              <svg
+                className={classNames(
+                  'w-3.5 h-3.5 text-white/50 transition-transform duration-200',
+                  dropdownOpen ? 'rotate-180' : undefined,
+                )}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-[#1c1c1e]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 z-[100]">
+              {/* User Info Header */}
+              <div className="flex items-center space-x-3 p-3 border-b border-white/5 mb-1">
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                  U
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-white truncate">User</div>
+                  <div className="text-[11px] text-white/40 truncate">user@joyful.uthakkan.in</div>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="space-y-0.5">
+                <DropdownItem
+                  icon="i-ph:user"
+                  label="Profile"
+                  onClick={() => {
+                    navigate('/settings/profile');
+                    setDropdownOpen(false);
+                  }}
+                />
+                <DropdownItem
+                  icon="i-ph:gear"
+                  label="Settings"
+                  shortcut="⌘ ,"
+                  onClick={() => {
+                    navigate('/settings/account');
+                    setDropdownOpen(false);
+                  }}
+                />
+                <DropdownItem
+                  icon="i-ph:palette"
+                  label="Appearance"
+                  hasChevron
+                  onClick={() => {
+                    navigate('/settings/appearance');
+                    setDropdownOpen(false);
+                  }}
+                />
+                <div className="border-t border-white/5 my-1" />
+                <DropdownItem
+                  icon="i-ph:house"
+                  label="Home"
+                  onClick={() => {
+                    window.location.href = '/';
+                    setDropdownOpen(false);
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>

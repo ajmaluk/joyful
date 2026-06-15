@@ -77,49 +77,51 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-[#0d0d10]">
+    <div className="flex h-full w-full flex-col">
       {isPortDropdownOpen && (
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
-      <div className="flex items-center gap-2 border-b border-white/10 bg-[#141418] p-3">
-        <IconButton
-          icon="i-ph:arrow-clockwise"
-          className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white"
-          onClick={reloadPreview}
-        />
-        <div className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white">
-          <div className="i-ph:globe-hemisphere-west text-white/35" />
-          <input
-            ref={inputRef}
-            className="w-full bg-transparent outline-none placeholder:text-white/20"
-            type="text"
-            value={url}
-            onChange={(event) => {
-              setUrl(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && validateUrl(url)) {
-                setIframeUrl(url);
+      {activePreview && (
+        <div className="flex items-center gap-2 border-b border-white/10 bg-[#141418] p-3">
+          <IconButton
+            icon="i-ph:arrow-clockwise"
+            className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+            onClick={reloadPreview}
+          />
+          <div className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white">
+            <div className="i-ph:globe-hemisphere-west text-white/35" />
+            <input
+              ref={inputRef}
+              className="w-full bg-transparent outline-none placeholder:text-white/20"
+              type="text"
+              value={url}
+              onChange={(event) => {
+                setUrl(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && validateUrl(url)) {
+                  setIframeUrl(url);
 
-                if (inputRef.current) {
-                  inputRef.current.blur();
+                  if (inputRef.current) {
+                    inputRef.current.blur();
+                  }
                 }
-              }
-            }}
-          />
+              }}
+            />
+          </div>
+          {previews.length > 1 && (
+            <PortDropdown
+              activePreviewIndex={activePreviewIndex}
+              setActivePreviewIndex={setActivePreviewIndex}
+              isDropdownOpen={isPortDropdownOpen}
+              setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
+              setIsDropdownOpen={setIsPortDropdownOpen}
+              previews={previews}
+            />
+          )}
         </div>
-        {previews.length > 1 && (
-          <PortDropdown
-            activePreviewIndex={activePreviewIndex}
-            setActivePreviewIndex={setActivePreviewIndex}
-            isDropdownOpen={isPortDropdownOpen}
-            setHasSelectedPreview={(value) => (hasSelectedPreview.current = value)}
-            setIsDropdownOpen={setIsPortDropdownOpen}
-            previews={previews}
-          />
-        )}
-      </div>
-      <div className="flex-1 bg-[#050507] flex items-center justify-center p-4 overflow-auto">
+      )}
+      <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
         {activePreview ? (
           <iframe
             ref={iframeRef}
@@ -139,11 +141,7 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
             }}
             src={iframeUrl}
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-white/45">
-            No preview available
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

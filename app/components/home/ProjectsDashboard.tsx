@@ -202,7 +202,7 @@ export const ProjectsDashboard = memo(({ onSelectTemplate, onRunTemplate }: Proj
   const filteredProjects = getFilteredItems();
 
   return (
-    <section id="projects-dashboard" className="hidden md:block w-full max-w-7xl mx-auto mb-0 mt-24 md:mt-32 px-4 md:px-6">
+    <section id="projects-dashboard" className="hidden md:block w-full max-w-[98%] mx-auto mb-0 mt-24 md:mt-32">
       <div className="rounded-t-[2.5rem] rounded-b-none p-6 md:p-8 pb-8 shadow-2xl bg-[#0a0a0c] border-x border-t border-white/5">
         {/* Header Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">

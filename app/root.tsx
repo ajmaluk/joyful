@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import type { LinksFunction } from '@remix-run/cloudflare';
-import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation } from '@remix-run/react';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useNavigation, useLocation } from '@remix-run/react';
 import tailwindReset from '@unocss/reset/tailwind-compat.css?url';
 import { themeStore } from './lib/stores/theme';
 import { stripIndents } from './utils/stripIndent';
@@ -127,10 +127,17 @@ function LoadingScreen() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const theme = useStore(themeStore);
+  const location = useLocation();
 
   useEffect(() => {
     document.querySelector('html')?.setAttribute('data-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!location.pathname.startsWith('/settings')) {
+      sessionStorage.setItem('last_non_settings_path', location.pathname);
+    }
+  }, [location.pathname]);
 
   return (
     <>

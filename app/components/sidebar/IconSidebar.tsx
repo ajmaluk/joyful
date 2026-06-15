@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
+import { useNavigate } from '@remix-run/react';
 import { classNames } from '~/utils/classNames';
 import { mobileSidebarOpen, closeMobileSidebar } from '~/lib/stores/sidebar';
 import { projectList, type ProjectMeta, loadProjectList, updateProjectMeta, removeProjectMeta } from '~/lib/persistence/project-metadata';
@@ -20,6 +21,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const loadedRef = useRef(false);
+  const navigate = useNavigate();
 
 
 
@@ -269,44 +271,43 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
 
                     {/* Profile actions list */}
                     <div className="flex flex-col">
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/profile');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:user text-sm" /> Profile
                         </span>
                       </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/account');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:gear text-sm" /> Settings
                         </span>
                         <span className="text-[9px] text-zinc-600 font-mono">⌘ ,</span>
                       </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/appearance');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:palette text-sm" /> Appearance
                         </span>
                         <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:question text-sm" /> Support
-                        </span>
-                        <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:book-open text-sm" /> Documentation
-                        </span>
-                        <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:users text-sm" /> Community
-                        </span>
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:house text-sm" /> Home
-                        </span>
                       </button>
                       
                       <div className="h-px bg-white/5 my-1" />
@@ -458,16 +459,16 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
 
             {/* Bottom Profile and Inbox inside wide sidebar */}
             <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between text-gray-400 relative">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowProfileMenu(!showProfileMenu);
-                  }}
-                  className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-semibold border border-white/10 text-white hover:scale-105 transition-transform cursor-pointer"
-                >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProfileMenu(!showProfileMenu);
+                }}
+                className="flex items-center gap-3 min-w-0 flex-1 bg-transparent border-none cursor-pointer text-left hover:opacity-80 transition-opacity"
+              >
+                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-semibold border border-white/10 text-white flex-shrink-0">
                   U
-                </button>
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] font-semibold text-white truncate max-w-[120px]">Uthakkan</div>
                 </div>
@@ -490,44 +491,43 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
 
                     {/* Profile actions list */}
                     <div className="flex flex-col">
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/profile');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:user text-sm" /> Profile
                         </span>
                       </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/account');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:gear text-sm" /> Settings
                         </span>
                         <span className="text-[9px] text-zinc-600 font-mono">⌘ ,</span>
                       </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/settings/appearance');
+                          setShowProfileMenu(false);
+                        }}
+                        className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                      >
                         <span className="flex items-center gap-2">
                           <div className="i-ph:palette text-sm" /> Appearance
                         </span>
                         <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:question text-sm" /> Support
-                        </span>
-                        <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:book-open text-sm" /> Documentation
-                        </span>
-                        <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:users text-sm" /> Community
-                        </span>
-                      </button>
-                      <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                        <span className="flex items-center gap-2">
-                          <div className="i-ph:house text-sm" /> Home
-                        </span>
                       </button>
                       
                       <div className="h-px bg-white/5 my-1" />
@@ -540,7 +540,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                     </div>
                   </div>
                 )}
-              </div>
+              </button>
 
               <a
                 href="#inbox"
@@ -560,26 +560,26 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
       {/* Mobile: slide-over sidebar */}
       <aside
         className={classNames(
-          'md:hidden fixed top-0 left-0 h-full w-[320px] bg-[#0a0a0c]/95 backdrop-blur-xl z-50 flex-shrink-0 flex flex-col border-r border-white/5 transition-transform duration-300 ease-in-out',
+          'md:hidden fixed top-0 left-0 h-full w-[280px] bg-[#0a0a0c]/95 backdrop-blur-xl z-50 flex-shrink-0 flex flex-col border-r border-white/5 transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="p-4 flex items-center justify-between border-b border-white/5">
+        <div className="px-3 py-2.5 flex items-center justify-between border-b border-white/5">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Joyful" className="w-5 h-5 object-contain" />
-            <span className="font-bold text-lg text-white">Joyful</span>
+            <img src="/logo.png" alt="Joyful" className="w-4 h-4 object-contain" />
+            <span className="font-semibold text-sm text-white">Joyful</span>
           </div>
           <button
             onClick={closeMobileSidebar}
-            className="p-2 hover:bg-white/5 rounded-full transition-colors bg-transparent border-none flex items-center justify-center cursor-pointer"
+            className="p-1.5 hover:bg-white/5 rounded-lg transition-colors bg-transparent border-none flex items-center justify-center cursor-pointer"
           >
-            <div className="i-ph:x text-zinc-400 text-xl" />
+            <div className="i-ph:x text-zinc-400 text-base" />
           </button>
         </div>
 
         {/* Navigation */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-4 space-y-6">
-          <nav className="space-y-1">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-2 py-3 space-y-4">
+          <nav className="space-y-0.5">
             <a
               href="/"
               onClick={(e) => {
@@ -589,70 +589,92 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                   hero.scrollIntoView({ behavior: 'smooth' });
                 }
               }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors bg-white/5 text-white font-medium"
+              className="flex items-center justify-start gap-2 px-3 py-2 rounded-xl transition-colors bg-white/5 text-white font-medium w-full text-xs"
             >
-              <div className="i-ph:house text-[20px]" />
+              <div className="i-ph:house text-base flex-shrink-0" />
               <span>Home</span>
             </a>
             <button
               onClick={() => {
                 handleNavClick();
               }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-zinc-400 hover:bg-white/5 hover:text-white w-full text-left bg-transparent border-none cursor-pointer"
+              className="flex items-center justify-start gap-2 px-3 py-2 rounded-xl transition-colors text-zinc-400 hover:bg-white/5 hover:text-white w-full text-left bg-transparent border-none cursor-pointer text-xs"
             >
-              <div className="i-ph:folder text-[20px]" />
+              <div className="i-ph:folder text-base flex-shrink-0" />
               <span>Projects</span>
             </button>
           </nav>
 
           {/* Recents Section */}
           <div>
-            <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-3 mb-1.5">Recents</div>
-            <div className="space-y-2">
-              {/* Project items from localStorage */}
+            <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider px-3 mb-1">Recents</div>
+            <div className="space-y-0.5">
               {projects.length === 0 && (
-                <div className="text-center py-6">
-                  <div className="i-ph:folder-dashed text-2xl mx-auto mb-2 text-zinc-600" />
-                  <p className="text-xs text-zinc-600">No projects yet</p>
+                <div className="text-center py-4">
+                  <div className="i-ph:folder-dashed text-xl mx-auto mb-1 text-zinc-600" />
+                  <p className="text-[10px] text-zinc-600">No projects yet</p>
                 </div>
               )}
 
               {projects.map((project) => (
-                <a
+                <div
                   key={project.id}
-                  href={`/chat/${project.urlId || project.id}`}
-                  onClick={handleNavClick}
-                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group"
+                  className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors group relative"
                 >
-                  {/* Thumbnail or gradient placeholder */}
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-gradient-to-br">
-                    {project.thumbnail ? (
-                      <img
-                        src={project.thumbnail}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div
-                        className={classNames(
-                          'w-full h-full flex items-center justify-center bg-gradient-to-br',
-                          getGradient(project.description || project.id),
-                        )}
-                      >
-                        <span className="text-white text-[10px] font-medium">
-                          {getInitials(project.description || 'P')}
-                        </span>
+                  <a
+                    href={`/chat/${project.urlId || project.id}`}
+                    onClick={handleNavClick}
+                    className="flex-1 text-[11px] font-medium text-zinc-300 hover:text-white truncate py-0.5 min-w-0"
+                  >
+                    {project.description || 'Untitled Project'}
+                  </a>
+
+                  {/* Three-dot menu - always visible on mobile */}
+                  <div className="relative flex-shrink-0 ml-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setActiveMenuId(activeMenuId === project.id ? null : project.id);
+                      }}
+                      className="p-1 hover:bg-white/10 rounded text-zinc-500 hover:text-white transition-colors bg-transparent border-none flex items-center justify-center cursor-pointer"
+                    >
+                      <div className="i-ph:dots-three-vertical text-sm" />
+                    </button>
+                    {activeMenuId === project.id && (
+                      <div className="absolute right-0 mt-1 w-32 bg-[#1c1c1a] border border-white/5 rounded-xl py-1.5 shadow-xl z-50">
+                        <a
+                          href={`/chat/${project.urlId || project.id}`}
+                          className="flex items-center gap-2 px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                        >
+                          <div className="i-ph:arrow-square-out text-xs" /> Open
+                        </a>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleRename(project.id, project.description);
+                            setActiveMenuId(null);
+                          }}
+                          className="flex items-center gap-2 w-full text-left px-3 py-2 text-[11px] text-zinc-300 hover:bg-white/5 hover:text-white bg-transparent border-none transition-colors cursor-pointer"
+                        >
+                          <div className="i-ph:pencil text-xs" /> Rename
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleDelete(project.id);
+                            setActiveMenuId(null);
+                          }}
+                          className="flex items-center gap-2 w-full text-left px-3 py-2 text-[11px] text-red-400 hover:bg-red-500/10 bg-transparent border-none transition-colors cursor-pointer"
+                        >
+                          <div className="i-ph:trash text-xs" /> Delete
+                        </button>
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate group-hover:underline">
-                      {project.description || 'Untitled Project'}
-                    </div>
-                    <div className="text-xs text-zinc-500">{formatTime(project.timestamp)}</div>
-                  </div>
-                </a>
+                </div>
               ))}
             </div>
           </div>
@@ -660,16 +682,16 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
 
         {/* Mobile Sidebar Footer - Profile Avatar and Mail Inbox */}
         <div className="mt-auto p-4 border-t border-white/5 flex items-center justify-between text-gray-400 relative bg-[#0a0a0c]/95">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowProfileMenu(!showProfileMenu);
-              }}
-              className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-semibold border border-white/10 text-white hover:scale-105 transition-transform cursor-pointer"
-            >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowProfileMenu(!showProfileMenu);
+            }}
+            className="flex items-center gap-3 min-w-0 flex-1 bg-transparent border-none cursor-pointer text-left hover:opacity-80 transition-opacity"
+          >
+            <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-semibold border border-white/10 text-white flex-shrink-0">
               U
-            </button>
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold text-white truncate max-w-[140px]">Uthakkan</div>
             </div>
@@ -692,44 +714,46 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
 
                 {/* Profile actions list */}
                 <div className="flex flex-col">
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/settings/profile');
+                      setShowProfileMenu(false);
+                      closeMobileSidebar();
+                    }}
+                    className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                  >
                     <span className="flex items-center gap-2">
                       <div className="i-ph:user text-sm" /> Profile
                     </span>
                   </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/settings/account');
+                      setShowProfileMenu(false);
+                      closeMobileSidebar();
+                    }}
+                    className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                  >
                     <span className="flex items-center gap-2">
                       <div className="i-ph:gear text-sm" /> Settings
                     </span>
                     <span className="text-[9px] text-zinc-600 font-mono">⌘ ,</span>
                   </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/settings/appearance');
+                      setShowProfileMenu(false);
+                      closeMobileSidebar();
+                    }}
+                    className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer"
+                  >
                     <span className="flex items-center gap-2">
                       <div className="i-ph:palette text-sm" /> Appearance
                     </span>
                     <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                  </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <div className="i-ph:question text-sm" /> Support
-                    </span>
-                    <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                  </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <div className="i-ph:book-open text-sm" /> Documentation
-                    </span>
-                    <div className="i-ph:caret-right text-[10px] text-zinc-600" />
-                  </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <div className="i-ph:users text-sm" /> Community
-                    </span>
-                  </button>
-                  <button className="flex items-center justify-between w-full px-4 py-2 text-xs text-zinc-300 hover:bg-white/5 hover:text-white transition-colors bg-transparent border-none text-left cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <div className="i-ph:house text-sm" /> Home
-                    </span>
                   </button>
                   
                   <div className="h-px bg-white/5 my-1" />
@@ -742,7 +766,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 </div>
               </div>
             )}
-          </div>
+          </button>
 
           <a
             href="#inbox"

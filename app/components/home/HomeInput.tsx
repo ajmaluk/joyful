@@ -214,7 +214,7 @@ export const HomeInput = memo(
     return (
       <>
         {isChat ? (
-          <div className="px-2 pb-2 pt-0 shrink-0 w-full flex">
+          <div className="px-3 pb-3 pt-0 shrink-0 w-full flex">
             {inputContent}
           </div>
         ) : (

@@ -14,6 +14,8 @@ import { renderLogger } from '~/utils/logger';
 import { EditorPanel } from './EditorPanel';
 import { Preview } from './Preview';
 
+import { chatStore } from '~/lib/stores/chat';
+
 interface WorkspaceProps {
   chatStarted?: boolean;
   isStreaming?: boolean;
@@ -113,11 +115,10 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
       >
         <div
           className={classNames(
-            'fixed top-[var(--header-height)] bottom-0 w-[var(--workbench-inner-width)] z-20 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
-            {
-              'left-[var(--workbench-left)]': showWorkbench,
-              'left-[100%]': !showWorkbench,
-            },
+            'fixed top-[var(--header-height)] bottom-0 z-20 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+            showWorkbench
+              ? 'left-0 w-full md:left-[var(--workbench-left)] md:w-[var(--workbench-inner-width)]'
+              : 'left-[100%] w-full md:w-[var(--workbench-inner-width)]',
           )}
         >
           <div className="absolute inset-0 flex flex-col bg-[#0d0d0f] border-l border-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] overflow-hidden">
@@ -153,7 +154,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       onClick={() => setDeviceMode('desktop')}
                     >
                       <div className="i-ph:monitor text-xs shrink-0" />
-                      <span>Desktop</span>
+                      <span className="hidden sm:inline">Desktop</span>
                     </button>
                     <button
                       className={classNames(
@@ -165,7 +166,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       onClick={() => setDeviceMode('tablet')}
                     >
                       <div className="i-ph:tablet text-xs shrink-0" />
-                      <span>Tablet</span>
+                      <span className="hidden sm:inline">Tablet</span>
                     </button>
                     <button
                       className={classNames(
@@ -177,7 +178,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                       onClick={() => setDeviceMode('mobile')}
                     >
                       <div className="i-ph:device-mobile text-xs shrink-0" />
-                      <span>Mobile</span>
+                      <span className="hidden sm:inline">Mobile</span>
                     </button>
                   </div>
                 )}
@@ -207,6 +208,46 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               >
                 <Preview deviceMode={deviceMode} />
               </View>
+            </div>
+            {/* Mobile Bottom Navigation Bar */}
+            <div className="md:hidden flex h-14 items-center justify-between border-t border-white/10 bg-[#131315] px-6 shrink-0 z-30">
+              <button
+                onClick={() => {
+                  workbenchStore.showWorkbench.set(false);
+                  chatStore.setKey('showChat', true);
+                }}
+                className="flex items-center space-x-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 cursor-pointer bg-transparent border-none py-2"
+              >
+                <div className="i-ph:caret-left-bold text-sm" />
+                <span>Chat</span>
+              </button>
+              
+              <div className="flex items-center space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
+                <button
+                  className={classNames(
+                    'flex items-center space-x-1.5 px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer',
+                    selectedView === 'preview'
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-transparent text-gray-400 hover:text-white border border-transparent'
+                  )}
+                  onClick={() => setSelectedView('preview')}
+                >
+                  <div className="i-ph:globe text-xs shrink-0" />
+                  <span>Preview</span>
+                </button>
+                <button
+                  className={classNames(
+                    'flex items-center space-x-1.5 px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer',
+                    selectedView === 'code'
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-transparent text-gray-400 hover:text-white border border-transparent'
+                  )}
+                  onClick={() => setSelectedView('code')}
+                >
+                  <div className="i-ph:code text-xs shrink-0" />
+                  <span>Code</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

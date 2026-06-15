@@ -70,9 +70,6 @@ export function Header() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
-          <p className="text-[9px] text-white/40 leading-none">
-            {chat.started ? 'Previewing last saved version' : 'AI-powered app builder'}
-          </p>
         </button>
 
         {/* Dropdown Menu */}
@@ -103,7 +100,7 @@ export function Header() {
 
       {/* Center Section: Mode Toggles - only show when chat started */}
       {chat.started && (
-        <div className="flex items-center space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
+        <div className="hidden md:flex items-center space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
           <button
             className={classNames(
               'flex items-center space-x-1.5 px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer',
@@ -136,18 +133,39 @@ export function Header() {
         {chat.started && (
           <ClientOnly>
             {() => (
-              <div className="mr-0 sm:mr-1">
+              <div className="hidden md:block mr-0 sm:mr-1">
                 <HeaderActionButtons />
               </div>
             )}
           </ClientOnly>
         )}
+        {chat.started && !showWorkbench && (
+          <button 
+            onClick={() => {
+              workbenchStore.showWorkbench.set(true);
+              workbenchStore.currentView.set('preview');
+              if (window.innerWidth < 768) {
+                chatStore.setKey('showChat', false);
+              }
+            }}
+            className="w-7 h-7 flex md:hidden items-center justify-center rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 hover:text-blue-300 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Run"
+          >
+            <div className="i-ph:play-fill text-xs ml-0.5" />
+          </button>
+        )}
         {chat.started && (
           <button 
             onClick={() => workbenchStore.downloadCodebase()}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold px-3 py-1 rounded-md transition-colors cursor-pointer border-none"
+            className={classNames(
+              "items-center justify-center gap-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 hover:text-blue-300 transition-all cursor-pointer rounded-full",
+              showWorkbench ? "flex" : "hidden md:flex",
+              "text-[9px] px-2 py-1 md:text-[11px] md:px-3 md:py-1.5 font-medium"
+            )}
+            title="Download"
           >
-            Download
+            <div className="i-ph:download-simple text-[10px] md:text-xs shrink-0" />
+            <span>Download</span>
           </button>
         )}
       </div>

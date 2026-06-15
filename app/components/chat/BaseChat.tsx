@@ -164,7 +164,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               {/* Resizable Divider Handle */}
               <div 
                 className={classNames(
-                  "w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0",
+                  "hidden md:block w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0",
                   isDragging ? "bg-white/30" : undefined
                 )}
                 onMouseDown={handleDragStart}

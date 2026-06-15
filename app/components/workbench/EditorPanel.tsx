@@ -156,18 +156,27 @@ export const EditorPanel = memo(
                 {activeFileSegments && activeFileSegments.length > 0 && (
                   <div className="flex items-center flex-1 text-sm">
                     <FileBreadcrumb pathSegments={activeFileSegments} files={files} onFileSelect={onFileSelect} />
-                    {activeFileUnsaved && (
-                      <div className="flex gap-1 ml-auto -mr-1.5">
-                        <PanelHeaderButton onClick={onFileSave}>
-                          <div className="i-ph:floppy-disk-duotone" />
-                          Save
-                        </PanelHeaderButton>
-                        <PanelHeaderButton onClick={onFileReset}>
-                          <div className="i-ph:clock-counter-clockwise-duotone" />
-                          Reset
-                        </PanelHeaderButton>
-                      </div>
-                    )}
+                    <div className="flex gap-1 ml-auto -mr-1.5 items-center">
+                      <PanelHeaderButton 
+                        onClick={() => workbenchStore.downloadCodebase()}
+                        className="bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 hover:text-blue-300 px-2.5 py-0.5 rounded-full text-[10px] transition-all"
+                      >
+                        <div className="i-ph:download-duotone text-xs shrink-0" />
+                        <span>Download</span>
+                      </PanelHeaderButton>
+                      {activeFileUnsaved && (
+                        <>
+                          <PanelHeaderButton onClick={onFileSave}>
+                            <div className="i-ph:floppy-disk-duotone" />
+                            Save
+                          </PanelHeaderButton>
+                          <PanelHeaderButton onClick={onFileReset}>
+                            <div className="i-ph:clock-counter-clockwise-duotone" />
+                            Reset
+                          </PanelHeaderButton>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </PanelHeader>

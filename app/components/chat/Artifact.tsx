@@ -107,25 +107,7 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
               </div>
               
               {/* Action Buttons */}
-              <div className="flex items-center space-x-2 pt-1.5 border-t border-white/5">
-                <button
-                  onClick={() => {
-                    workbenchStore.showWorkbench.set(true);
-                    workbenchStore.currentView.set('code');
-                  }}
-                  className="flex-grow py-1 text-[10px] font-medium border border-white/20 rounded-md hover:bg-white/10 text-white transition-colors bg-transparent cursor-pointer"
-                >
-                  Details
-                </button>
-                <button
-                  onClick={() => {
-                    workbenchStore.showWorkbench.set(true);
-                    workbenchStore.currentView.set('preview');
-                  }}
-                  className="flex-grow py-1 text-[10px] font-medium border border-white/20 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors bg-transparent cursor-pointer"
-                >
-                  Preview
-                </button>
+              <div className="flex items-center justify-end pt-1.5 border-t border-white/5">
                 {actions.length > 5 && (
                   <button
                     onClick={() => setShowAllActions(!showAllActions)}

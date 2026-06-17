@@ -24,7 +24,7 @@ function ProfileMenu({
     <div
       onClick={(e) => e.stopPropagation()}
       className={classNames(
-        'w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col',
+        'w-60 bg-[#0f0f11] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col',
         className,
       )}
     >
@@ -266,7 +266,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
           }
         }}
         className={classNames(
-          'hidden md:flex flex-col pt-6 pb-4 z-50 bg-[#0a0a0c] flex-shrink-0 transition-all duration-300 select-none border-r border-white/5',
+          'hidden md:flex flex-col pt-6 pb-4 z-50 bg-[#0f0f11] flex-shrink-0 transition-all duration-300 select-none border-r border-white/10',
           isDrawerOpen ? 'w-64 px-4' : 'w-12 items-center px-0 gap-4 cursor-pointer',
           className,
         )}
@@ -333,7 +333,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 {showProfileMenu && (
                   <div 
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-10 bottom-0 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
+                    className="absolute left-10 bottom-0 w-60 bg-[#0f0f11] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
                   >
                     {/* User card header */}
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
@@ -405,7 +405,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 title="Inbox"
               >
                 <div className="i-ph:envelope text-base" />
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#0a0a0c]" />
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#181816]" />
               </a>
             </div>
           </>
@@ -553,7 +553,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 {showProfileMenu && (
                   <div 
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 bottom-10 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
+                    className="absolute left-0 bottom-10 w-60 bg-[#0f0f11] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
                   >
                     {/* User card header */}
                     <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
@@ -626,7 +626,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
                 title="Inbox"
               >
                 <div className="i-ph:envelope text-base" />
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#0a0a0c]" />
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#181816]" />
               </a>
             </div>
           </>
@@ -637,7 +637,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
       {/* Mobile: slide-over sidebar */}
       <aside
         className={classNames(
-          'md:hidden fixed top-0 left-0 h-full w-[280px] bg-[#0a0a0c]/95 backdrop-blur-xl z-50 flex-shrink-0 flex flex-col border-r border-white/5 transition-transform duration-300 ease-in-out',
+          'md:hidden fixed top-0 left-0 h-full w-[280px] bg-[#0f0f11]/95 backdrop-blur-xl z-50 flex-shrink-0 flex flex-col border-r border-white/10 transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -758,7 +758,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
         </div>
 
         {/* Mobile Sidebar Footer - Profile Avatar and Mail Inbox */}
-        <div className="mt-auto p-4 border-t border-white/5 flex items-center justify-between text-gray-400 relative bg-[#0a0a0c]/95">
+        <div className="mt-auto p-4 border-t border-white/5 flex items-center justify-between text-gray-400 relative bg-[#0f0f11]/95">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -776,7 +776,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
             {showProfileMenu && (
               <div 
                 onClick={(e) => e.stopPropagation()}
-                className="absolute left-4 bottom-12 w-60 bg-[#0a0a0c] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
+                className="absolute left-4 bottom-12 w-60 bg-[#0f0f11] border border-white/5 rounded-2xl py-3 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[999] flex flex-col"
               >
                 {/* User card header */}
                 <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 mb-2">
@@ -852,7 +852,7 @@ export const IconSidebar = memo(({ className }: IconSidebarProps) => {
             title="Inbox"
           >
             <div className="i-ph:envelope text-base" />
-            <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#0a0a0c]" />
+            <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full border border-[#181816]" />
           </a>
         </div>
       </aside>

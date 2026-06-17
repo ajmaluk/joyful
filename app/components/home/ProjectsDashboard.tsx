@@ -203,10 +203,10 @@ export const ProjectsDashboard = memo(({ onSelectTemplate, onRunTemplate }: Proj
 
   return (
     <section id="projects-dashboard" className="hidden md:block w-full max-w-[98%] mx-auto mb-0 mt-24 md:mt-32">
-      <div className="rounded-t-[2.5rem] rounded-b-none p-6 md:p-8 pb-8 shadow-2xl bg-[#0a0a0c] border-x border-t border-white/5">
+      <div className="rounded-t-[2.5rem] rounded-b-none p-6 md:p-8 pb-8 shadow-2xl bg-[#0f0f11] border-x border-t border-white/10">
         {/* Header Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center space-x-1 bg-black/35 p-1 rounded-2xl border border-white/5 w-full sm:w-auto animate-fade-in">
+          <div className="flex items-center space-x-1 bg-black/30 p-1 rounded-2xl border border-white/5 w-full sm:w-auto animate-fade-in">
             <button
               onClick={() => setActiveTab('my-projects')}
               className={classNames(

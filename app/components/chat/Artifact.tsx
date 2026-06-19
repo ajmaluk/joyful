@@ -60,25 +60,25 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const isRunning = actions.some((a) => a.status === 'running');
 
   return (
-    <div className="artifact w-full max-w-full mr-auto overflow-hidden rounded-2xl border border-white/10 bg-[#202023] shadow-md transition-all duration-200">
+    <div className="artifact w-full max-w-full mr-auto overflow-hidden rounded-2xl border border-[var(--theme-border-default)] bg-[var(--theme-bg-user-msg)] shadow-md transition-all duration-200">
       {/* Accordion Header */}
       <div
-        className="flex items-center justify-between py-2 px-3 cursor-pointer hover:bg-white/5 transition-colors border-b border-white/5"
+        className="flex items-center justify-between py-2 px-3 cursor-pointer hover:bg-[var(--theme-hover-bg)] transition-colors border-b border-[var(--theme-border-subtle)]"
         onClick={toggleActions}
       >
         <div className="flex items-center min-w-0 flex-1 mr-2">
           <div className="min-w-0 flex-1">
             <h3
               style={{ fontSize: '12px', margin: 0 }}
-              className="font-semibold text-white truncate whitespace-nowrap overflow-hidden leading-tight"
+              className="font-semibold text-[var(--theme-text-primary)] truncate whitespace-nowrap overflow-hidden leading-tight"
             >
               {artifact.title}
             </h3>
             <div className="flex items-center space-x-1.5 mt-1.5">
-              <span className="text-[8px] text-white/50 leading-none">
+              <span className="text-[8px] text-[var(--theme-text-muted)] leading-none">
                 {isRunning ? 'Building...' : 'Click to view actions'}
               </span>
-              <span className="text-[8px] px-1 py-0.5 rounded-full bg-white/10 text-white/70 leading-none">
+              <span className="text-[8px] px-1 py-0.5 rounded-full bg-[var(--theme-active-bg)] text-[var(--theme-text-secondary)] leading-none">
                 {completedActions}/{totalActions}
               </span>
               {failedActions > 0 && (
@@ -90,7 +90,7 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
           </div>
         </div>
         <div className={classNames('transition-transform duration-200 shrink-0', showActions ? 'rotate-180' : '')}>
-          <svg className="w-2.5 h-2.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-2.5 h-2.5 text-[var(--theme-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
@@ -117,11 +117,11 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end pt-1.5 border-t border-white/5">
+              <div className="flex items-center justify-end pt-1.5 border-t border-[var(--theme-border-subtle)]">
                 {actions.length > 5 && (
                   <button
                     onClick={() => setShowAllActions(!showAllActions)}
-                    className="py-1 px-2.5 text-[10px] font-medium border border-white/20 rounded-md hover:bg-white/10 text-white transition-colors bg-transparent cursor-pointer shrink-0"
+                    className="py-1 px-2.5 text-[10px] font-medium border border-[var(--theme-border-default)] rounded-md hover:bg-[var(--theme-active-bg)] text-[var(--theme-text-primary)] transition-colors bg-transparent cursor-pointer shrink-0"
                   >
                     {showAllActions ? 'Show Less' : 'Show All'}
                   </button>
@@ -144,7 +144,7 @@ function ShellCodeBlock({ className, code }: ShellCodeBlockProps) {
   return (
     <div
       className={classNames(
-        'text-xs font-mono bg-black/30 rounded-lg p-2 border border-white/5 overflow-x-auto',
+        'text-xs font-mono bg-black/30 rounded-lg p-2 border border-[var(--theme-border-subtle)] overflow-x-auto',
         className,
       )}
       dangerouslySetInnerHTML={{
@@ -171,13 +171,13 @@ function getStatusIcon(status: ActionState['status']) {
     case 'running':
       return <div className="i-svg-spinners:90-ring-with-bg text-blue-400"></div>;
     case 'pending':
-      return <div className="i-ph:circle-duotone text-white/30"></div>;
+      return <div className="i-ph:circle-duotone text-[var(--theme-text-muted)]/30"></div>;
     case 'complete':
       return <div className="i-ph:check text-green-500 font-bold"></div>;
     case 'failed':
       return <div className="i-ph:x text-red-500 font-bold"></div>;
     case 'aborted':
-      return <div className="i-ph:minus-circle text-white/30"></div>;
+      return <div className="i-ph:minus-circle text-[var(--theme-text-muted)]/30"></div>;
     default:
       return null;
   }
@@ -205,19 +205,19 @@ const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: bool
       <div className="flex items-center space-x-3 text-[13px]">
         <div className="text-base shrink-0 flex items-center">{getStatusIcon(action.status)}</div>
         {action.type === 'file' ? (
-          <div className="text-white/70 min-w-0 flex-1 break-all py-0.5">
+          <div className="text-[var(--theme-text-secondary)] min-w-0 flex-1 break-all py-0.5">
             {action.filePath.includes('/') ? 'Edit' : 'Create'}{' '}
-            <code className="bg-white/5 px-1.5 py-0.5 rounded text-white/90 font-mono text-[11px] break-all inline-block max-w-full">
+            <code className="bg-[var(--theme-hover-bg)] px-1.5 py-0.5 rounded text-[var(--theme-text-primary)] font-mono text-[11px] break-all inline-block max-w-full">
               {action.filePath}
             </code>
           </div>
         ) : action.type === 'shell' ? (
           <div
-            className="flex items-center w-full text-white/70 min-w-0 cursor-pointer select-none gap-2 hover:text-white py-0.5"
+            className="flex items-center w-full text-[var(--theme-text-secondary)] min-w-0 cursor-pointer select-none gap-2 hover:text-[var(--theme-text-primary)] py-0.5"
             onClick={() => setIsExpanded(!isExpanded)}
           >
             <span className="font-medium shrink-0">Run:</span>
-            <code className="bg-white/5 px-1.5 py-0.5 rounded text-white/90 font-mono text-[11px] break-all truncate flex-1 max-w-[calc(100%-40px)]">
+            <code className="bg-[var(--theme-hover-bg)] px-1.5 py-0.5 rounded text-[var(--theme-text-primary)] font-mono text-[11px] break-all truncate flex-1 max-w-[calc(100%-40px)]">
               {action.content}
             </code>
             <div
@@ -226,7 +226,7 @@ const ActionItem = memo(({ action, isLast }: { action: ActionState; isLast: bool
                 isExpanded ? 'rotate-180' : '',
               )}
             >
-              <svg className="w-2.5 h-2.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-2.5 h-2.5 text-[var(--theme-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>

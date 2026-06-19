@@ -67,7 +67,7 @@ export const ImageUpload = memo(({ className }: ImageUploadProps) => {
         onClick={() => fileInputRef.current?.click()}
         disabled={hasReachedLimit()}
         className={classNames(
-          'bg-transparent text-gray-400 transition-colors flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 hover:text-white',
+          'bg-transparent text-[var(--theme-text-muted)] transition-colors flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[var(--theme-active-bg)] hover:text-[var(--theme-text-primary)]',
           hasReachedLimit()
             ? 'opacity-30 cursor-not-allowed'
             : '',
@@ -78,7 +78,7 @@ export const ImageUpload = memo(({ className }: ImageUploadProps) => {
       </button>
 
       {imagesCount > 0 && (
-        <span className="text-xs text-gray-500 font-medium">
+        <span className="text-xs text-[var(--theme-text-muted)] font-medium">
           {imagesCount}/{MAX_IMAGES} images
         </span>
       )}

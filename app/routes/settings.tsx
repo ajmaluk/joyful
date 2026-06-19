@@ -41,14 +41,14 @@ export default function SettingsLayout() {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-[#0a0a0a] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[200] bg-[var(--theme-bg-surface)] flex flex-col overflow-hidden">
       {/* Top bar */}
-      <header className="h-11 flex items-center justify-between px-4 border-b border-white/10 shrink-0 bg-[#0a0a0a]">
+      <header className="h-11 flex items-center justify-between px-4 border-b border-[var(--theme-border-default)] shrink-0 bg-[var(--theme-bg-surface)]">
         <div className="flex items-center space-x-3">
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 -ml-2 rounded-full hover:bg-white/10 text-white bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
+            className="md:hidden p-2 -ml-2 rounded-full hover:bg-[var(--theme-hover-bg)] text-[var(--theme-text-primary)] bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
             aria-label="Toggle settings menu"
           >
             <div className="i-ph:list text-lg" />
@@ -56,7 +56,7 @@ export default function SettingsLayout() {
 
           <button
             onClick={handleGoBack}
-            className="flex items-center space-x-2 text-white/60 hover:text-white transition-colors bg-transparent border-none cursor-pointer p-0"
+            className="flex items-center space-x-2 text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors bg-transparent border-none cursor-pointer p-0"
           >
             <div className="i-ph:arrow-left text-sm" />
             <span className="text-sm font-medium">Go back</span>
@@ -85,29 +85,29 @@ export default function SettingsLayout() {
         {/* Sidebar */}
         <aside
           className={classNames(
-            'w-[280px] md:w-64 shrink-0 border-r border-white/5 md:border-white/10 bg-[#0a0a0c]/95 md:bg-[#0a0a0a] backdrop-blur-xl md:backdrop-blur-none overflow-y-auto z-50 transition-transform duration-300 ease-in-out flex flex-col',
+            'w-[280px] md:w-64 shrink-0 border-r border-[var(--theme-border-subtle)] md:border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-1)]/95 md:bg-[var(--theme-bg-surface)] backdrop-blur-xl md:backdrop-blur-none overflow-y-auto z-50 transition-transform duration-300 ease-in-out flex flex-col',
             'fixed md:relative inset-y-0 md:inset-auto left-0 h-full md:h-auto',
             mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
           )}
         >
           {/* Mobile Header */}
-          <div className="px-3 py-2.5 flex items-center justify-between border-b border-white/5 md:hidden">
+          <div className="px-3 py-2.5 flex items-center justify-between border-b border-[var(--theme-border-subtle)] md:hidden">
             <div className="flex items-center gap-2">
               <img src="/logo.png" alt="Joyful" className="w-4 h-4 object-contain" />
-              <span className="font-semibold text-sm text-white">Settings</span>
+              <span className="font-semibold text-sm text-[var(--theme-text-primary)]">Settings</span>
             </div>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-1.5 hover:bg-white/5 rounded-lg transition-colors bg-transparent border-none flex items-center justify-center cursor-pointer"
-            >
-              <div className="i-ph:x text-zinc-400 text-base" />
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1.5 hover:bg-[var(--theme-hover-bg)] rounded-lg transition-colors bg-transparent border-none flex items-center justify-center cursor-pointer"
+              >
+                <div className="i-ph:x text-[var(--theme-text-secondary)] text-base" />
             </button>
           </div>
 
           <nav className="p-3 md:p-4 space-y-5 md:space-y-6 flex-1">
             {NAV_ITEMS.map((section) => (
               <div key={section.section}>
-                <div className="text-[11px] font-semibold text-white/40 uppercase tracking-wider px-3 mb-2">
+                <div className="text-[11px] font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider px-3 mb-2">
                   {section.section}
                 </div>
                 <div className="space-y-0.5">
@@ -120,8 +120,8 @@ export default function SettingsLayout() {
                         classNames(
                           'flex items-center !justify-start !text-left w-full space-x-3 px-3 py-2.5 md:py-2 rounded-lg text-[13px] transition-colors no-underline',
                           isActive
-                            ? 'bg-white/10 text-white font-medium'
-                            : 'text-white/60 hover:text-white hover:bg-white/5',
+                            ? 'bg-[var(--theme-active-bg)] text-[var(--theme-text-primary)] font-medium'
+                            : 'text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] hover:bg-[var(--theme-hover-bg)]',
                         )
                       }
                     >

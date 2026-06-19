@@ -1,0 +1,236 @@
+/* =============================================
+   Theme Overrides - Light Theme
+   ============================================= */
+
+:root {
+  /* Background tokens */
+  --theme-bg-body: #191a1d;
+  --theme-bg-surface: #0a0a0a;
+  --theme-bg-depth-1: #0f0f11;
+  --theme-bg-depth-2: #111114;
+  --theme-bg-depth-3: #131315;
+  --theme-bg-depth-4: #141418;
+  --theme-bg-depth-5: #16161a;
+  --theme-bg-depth-6: #17171b;
+  --theme-bg-input: #181816;
+  --theme-bg-user-msg: #202023;
+  --theme-bg-dropdown: #1c1c1e;
+  --theme-bg-context-menu: #1c1c1a;
+  --theme-bg-overlay: rgba(0, 0, 0, 0.85);
+  --theme-bg-code: #0d0d0f;
+
+  /* Text tokens */
+  --theme-text-primary: #ffffff;
+  --theme-text-secondary: #a1a1aa;
+  --theme-text-tertiary: #71717a;
+  --theme-text-muted: #52525b;
+  --theme-text-on-surface: #ffffff;
+  --theme-text-placeholder: rgba(255, 255, 255, 0.3);
+  --theme-text-placeholder-strong: rgba(255, 255, 255, 0.5);
+
+  /* Border tokens */
+  --theme-border-default: rgba(255, 255, 255, 0.1);
+  --theme-border-subtle: rgba(255, 255, 255, 0.05);
+  --theme-border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Surface overlay tokens */
+  --theme-hover-bg: rgba(255, 255, 255, 0.05);
+  --theme-hover-bg-strong: rgba(255, 255, 255, 0.1);
+  --theme-active-bg: rgba(255, 255, 255, 0.1);
+  --theme-active-bg-strong: rgba(255, 255, 255, 0.15);
+  --theme-glass-bg: rgba(255, 255, 255, 0.06);
+  --theme-glass-border: rgba(255, 255, 255, 0.12);
+
+  /* Scrollbar */
+  --theme-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --theme-scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+
+  /* Selection */
+  --theme-selection-bg: rgba(139, 92, 246, 0.3);
+  --theme-selection-text: white;
+
+  /* Accent */
+  --theme-accent-bg: rgba(255, 255, 255, 0.1);
+  --theme-accent-bg-hover: rgba(255, 255, 255, 0.15);
+
+  /* Gradient (dark) */
+  --theme-gradient-top: #191a1d;
+}
+
+/* =============================================
+   Light Theme Overrides
+   ============================================= */
+html[data-theme='light'] {
+  --theme-bg-body: #f5f5f5;
+  --theme-bg-surface: #ffffff;
+  --theme-bg-depth-1: #f8f8f8;
+  --theme-bg-depth-2: #f0f0f0;
+  --theme-bg-depth-3: #e8e8e8;
+  --theme-bg-depth-4: #e0e0e0;
+  --theme-bg-depth-5: #d8d8d8;
+  --theme-bg-depth-6: #d0d0d0;
+  --theme-bg-input: #ffffff;
+  --theme-bg-user-msg: #f0f0f0;
+  --theme-bg-dropdown: #ffffff;
+  --theme-bg-context-menu: #ffffff;
+  --theme-bg-overlay: rgba(0, 0, 0, 0.4);
+  --theme-bg-code: #f5f5f5;
+
+  --theme-text-primary: #18181b;
+  --theme-text-secondary: #52525b;
+  --theme-text-tertiary: #71717a;
+  --theme-text-muted: #a1a1aa;
+  --theme-text-on-surface: #18181b;
+  --theme-text-placeholder: rgba(0, 0, 0, 0.35);
+  --theme-text-placeholder-strong: rgba(0, 0, 0, 0.5);
+
+  --theme-border-default: rgba(0, 0, 0, 0.1);
+  --theme-border-subtle: rgba(0, 0, 0, 0.05);
+  --theme-border-strong: rgba(0, 0, 0, 0.15);
+
+  --theme-hover-bg: rgba(0, 0, 0, 0.04);
+  --theme-hover-bg-strong: rgba(0, 0, 0, 0.08);
+  --theme-active-bg: rgba(0, 0, 0, 0.06);
+  --theme-active-bg-strong: rgba(0, 0, 0, 0.1);
+  --theme-glass-bg: rgba(255, 255, 255, 0.7);
+  --theme-glass-border: rgba(0, 0, 0, 0.08);
+
+  --theme-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --theme-scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+  --theme-selection-bg: rgba(59, 130, 246, 0.2);
+  --theme-selection-text: #18181b;
+
+  --theme-accent-bg: rgba(0, 0, 0, 0.05);
+  --theme-accent-bg-hover: rgba(0, 0, 0, 0.08);
+
+  --theme-gradient-top: #e8e8e8;
+}
+
+/* =============================================
+   Body Background Overrides
+   ============================================= */
+html[data-theme='light'] body {
+  background: var(--theme-bg-body) !important;
+  color: var(--theme-text-primary) !important;
+}
+
+/* =============================================
+   Scrollbar Overrides
+   ============================================= */
+html[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: var(--theme-scrollbar-thumb);
+}
+html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-scrollbar-thumb-hover);
+}
+
+/* =============================================
+   Selection Override
+   ============================================= */
+html[data-theme='light'] ::selection {
+  background: var(--theme-selection-bg);
+  color: var(--theme-selection-text);
+}
+
+/* =============================================
+   Home Gradient - Light Mode
+   ============================================= */
+html[data-theme='light'] .joyful-gradient,
+html[data-theme='light'] .lovable-gradient {
+  background:
+    radial-gradient(
+      ellipse 110% 50% at 50% 45%,
+      rgba(61, 111, 255, 0.95) 0%,
+      rgba(70, 102, 225, 0.7) 38%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 85% 42% at 50% 68%,
+      rgba(255, 105, 220, 0.95) 0%,
+      rgba(255, 66, 172, 0.86) 48%,
+      transparent 78%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 18% 105%,
+      rgba(255, 75, 42, 1) 0%,
+      rgba(255, 29, 99, 0.9) 45%,
+      transparent 76%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 82% 105%,
+      rgba(255, 74, 40, 1) 0%,
+      rgba(255, 29, 105, 0.9) 45%,
+      transparent 76%
+    ),
+    linear-gradient(
+      180deg,
+      #d4d4d4 0%,
+      #d4d4d4 24%,
+      #25365e 37%,
+      #5576e8 49%,
+      #b36ee4 58%,
+      #fa68d0 68%,
+      #ff2e91 82%,
+      #ff552d 100%
+    );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: 100% 200%;
+  background-position: 0 100%;
+  animation: spreadFromBottomDirect 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
+}
+
+/* =============================================
+   Glass & Panel Overrides
+   ============================================= */
+html[data-theme='light'] .joyful-glass {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .chat-bubble {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* =============================================
+   Joyful Chat Gradient - Light Mode
+   ============================================= */
+html[data-theme='light'] .joyful-chat-gradient {
+  background:
+    radial-gradient(
+      ellipse 60% 40% at 10% 40%,
+      rgba(59, 130, 246, 0.08) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 90% 60%,
+      rgba(236, 72, 153, 0.06) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 35% at 50% 100%,
+      rgba(249, 115, 22, 0.05) 0%,
+      transparent 60%
+    ),
+    #f5f5f5;
+}
+
+/* =============================================
+   Premium Scrollbar - Light Mode
+   ============================================= */
+html[data-theme='light'] .premium-scrollbar {
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+html[data-theme='light'] .premium-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+html[data-theme='light'] .premium-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}

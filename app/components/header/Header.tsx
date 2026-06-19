@@ -38,7 +38,7 @@ export const Header = memo(function Header() {
       className={classNames(
         'h-11 flex items-center justify-between px-4 z-50 shrink-0 relative',
         chat.started
-          ? 'bg-[#0a0a0a] border-b border-white/10'
+          ? 'bg-[var(--theme-bg-surface)] border-b border-[var(--theme-border-default)]'
           : 'bg-transparent border-b border-transparent absolute top-0 left-0 right-0 w-full',
       )}
     >
@@ -63,7 +63,7 @@ export const Header = memo(function Header() {
             onClick={() => setDropdownOpen(!dropdownOpen)}
           >
             <div className="flex items-center space-x-1">
-              <span className="text-xs font-semibold text-white leading-tight">Joyful</span>
+              <span className="text-xs font-semibold text-[var(--theme-text-primary)] leading-tight">Joyful</span>
               <svg
                 className={classNames(
                   'w-3.5 h-3.5 text-white/50 transition-transform duration-200',
@@ -80,15 +80,15 @@ export const Header = memo(function Header() {
 
           {/* Dropdown Menu */}
           {dropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-[#1c1c1e]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 z-[100]">
+            <div className="absolute top-full left-0 mt-2 w-64 bg-[var(--theme-bg-dropdown)] backdrop-blur-2xl border border-[var(--theme-border-default)] rounded-2xl shadow-2xl p-2 z-[100]">
               {/* User Info Header */}
-              <div className="flex items-center space-x-3 p-3 border-b border-white/5 mb-1">
+              <div className="flex items-center space-x-3 p-3 border-b border-[var(--theme-border-subtle)] mb-1">
                 <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                   U
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-white truncate">User</div>
-                  <div className="text-[11px] text-white/40 truncate">user@joyful.uthakkan.in</div>
+                  <div className="text-sm font-semibold text-[var(--theme-text-primary)] truncate">User</div>
+                  <div className="text-[11px] text-[var(--theme-text-muted)] truncate">user@joyful.uthakkan.in</div>
                 </div>
               </div>
 
@@ -120,7 +120,7 @@ export const Header = memo(function Header() {
                     setDropdownOpen(false);
                   }}
                 />
-                <div className="border-t border-white/5 my-1" />
+                <div className="border-t border-[var(--theme-border-subtle)] my-1" />
                 <DropdownItem
                   icon="i-ph:house"
                   label="Home"
@@ -137,13 +137,13 @@ export const Header = memo(function Header() {
 
       {/* Center Section: Mode Toggles - only show when chat started */}
       {chat.started && (
-        <div className="hidden md:flex items-center space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
+        <div className="hidden md:flex items-center space-x-1 bg-[var(--theme-accent-bg)] p-0.5 rounded-full border border-[var(--theme-border-default)]">
           <button
             className={classNames(
               'flex items-center space-x-1.5 px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer',
               selectedView === 'preview' && showWorkbench
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+                : 'bg-transparent text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] border border-transparent',
             )}
             onClick={() => setView('preview')}
           >
@@ -155,7 +155,7 @@ export const Header = memo(function Header() {
               'flex items-center space-x-1.5 px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer',
               selectedView === 'code' && showWorkbench
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+                : 'bg-transparent text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] border border-transparent',
             )}
             onClick={() => setView('code')}
           >
@@ -219,16 +219,16 @@ function DropdownItem({
 
   return (
     <Component
-      className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5 text-white/80 hover:text-white transition-colors border-none bg-transparent cursor-pointer"
+      className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-[var(--theme-hover-bg)] text-[var(--theme-text-primary)]/80 hover:text-[var(--theme-text-primary)] transition-colors border-none bg-transparent cursor-pointer"
       {...(onClick ? { onClick } : {})}
     >
       <div className="flex items-center space-x-3">
         <div className={classNames(icon, 'text-[18px]')} />
         <span className="text-[13px]">{label}</span>
       </div>
-      {shortcut && <span className="text-[10px] text-white/30 font-mono">{shortcut}</span>}
+      {shortcut && <span className="text-[10px] text-[var(--theme-text-muted)] font-mono">{shortcut}</span>}
       {hasChevron && (
-        <svg className="w-4 h-4 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-[var(--theme-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       )}

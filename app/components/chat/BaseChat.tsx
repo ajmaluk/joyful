@@ -98,7 +98,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
         className={classNames(
           styles.BaseChat,
           'relative flex flex-col h-full w-full overflow-hidden',
-          chatStarted ? 'bg-[#0a0a0a]' : 'bg-transparent',
+          chatStarted ? 'bg-[var(--theme-bg-surface)]' : 'bg-transparent',
         )}
         style={
           chatStarted
@@ -117,14 +117,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           <div className="md:hidden h-11 flex items-center justify-between px-4 shrink-0 relative z-50">
             <button
               onClick={toggleMobileSidebar}
-              className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
+              className="p-2 -ml-2 rounded-full hover:bg-[var(--theme-hover-bg-strong)] text-[var(--theme-text-primary)] bg-transparent border-none transition-colors cursor-pointer flex items-center justify-center"
               aria-label="Toggle sidebar"
             >
               <div className="i-ph:list text-lg" />
             </button>
             <div className="absolute left-1/2 -translate-x-1/2 flex items-center space-x-2">
               <img src="/logo.png" alt="Joyful" className="w-6 h-6 object-contain" />
-              <span className="text-sm font-semibold text-white">Joyful</span>
+              <span className="text-sm font-semibold text-[var(--theme-text-primary)]">Joyful</span>
             </div>
             <div className="w-9" />
           </div>
@@ -193,7 +193,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
               {/* Resizable Divider Handle */}
               <div
                 className={classNames(
-                  'hidden md:block w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-white/10 hover:bg-white/20 transition-colors absolute right-0 top-0',
+                  'hidden md:block w-1.5 h-full cursor-col-resize z-40 bg-black/20 border-x border-[var(--theme-border-default)] hover:bg-[var(--theme-active-bg)] transition-colors absolute right-0 top-0',
                   isDragging ? 'bg-white/30' : undefined,
                 )}
                 onMouseDown={handleDragStart}

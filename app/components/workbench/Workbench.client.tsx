@@ -74,7 +74,7 @@ function DeviceModeButton({
         'flex items-center justify-center w-6 h-6 md:w-auto md:px-2.5 md:py-0.5 text-[10px] font-medium rounded-full transition-all cursor-pointer',
         isActive
           ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-          : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+          : 'bg-transparent text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] border border-transparent',
       )}
       onClick={onClick}
     >
@@ -178,10 +178,10 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               : 'left-[100%] w-full md:w-[var(--workbench-inner-width)]',
           )}
         >
-          <div className="absolute inset-0 flex flex-col bg-[#0d0d0f] border-l border-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] overflow-hidden">
+          <div className="absolute inset-0 flex flex-col bg-[var(--theme-bg-code)] border-l border-[var(--theme-border-default)] shadow-[0_0_0_1px_rgba(255,255,255,0.02)] overflow-hidden">
             {/* Simplified Header - Main controls */}
-            <div className="flex h-9 md:h-10 items-center gap-3 border-b border-white/5 px-3 md:px-4 bg-[#131315]">
-              <div className="flex items-center gap-2 text-[11px] text-white/50">
+            <div className="flex h-9 md:h-10 items-center gap-3 border-b border-[var(--theme-border-subtle)] px-3 md:px-4 bg-[var(--theme-bg-depth-3)]">
+              <div className="flex items-center gap-2 text-[11px] text-[var(--theme-text-muted)]">
                 <span className="font-medium hidden md:inline">
                   {selectedView === 'code' ? 'Code Editor' : 'Preview'}
                 </span>
@@ -189,7 +189,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               <div className="ml-auto flex items-center gap-1.5 md:gap-2">
                 {selectedView === 'code' ? (
                   <button
-                    className="inline-flex items-center gap-1 rounded md:gap-1.5 rounded border border-white/10 bg-white/5 px-1.5 md:px-2 py-1 text-[10px] md:text-[11px] text-white/60 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 rounded md:gap-1.5 rounded border border-[var(--theme-border-default)] bg-[var(--theme-hover-bg)] px-1.5 md:px-2 py-1 text-[10px] md:text-[11px] text-[var(--theme-text-muted)] hover:bg-[var(--theme-hover-bg-strong)] hover:text-[var(--theme-text-primary)] transition-colors cursor-pointer"
                     onClick={() => {
                       workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get());
                     }}
@@ -198,7 +198,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     <span className="hidden sm:inline">Terminal</span>
                   </button>
                 ) : (
-                  <div className="flex items-center space-x-0.5 md:space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
+                  <div className="flex items-center space-x-0.5 md:space-x-1 bg-[var(--theme-hover-bg)] p-0.5 rounded-full border border-[var(--theme-border-default)]">
                     {DEVICE_MODE_OPTIONS.map((opt) => (
                       <DeviceModeButton
                         key={opt.mode}
@@ -237,7 +237,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               </View>
             </div>
             {/* Mobile Bottom Navigation Bar */}
-            <div className="md:hidden flex h-12 items-center justify-between border-t border-white/10 bg-[#131315] px-3 shrink-0 z-30">
+            <div className="md:hidden flex h-12 items-center justify-between border-t border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-3)] px-3 shrink-0 z-30">
               <button
                 onClick={() => {
                   workbenchStore.showWorkbench.set(false);
@@ -249,13 +249,13 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 <span>Chat</span>
               </button>
 
-              <div className="flex items-center space-x-1 bg-white/5 p-0.5 rounded-full border border-white/10">
+              <div className="flex items-center space-x-1 bg-[var(--theme-hover-bg)] p-0.5 rounded-full border border-[var(--theme-border-default)]">
                 <button
                   className={classNames(
                     'flex items-center justify-center w-7 h-7 text-[11px] font-medium rounded-full transition-all cursor-pointer',
                     selectedView === 'preview'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+                      : 'bg-transparent text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] border border-transparent',
                   )}
                   onClick={() => setSelectedView('preview')}
                 >
@@ -266,7 +266,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     'flex items-center justify-center w-7 h-7 text-[11px] font-medium rounded-full transition-all cursor-pointer',
                     selectedView === 'code'
                       ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                      : 'bg-transparent text-gray-400 hover:text-white border border-transparent',
+                      : 'bg-transparent text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] border border-transparent',
                   )}
                   onClick={() => setSelectedView('code')}
                 >
@@ -277,7 +277,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => workbenchStore.toggleTerminal(!workbenchStore.showTerminal.get())}
-                  className="flex items-center justify-center w-7 h-7 text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer rounded-lg hover:bg-white/5"
+                  className="flex items-center justify-center w-7 h-7 text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] transition-colors bg-transparent border-none cursor-pointer rounded-lg hover:bg-[var(--theme-hover-bg)]"
                   title="Toggle terminal"
                 >
                   {TERMINAL_ICON}
@@ -288,7 +288,7 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                     const idx = modes.indexOf(deviceMode);
                     setDeviceMode(modes[(idx + 1) % modes.length]);
                   }}
-                  className="flex items-center justify-center w-7 h-7 text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer rounded-lg hover:bg-white/5"
+                  className="flex items-center justify-center w-7 h-7 text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)] transition-colors bg-transparent border-none cursor-pointer rounded-lg hover:bg-[var(--theme-hover-bg)]"
                   title={`Device: ${deviceMode}`}
                 >
                   <div

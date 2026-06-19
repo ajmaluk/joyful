@@ -144,18 +144,18 @@ export const EditorPanel = memo(
               onCollapse={() => setIsFileTreeOpen(false)}
               onExpand={() => setIsFileTreeOpen(true)}
             >
-              <div className="flex h-full flex-col border-r border-white/10 bg-[#111114]">
-                <PanelHeader className="border-white/10 bg-[#17171b] px-3 py-2 text-white/55">
+              <div className="flex h-full flex-col border-r border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-2)]">
+                <PanelHeader className="border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-6)] px-3 py-2 text-[var(--theme-text-muted)]">
                   <div className="i-ph:magnifying-glass shrink-0" />
                   <input
-                    className="w-full rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white outline-none placeholder:text-white/25 focus:border-white/20"
+                    className="w-full rounded-md border border-[var(--theme-border-default)] bg-[var(--theme-hover-bg)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] outline-none placeholder:text-[var(--theme-text-placeholder)] focus:border-[var(--theme-border-strong)]"
                     value={fileSearch}
                     onChange={(event) => setFileSearch(event.target.value)}
                     placeholder="Search code"
                   />
                 </PanelHeader>
                 <FileTree
-                  className="h-full overflow-y-auto px-2 py-3 text-white/70"
+                  className="h-full overflow-y-auto px-2 py-3 text-[var(--theme-text-secondary)]"
                   files={files}
                   hideRoot
                   unsavedFiles={unsavedFiles}
@@ -167,8 +167,8 @@ export const EditorPanel = memo(
               </div>
             </Panel>
             <PanelResizeHandle />
-            <Panel className="flex flex-col bg-[#0d0d10]" defaultSize={80} minSize={20}>
-              <PanelHeader className="overflow-x-auto border-white/10 bg-[#16161a] px-4 py-0 text-white/60">
+            <Panel className="flex flex-col bg-[var(--theme-bg-code)]" defaultSize={80} minSize={20}>
+              <PanelHeader className="overflow-x-auto border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-5)] px-4 py-0 text-[var(--theme-text-muted)]">
                 <div className="flex items-center flex-1 text-sm h-full">
                   <IconButton
                     icon={isFileTreeOpen ? 'i-ph:folder-open-duotone' : 'i-ph:folder-duotone'}
@@ -184,7 +184,7 @@ export const EditorPanel = memo(
                       }
                     }}
                     title={isFileTreeOpen ? 'Collapse File Tree' : 'Expand File Tree'}
-                    className="mr-2 text-zinc-400 hover:text-white"
+                    className="mr-2 text-[var(--theme-text-secondary)] hover:text-[var(--theme-text-primary)]"
                     size="lg"
                   />
                   {activeFileSegments && activeFileSegments.length > 0 && (
@@ -242,7 +242,7 @@ export const EditorPanel = memo(
         >
           <div className="h-full">
             <div className="bg-bolt-elements-terminals-background h-full flex flex-col">
-              <div className="flex min-h-[40px] items-center gap-1.5 border-y border-white/10 bg-[#141418] p-2">
+              <div className="flex min-h-[40px] items-center gap-1.5 border-y border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-4)] p-2">
                 {Array.from({ length: terminalCount }, (_, index) => {
                   const isActive = activeTerminal === index;
 
@@ -252,8 +252,8 @@ export const EditorPanel = memo(
                       className={classNames(
                         'flex items-center text-sm cursor-pointer gap-1.5 px-3 py-2 h-full whitespace-nowrap rounded-full',
                         {
-                          'bg-white/10 text-white': isActive,
-                          'bg-transparent text-white/45 hover:bg-white/5 hover:text-white/75': !isActive,
+                          'bg-[var(--theme-active-bg)] text-[var(--theme-text-primary)]': isActive,
+                          'bg-transparent text-[var(--theme-text-muted)] hover:bg-[var(--theme-hover-bg)] hover:text-[var(--theme-text-secondary)]': !isActive,
                         },
                       )}
                       onClick={() => setActiveTerminal(index)}

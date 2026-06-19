@@ -82,17 +82,17 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
         <div className="z-iframe-overlay w-full h-full absolute" onClick={() => setIsPortDropdownOpen(false)} />
       )}
       {activePreview && (
-        <div className="flex items-center gap-2 border-b border-white/10 bg-[#141418] p-3">
+        <div className="flex items-center gap-2 border-b border-[var(--theme-border-default)] bg-[var(--theme-bg-depth-4)] p-3">
           <IconButton
             icon="i-ph:arrow-clockwise"
-            className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/60 hover:bg-white/10 hover:text-white"
+            className="rounded-lg border border-[var(--theme-border-default)] bg-[var(--theme-hover-bg)] p-2 text-[var(--theme-text-muted)] hover:bg-[var(--theme-hover-bg-strong)] hover:text-[var(--theme-text-primary)]"
             onClick={reloadPreview}
           />
-          <div className="flex flex-grow items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/60 focus-within:border-white/20 focus-within:bg-white/10 focus-within:text-white">
-            <div className="i-ph:globe-hemisphere-west text-white/35" />
+          <div className="flex flex-grow items-center gap-2 rounded-xl border border-[var(--theme-border-default)] bg-[var(--theme-hover-bg)] px-4 py-2 text-sm text-[var(--theme-text-muted)] focus-within:border-[var(--theme-border-strong)] focus-within:bg-[var(--theme-hover-bg-strong)] focus-within:text-[var(--theme-text-primary)]">
+            <div className="i-ph:globe-hemisphere-west text-[var(--theme-text-muted)]/35" />
             <input
               ref={inputRef}
-              className="w-full bg-transparent outline-none placeholder:text-white/20"
+              className="w-full bg-transparent outline-none placeholder:text-[var(--theme-text-placeholder)]"
               type="text"
               value={url}
               onChange={(event) => {
@@ -127,8 +127,8 @@ export const Preview = memo(({ deviceMode = 'desktop' }: PreviewProps) => {
             ref={iframeRef}
             title="Preview"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            className={classNames(
-              'border border-white/10 bg-white transition-all duration-300 shadow-2xl',
+              className={classNames(
+                'border border-[var(--theme-border-default)] bg-white transition-all duration-300 shadow-2xl',
               deviceMode === 'mobile' ? 'rounded-2xl' : undefined,
               deviceMode === 'tablet' ? 'rounded-xl' : undefined,
               deviceMode === 'desktop' ? 'border-none' : undefined,

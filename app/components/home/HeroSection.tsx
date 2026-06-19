@@ -26,7 +26,7 @@ export const HeroSection = memo(
     return (
       <section className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto px-4 sm:px-6 text-center my-6 md:my-10">
         {/* Heading - Pure white bold title to match screenshot exactly */}
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white mb-10 tracking-tight max-w-full px-2 drop-shadow-sm whitespace-nowrap">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-[var(--theme-text-primary)] mb-10 tracking-tight max-w-full px-2 drop-shadow-sm whitespace-nowrap">
           Build something Joyful
         </h1>
 

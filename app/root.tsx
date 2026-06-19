@@ -113,7 +113,7 @@ function LoadingScreen() {
   if (!shouldRender) return null;
 
   return (
-    <div className={`fixed inset-0 z-[9999] bg-[#181816] flex items-center justify-center transition-all duration-300 ease-out ${fadeStyle}`}>
+    <div className={`fixed inset-0 z-[9999] bg-[var(--theme-bg-surface)] flex items-center justify-center transition-all duration-300 ease-out ${fadeStyle}`}>
       <div className="flex flex-col items-center justify-center animate-pulse">
         <img
           src="/logo.png"

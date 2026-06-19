@@ -76,11 +76,11 @@ html[data-theme='light'] {
   --theme-bg-overlay: rgba(0, 0, 0, 0.4);
   --theme-bg-code: #f5f5f5;
 
-  --theme-text-primary: #18181b;
-  --theme-text-secondary: #52525b;
-  --theme-text-tertiary: #71717a;
-  --theme-text-muted: #a1a1aa;
-  --theme-text-on-surface: #18181b;
+  --theme-text-primary: #09090b;
+  --theme-text-secondary: #27272a;
+  --theme-text-tertiary: #3f3f46;
+  --theme-text-muted: #52525b;
+  --theme-text-on-surface: #09090b;
   --theme-text-placeholder: rgba(0, 0, 0, 0.35);
   --theme-text-placeholder-strong: rgba(0, 0, 0, 0.5);
 
@@ -165,9 +165,9 @@ html[data-theme='light'] .lovable-gradient {
     ),
     linear-gradient(
       180deg,
-      #d4d4d4 0%,
-      #d4d4d4 24%,
-      #25365e 37%,
+      #ffffff 0%,
+      #ffffff 24%,
+      #dbe4fd 37%,
       #5576e8 49%,
       #b36ee4 58%,
       #fa68d0 68%,
@@ -233,4 +233,26 @@ html[data-theme='light'] .premium-scrollbar::-webkit-scrollbar-thumb {
 }
 html[data-theme='light'] .premium-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.28);
+}
+
+/* =============================================
+   Resize Handle - Light Mode
+   ============================================= */
+html[data-theme='light'] #resize-handle:hover,
+html[data-theme='light'] #resize-handle.is-dragging,
+html[data-theme='light'] #file-tree-resize-handle:hover,
+html[data-theme='light'] #file-tree-resize-handle.is-dragging {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* =============================================
+   BaseChat scoped overrides - Light Mode
+   ============================================= */
+html[data-theme='light'] .BaseChat .chat-bubble {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme='light'] .BaseChat .resize-active {
+  background-color: rgba(0, 0, 0, 0.1);
 }

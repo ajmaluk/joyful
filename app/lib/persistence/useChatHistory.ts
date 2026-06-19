@@ -30,13 +30,18 @@ if (db) {
   getAll(db)
     .then((list) => {
       const metas = list
-        .filter((item) => item.urlId && item.description)
-        .map(({ id, urlId, description, timestamp }) => ({
-          id,
-          urlId,
-          description,
-          timestamp,
-        }));
+        .map(({ id, urlId, description, timestamp, messages }) => {
+          const firstUserMessage = messages?.find((m) => m.role === 'user')?.content ?? '';
+          const fallbackTitle = firstUserMessage 
+            ? (firstUserMessage.slice(0, 40) + (firstUserMessage.length > 40 ? '...' : '')) 
+            : 'New Chat';
+          return {
+            id,
+            urlId: urlId || id,
+            description: description || fallbackTitle,
+            timestamp: timestamp || new Date().toISOString(),
+          };
+        });
       syncFromIndexedDB(metas);
     })
     .catch(() => {
@@ -93,41 +98,48 @@ export function useChatHistory() {
 
       const { firstArtifact } = workbenchStore;
 
-      if (!urlId && firstArtifact?.id) {
-        const urlId = await getUrlId(db, firstArtifact.id);
-
-        navigateChat(urlId);
-        setUrlId(urlId);
+      let currentUrlId = urlId;
+      if (!currentUrlId && firstArtifact?.id) {
+        currentUrlId = await getUrlId(db, firstArtifact.id);
+        navigateChat(currentUrlId);
+        setUrlId(currentUrlId);
       }
 
-      if (!description.get() && firstArtifact?.title) {
-        description.set(firstArtifact?.title);
+      if (!description.get()) {
+        const firstUserMessage = messages.find(m => m.role === 'user')?.content ?? '';
+        const fallbackTitle = firstUserMessage 
+          ? (firstUserMessage.slice(0, 40) + (firstUserMessage.length > 40 ? '...' : '')) 
+          : 'New Chat';
+        description.set(firstArtifact?.title || fallbackTitle);
       }
 
-      if (initialMessages.length === 0 && !chatId.get()) {
+      let currentChatId = chatId.get();
+      if (initialMessages.length === 0 && !currentChatId) {
         const nextId = await getNextId(db);
-
+        currentChatId = nextId;
         chatId.set(nextId);
 
-        if (!urlId) {
+        if (!currentUrlId) {
           navigateChat(nextId);
         }
       }
 
+      const finalUrlId = currentUrlId || (currentChatId as string);
+
       // Sync description to localStorage when it changes
-      if (description.get() && chatId.get()) {
-        updateProjectMeta(chatId.get() as string, {
+      if (description.get() && currentChatId) {
+        updateProjectMeta(currentChatId, {
           description: description.get(),
           timestamp: new Date().toISOString(),
         });
       }
 
-      await setMessages(db, chatId.get() as string, messages, urlId, description.get());
+      await setMessages(db, currentChatId as string, messages, finalUrlId, description.get());
 
       // Sync lightweight metadata to localStorage for instant sidebar loading
       saveProjectMeta({
-        id: chatId.get() as string,
-        urlId,
+        id: currentChatId as string,
+        urlId: finalUrlId,
         description: description.get(),
         timestamp: new Date().toISOString(),
       });

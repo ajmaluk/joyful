@@ -1,5 +1,5 @@
 import { streamText as _streamText, convertToCoreMessages } from 'ai';
-import { DEFAULT_MODEL_NAME as DEFAULT_MODEL, getModel } from '~/lib/.server/llm/model';
+import { DEFAULT_MODEL_NAME as DEFAULT_MODEL, NVIDIA_MODEL_NAME, getModel } from '~/lib/.server/llm/model';
 import { MAX_TOKENS } from './constants';
 import { getSystemPrompt } from './prompts';
 
@@ -24,20 +24,43 @@ export type StreamingOptions = Omit<Parameters<typeof _streamText>[0], 'model'>;
  * Streams text from the AI model.
  * Supports multi-provider model selection via the `model` query parameter.
  */
-export function streamText(messages: Messages, env: Env, options?: StreamingOptions & { model?: string }) {
+export async function streamText(messages: Messages, env: Env, options?: StreamingOptions & { model?: string }) {
   // Model can be specified in options (from client), or via env var, or use default
   const modelName = options?.model || env.MODEL_NAME || DEFAULT_MODEL;
 
   // Strip the model from options so it doesn't get passed to _streamText
   const { model: _model, ...streamOptions } = options || {};
 
-  return _streamText({
-    model: getModel(modelName, env) as any,
-    system: getSystemPrompt(),
-    maxTokens: MAX_TOKENS,
-    messages: convertToCoreMessages(messages as any),
-    ...streamOptions,
-  });
+  try {
+    return await _streamText({
+      model: getModel(modelName, env) as any,
+      system: getSystemPrompt(),
+      maxTokens: MAX_TOKENS,
+      messages: convertToCoreMessages(messages as any),
+      ...streamOptions,
+    });
+  } catch (error) {
+    console.error(`streamText failed with model ${modelName}:`, error);
+
+    // If it fails and we are using the primary LLM7 model, fallback to NVIDIA
+    if (modelName === DEFAULT_MODEL) {
+      console.log(`Attempting fallback to NVIDIA model: ${NVIDIA_MODEL_NAME}`);
+      try {
+        return await _streamText({
+          model: getModel(NVIDIA_MODEL_NAME, env) as any,
+          system: getSystemPrompt(),
+          maxTokens: MAX_TOKENS,
+          messages: convertToCoreMessages(messages as any),
+          ...streamOptions,
+        });
+      } catch (fallbackError) {
+        console.error('NVIDIA fallback model also failed:', fallbackError);
+        throw fallbackError;
+      }
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -99,6 +122,7 @@ ${conversationText}
  */
 export async function summarizeConversation(olderMessages: Messages, env: Env, modelName?: string): Promise<Message> {
   const prompt = buildSummarizationPrompt(olderMessages);
+  const activeModelName = modelName || env.MODEL_NAME || DEFAULT_MODEL;
 
   try {
     /*
@@ -106,7 +130,7 @@ export async function summarizeConversation(olderMessages: Messages, env: Env, m
      * We use _streamText directly with low maxTokens since this is a summary
      */
     const { text } = await _streamText({
-      model: getModel(modelName || DEFAULT_MODEL, env) as any,
+      model: getModel(activeModelName, env) as any,
       maxTokens: 1024,
       messages: convertToCoreMessages([{ role: 'user', content: prompt }] as any),
     });
@@ -118,7 +142,28 @@ export async function summarizeConversation(olderMessages: Messages, env: Env, m
       content: `[Summary of earlier conversation:\n${summary}\n]`,
     };
   } catch (error) {
-    console.error('LLM summarization failed, falling back to truncation:', error);
+    console.error(`LLM summarization failed with model ${activeModelName}:`, error);
+
+    if (activeModelName === DEFAULT_MODEL) {
+      console.log(`Attempting summarization fallback with NVIDIA model: ${NVIDIA_MODEL_NAME}`);
+      try {
+        const { text } = await _streamText({
+          model: getModel(NVIDIA_MODEL_NAME, env) as any,
+          maxTokens: 1024,
+          messages: convertToCoreMessages([{ role: 'user', content: prompt }] as any),
+        });
+
+        const summary = (await text).trim();
+
+        return {
+          role: 'user',
+          content: `[Summary of earlier conversation:\n${summary}\n]`,
+        };
+      } catch (fallbackError) {
+        console.error('NVIDIA fallback summarization also failed:', fallbackError);
+      }
+    }
+
     return compactOlderMessages(olderMessages);
   }
 }

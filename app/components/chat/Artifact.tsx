@@ -24,6 +24,10 @@ interface ArtifactProps {
   messageId: string;
 }
 
+import { map } from 'nanostores';
+
+const emptyActionsStore = map({});
+
 export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const userToggledActions = useRef(false);
   const [showActions, setShowActions] = useState(false);
@@ -32,12 +36,8 @@ export const Artifact = memo(({ messageId }: ArtifactProps) => {
   const artifacts = useStore(workbenchStore.artifacts);
   const artifact = artifacts[messageId];
 
-  const actions = useStore(
-    computed(workbenchStore.artifacts, (arts) => {
-      const art = arts[messageId];
-      return art ? Object.values(art.runner.actions.get()) : [];
-    }),
-  );
+  const actionsMap = useStore(artifact?.runner.actions ?? emptyActionsStore);
+  const actions = Object.values(actionsMap);
 
   useEffect(() => {
     if (actions.length && !showActions && !userToggledActions.current) {
